@@ -1,12 +1,36 @@
 {
   "name": "city-pulse",
+  "productName": "City Pulse",
   "version": "0.1.0",
+  "description": "Music-reactive city skyline visualizer: desktop widget and full-screen TV mode",
+  "author": "GelMeister1",
+  "license": "MIT",
   "private": true,
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.gelmeister1.citypulse",
+    "productName": "City Pulse",
+    "files": ["index.html", "main.js", "package.json"],
+    "directories": { "buildResources": "build", "output": "dist" },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "City-Pulse-Setup-${version}.${ext}"
+    },
+    "portable": { "artifactName": "City-Pulse-Portable-${version}.${ext}" }
   },
   "devDependencies": {
-    "electron": "^45.3.3"
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0"
   }
 }
