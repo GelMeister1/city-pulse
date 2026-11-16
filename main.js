@@ -15,17 +15,25 @@ const SAFE_PREFS = { contextIsolation: true, sandbox: true, nodeIntegration: fal
 // Every window (including the full-screen one): no navigating away, no pop-ups except our own full-screen view.
 app.on('web-contents-created', (_, wc) => {
   wc.on('will-navigate', (e, url) => { if (!isOurs(url)) e.preventDefault(); });
+  // Full screen opens on whichever display the widget is sitting on: drag the widget to the TV, press full screen.
+  const targetDisplay = () => {
+    const owner = BrowserWindow.fromWebContents(wc);
+    return screen.getDisplayMatching(owner ? owner.getBounds() : screen.getPrimaryDisplay().bounds);
+  };
   wc.setWindowOpenHandler(({ url }) => {
     if (!isOurs(url) || new URL(url).searchParams.get('full') !== '1') return { action: 'deny' };
-    // Full screen goes on another display (a TV or second monitor) when there is one.
-    const owner = BrowserWindow.fromWebContents(wc);
-    const here = screen.getDisplayMatching(owner ? owner.getBounds() : screen.getPrimaryDisplay().bounds);
-    const target = screen.getAllDisplays().find(d => d.id !== here.id) || here;
+    const { bounds } = targetDisplay();
     return { action: 'allow', overrideBrowserWindowOptions: {
-      x: target.bounds.x, y: target.bounds.y, width: target.bounds.width, height: target.bounds.height,
-      fullscreen: true, frame: false, backgroundColor: '#05060c', title: 'City Pulse', autoHideMenuBar: true,
+      ...bounds, show: false, frame: false, backgroundColor: '#05060c', title: 'City Pulse', autoHideMenuBar: true,
       webPreferences: SAFE_PREFS,
     } };
+  });
+  // Windows can drop a window created already-full-screen onto another display, so place it first, then go full screen.
+  wc.on('did-create-window', child => {
+    const { bounds } = targetDisplay();
+    child.setBounds(bounds);
+    child.setFullScreen(true);
+    child.show();
   });
 });
 
