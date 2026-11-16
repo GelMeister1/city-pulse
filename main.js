@@ -26,7 +26,8 @@ const prefsFile = () => path.join(app.getPath('userData'), 'app-prefs.json');
 let prefs = {};
 const savePrefs = () => { try { fs.writeFileSync(prefsFile(), JSON.stringify(prefs)); } catch {} };
 
-let tray, widget, full, settings, wall;
+let tray, widget, full, wall;
+const settings = {};                                         // one settings window per target: widget, full, wall
 
 // No navigating away and no pop-ups, in every window. All new windows are opened by this file.
 app.on('web-contents-created', (_, wc) => {
@@ -57,11 +58,13 @@ function openFull() {
   full.once('ready-to-show', () => { full.setBounds(d.bounds); full.setFullScreen(true); full.show(); });   // place first: Windows can move a window created already full screen
 }
 
-function openSettings() {
-  if (settings && !settings.isDestroyed()) return settings.focus();
-  settings = new BrowserWindow({ width: 380, height: 760, minWidth: 320, title: 'City Pulse Settings', icon: ICON,
+// Settings window for the widget, the full-screen view or the live wallpaper; changes apply to that one live.
+function openSettings(target = 'widget') {
+  const open = settings[target];
+  if (open && !open.isDestroyed()) return open.focus();
+  const w = settings[target] = new BrowserWindow({ width: 380, height: 760, minWidth: 320, title: 'City Pulse Settings', icon: ICON,
     autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
-  load(settings, { settings: '1' });
+  load(w, { settings: '1', for: target });
 }
 
 // Experimental live wallpaper: a full-screen view parented behind the desktop icons on one display.
@@ -145,7 +148,9 @@ function updateTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: shown ? 'Hide widget' : 'Show widget', click: () => { shown ? widget.hide() : widget.show(); updateTray(); } },
     { label: 'Full screen (on the widget’s display)', click: openFull },
-    { label: 'Settings…', click: openSettings },
+    { label: 'Widget settings…', click: () => openSettings('widget') },
+    { label: 'Full-screen settings…', click: () => openSettings('full') },
+    { label: 'Wallpaper settings…', click: () => openSettings('wall') },
     { type: 'separator' },
     { label: 'Live wallpaper (experimental)', submenu: [
       { label: 'Off', type: 'radio', checked: !prefs.wallpaper, click: () => setWallpaper(null) },
@@ -166,7 +171,7 @@ function updateTray() {
 // Page → app calls. Only our own page may use them.
 const fromUs = e => isOurs(e.senderFrame && e.senderFrame.url);
 ipcMain.on('open-full', e => { if (fromUs(e)) openFull(); });
-ipcMain.on('open-settings', e => { if (fromUs(e)) openSettings(); });
+ipcMain.on('open-settings', e => { if (fromUs(e)) openSettings('widget'); });   // only the widget's ⚙ asks; full screen has its own panel
 ipcMain.on('close-window', e => { if (fromUs(e)) BrowserWindow.fromWebContents(e.sender)?.close(); });
 ipcMain.handle('volume', e => fromUs(e) ? win32.volume() : null);
 ipcMain.handle('outputs', e => fromUs(e) ? win32.outputs() : null);

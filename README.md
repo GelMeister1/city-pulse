@@ -40,7 +40,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - the controls auto-hide
   - optional burn-in protection creeps the picture a few pixels over about 20 minutes
 - **Lives in the tray:** no taskbar button. The tray icon by the clock shows or hides the widget, and also has full screen, Settings, Start with Windows and Quit.
-- **Live wallpaper (experimental):** puts City Pulse behind your desktop icons on the display you choose. It relies on an unofficial Windows feature, so a future Windows update could break it. If that happens, it switches itself off.
+- **Live wallpaper (experimental):** puts City Pulse behind your desktop icons on the display you choose, with its own look (tray → Wallpaper settings…). It relies on an unofficial Windows feature, so a future Windows update could break it. If that happens, it switches itself off.
 
 ## Install (Windows)
 
@@ -67,7 +67,7 @@ Use the tray's **Uninstall City Pulse…**, or go to Windows **Settings → Apps
 - The widget opens in the bottom-right corner. Hover over it to show the toolbar, drag the toolbar to move the widget, and drag the edges to resize it. **✕** tucks it into the tray.
 - **⛶ Full screen** opens the big view on the widget's display: drag the widget to your TV first. Press **Esc** to close it.
 - **⚙ Settings** opens a settings window with presets plus the Skyline, Lights, Scene, Weather and Ambient sections. Changes apply to the widget live. In full screen, ⚙ opens the panel on screen instead.
-- **Right-click the tray icon** for full screen, Settings, Live wallpaper, Start with Windows, Check for updates, Uninstall and Quit.
+- **Right-click the tray icon** for full screen, separate settings for the widget, full screen and wallpaper, Live wallpaper, Start with Windows, Check for updates, Uninstall and Quit.
 - Keyboard shortcuts:
 
 | Key | Action |

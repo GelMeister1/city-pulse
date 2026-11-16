@@ -160,17 +160,23 @@ const widget = qs.has('widget'), full = qs.has('full'), settingsMode = qs.has('s
 const inApp = !!window.cityPulse;                                    // set by the app's preload; absent in a plain browser
 for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'settings'], [wallMode, 'wall'], [inApp, 'app']])
   if (on) document.documentElement.classList.add(cls);
+// Whose settings this window uses. The settings window edits whichever one it was opened for (?settings=1&for=…).
+const TARGET = settingsMode ? (['widget', 'full', 'wall'].includes(qs.get('for')) ? qs.get('for') : 'widget')
+  : wallMode ? 'wall' : full ? 'full' : 'widget';
 
 // ---------- settings (remembered between launches) ----------
 const DEF = { city: 'generic', view: 'fit', scroll: 30, gap: 40, pan: .5,
   mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, loudFill: false, cityLine: false, lineH: 70, bright: 100, meter: true,
-  ground: widget ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
+  ground: TARGET === 'widget' ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
   weather: 'none', wxAmt: 50,
   roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
   search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true };
 let S;
-const KEY = full ? 'cityPulse:full' : 'cityPulse';                  // widget and full screen keep their own settings; presets are shared
-try { S = { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { S = { ...DEF }; }
+// Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
+const KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
+// The wallpaper starts as a copy of the full-screen look until it's given its own.
+const stored = localStorage.getItem(KEY) || (TARGET === 'wall' && localStorage.getItem('cityPulse:full')) || '{}';
+try { S = { ...DEF, ...JSON.parse(stored) }; } catch { S = { ...DEF }; }
 if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
 
@@ -708,7 +714,7 @@ function refreshPanel() {
   hide('traffic', !S.ground.startsWith('street'));
   hide('wxAmt', S.weather === 'none');
   hide('flyers', S.city !== 'cyber');
-  const forWidget = widget || settingsMode;              // the settings window edits the widget
+  const forWidget = TARGET === 'widget';
   hide('drift', forWidget);
   for (const id of ['stars', 'shooting', 'skyBody', 'clouds', 'planes']) hide(id, forWidget);   // the widget has no sky
 }
@@ -802,7 +808,10 @@ $('gear').onclick = () => {
   if (widget) return cityPulse.openSettings();          // the widget is too small for the panel: use the settings window
   $('panel').hidden = !$('panel').hidden; $('gear').classList.toggle('on', !$('panel').hidden); $('gear').setAttribute('aria-expanded', !$('panel').hidden);
 };
-if (settingsMode) { $('panel').hidden = false; document.title = 'City Pulse Settings'; }
+if (settingsMode) {
+  $('panel').hidden = false;
+  document.title = `City Pulse Settings — ${{ widget: 'Widget', full: 'Full screen', wall: 'Wallpaper' }[TARGET]}`;
+}
 $('fs').onclick = toggleFs;
 addEventListener('keydown', e => {
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
