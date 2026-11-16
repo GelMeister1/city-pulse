@@ -9,28 +9,34 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win"
+    "dist": "electron-builder --win --publish never",
+    "release": "electron-builder --win --publish always"
   },
   "build": {
     "appId": "com.gelmeister1.citypulse",
     "productName": "City Pulse",
     "files": ["index.html", "main.js", "preload.js", "winhelper.js", "assets/icon.png", "package.json"],
     "directories": { "buildResources": "build", "output": "dist" },
+    "publish": [{ "provider": "github", "owner": "GelMeister1", "repo": "city-pulse", "releaseType": "release" }],
     "win": {
       "icon": "build/icon.png",
-      "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }]
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": true,
+      "include": "build/installer.nsh",
       "artifactName": "City-Pulse-Setup-${version}.${ext}"
-    },
-    "portable": { "artifactName": "City-Pulse-Portable-${version}.${ext}" }
+    }
   },
   "devDependencies": {
     "electron": "^45.3.3",
     "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

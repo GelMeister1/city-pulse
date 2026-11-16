@@ -1,10 +1,12 @@
 // City Pulse app: a tray icon, the desktop widget, a full-screen view, a settings window and an
 // experimental live wallpaper. The visualizer itself is index.html; windows differ only by URL flags.
-const { app, BrowserWindow, screen, session, ipcMain, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, screen, session, ipcMain, Tray, Menu, nativeImage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 const win32 = require('./winhelper');
+const { autoUpdater } = require('electron-updater');
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (!app.requestSingleInstanceLock()) app.quit();           // one City Pulse at a time; a second launch shows the widget
@@ -83,6 +85,55 @@ async function setWallpaper(displayId) {
   updateTray();
 }
 
+// ---- updates: one installed copy that keeps itself current ----
+// The installed app checks GitHub Releases at startup and every 6 hours, downloads a newer version in the
+// background, and installs it over itself the next time City Pulse quits (or right away from the tray).
+let update = { state: 'idle' };                            // idle | checking | downloading | ready | latest | error
+function checkForUpdates(manual) {
+  if (!app.isPackaged) return manual && dialog.showMessageBox({ message: 'Updates only work in the installed app.' });
+  update = { state: 'checking', manual }; updateTray();
+  autoUpdater.checkForUpdates().catch(() => {});         // results arrive as events below
+}
+function setupUpdates() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('update-available', i => { update = { state: 'downloading', version: i.version }; updateTray(); });
+  autoUpdater.on('update-not-available', () => {
+    if (update.manual) dialog.showMessageBox({ message: `City Pulse ${app.getVersion()} is the latest version.` });
+    update = { state: 'latest' }; updateTray();
+  });
+  autoUpdater.on('update-downloaded', i => {
+    update = { state: 'ready', version: i.version }; updateTray();
+    tray.displayBalloon?.({ title: 'City Pulse update ready', content: `Version ${i.version} installs when City Pulse restarts.` });
+  });
+  autoUpdater.on('error', () => {                         // offline, or the release page isn't reachable: try again later
+    if (update.manual) dialog.showMessageBox({ message: 'Couldn’t check for updates right now. Try again later.' });
+    update = { state: 'error' }; updateTray();
+  });
+  checkForUpdates(false);
+  setInterval(() => checkForUpdates(false), 6 * 60 * 60 * 1000);
+}
+function updateMenuItem() {
+  switch (update.state) {
+    case 'checking': return { label: 'Checking for updates…', enabled: false };
+    case 'downloading': return { label: `Downloading version ${update.version}…`, enabled: false };
+    case 'ready': return { label: `Restart to update to ${update.version}`, click: () => { app.quitting = true; autoUpdater.quitAndInstall(); } };
+    default: return { label: 'Check for updates', click: () => checkForUpdates(true) };
+  }
+}
+
+// ---- uninstall: runs the app's own uninstaller (also in Windows Settings → Apps) ----
+async function uninstall() {
+  const exe = path.join(path.dirname(app.getPath('exe')), `Uninstall ${app.getName()}.exe`);
+  if (!app.isPackaged || !fs.existsSync(exe)) return dialog.showMessageBox({ message: 'Uninstall City Pulse from Windows Settings → Apps.' });
+  const { response } = await dialog.showMessageBox({ type: 'question', buttons: ['Uninstall', 'Cancel'], defaultId: 1, cancelId: 1,
+    message: 'Uninstall City Pulse?', detail: 'This removes the app, its settings and presets, and its Start with Windows entry.' });
+  if (response !== 0) return;
+  spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
+  app.quit();
+}
+
+const LOGIN = { name: 'CityPulse' };                        // fixed name, so the uninstaller can remove it
 function updateTray() {
   const displays = screen.getAllDisplays();
   const shown = widget && !widget.isDestroyed() && widget.isVisible();
@@ -96,8 +147,12 @@ function updateTray() {
       ...displays.map((d, i) => ({ label: `Display ${i + 1}: ${d.label || ''} (${d.bounds.width}×${d.bounds.height})`,
         type: 'radio', checked: prefs.wallpaper === d.id, click: () => setWallpaper(d.id) })),
     ] },
-    { label: 'Start with Windows', type: 'checkbox', enabled: app.isPackaged, checked: app.getLoginItemSettings().openAtLogin,
-      click: m => app.setLoginItemSettings({ openAtLogin: m.checked }) },
+    { label: 'Start with Windows', type: 'checkbox', enabled: app.isPackaged, checked: app.getLoginItemSettings(LOGIN).openAtLogin,
+      click: m => app.setLoginItemSettings({ ...LOGIN, openAtLogin: m.checked }) },
+    { type: 'separator' },
+    { label: `City Pulse ${app.getVersion()}`, enabled: false },
+    updateMenuItem(),
+    { label: 'Uninstall City Pulse…', click: uninstall },
     { type: 'separator' },
     { label: 'Quit City Pulse', click: () => app.quit() },
   ]));
@@ -129,6 +184,7 @@ app.whenReady().then(() => {
   widget.on('show', updateTray); widget.on('hide', updateTray);
   updateTray();
   if (prefs.wallpaper) setWallpaper(prefs.wallpaper);
+  setupUpdates();
   screen.on('display-added', updateTray); screen.on('display-removed', updateTray);
 });
 

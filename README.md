@@ -42,16 +42,30 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 
 ## Install (Windows)
 
-Download `City-Pulse-Setup-x.y.z.exe` (installer with Start-menu and desktop shortcuts) or `City-Pulse-Portable-x.y.z.exe` (runs without installing) from Releases, or build them yourself (see below).
+Download `City-Pulse-Setup-x.y.z.exe` from Releases and run it. It adds Start-menu and desktop shortcuts.
 
 The exe isn't code-signed yet, so Windows SmartScreen may warn on first run. Choose **More info → Run anyway**.
+
+### Updates
+
+City Pulse updates itself, so you never need to download a new installer.
+- It checks for a new version when it starts and every 6 hours.
+- A new version downloads in the background and installs the next time City Pulse restarts. To install it straight away, use the tray's **Restart to update**.
+- There's only ever one copy installed. Running a newer installer by hand also replaces the old version and keeps your settings and presets.
+
+### Uninstall
+
+Use the tray's **Uninstall City Pulse…**, or go to Windows **Settings → Apps → Installed apps → City Pulse → Uninstall**. Either one removes:
+- the app
+- its settings and presets
+- its Start with Windows entry
 
 ## Use
 
 - The widget opens in the bottom-right corner. Hover over it to show the toolbar, drag the toolbar to move the widget, and drag the edges to resize it. **✕** tucks it into the tray.
 - **⛶ Full screen** opens the big view on the widget's display: drag the widget to your TV first. Press **Esc** to close it.
 - **⚙ Settings** opens a settings window with presets plus the Skyline, Lights, Scene, Weather and Ambient sections. Changes apply to the widget live. In full screen, ⚙ opens the panel on screen instead.
-- **Right-click the tray icon** for full screen, Settings, Live wallpaper, Start with Windows and Quit.
+- **Right-click the tray icon** for full screen, Settings, Live wallpaper, Start with Windows, Check for updates, Uninstall and Quit.
 - Keyboard shortcuts:
 
 | Key | Action |
@@ -85,7 +99,20 @@ You can also open `index.html` straight in a browser for the full-screen version
 npm run dist
 ```
 
-The installer and the portable exe are written to `dist/`.
+The installer is written to `dist/`.
+
+## Publish a new version (maintainers)
+
+1. Bump `"version"` in `package.json`, for example from 0.2.0 to 0.2.1.
+2. Run the release script with a GitHub token:
+
+```bash
+GH_TOKEN=$(gh auth token) npm run release
+```
+
+This builds the installer and publishes it as a GitHub Release, together with `latest.yml`, the file installed copies check to find updates. Every installed copy then updates itself.
+
+Automatic updates need the repository to be **public**, because installed copies read the Releases page without signing in.
 
 ## Notes
 
