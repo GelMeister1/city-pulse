@@ -1,7 +1,7 @@
 {
   "name": "city-pulse",
   "productName": "City Pulse",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Music-reactive city skyline visualizer: desktop widget and full-screen TV mode",
   "author": "GelMeister1",
   "license": "MIT",
@@ -14,7 +14,7 @@
   "build": {
     "appId": "com.gelmeister1.citypulse",
     "productName": "City Pulse",
-    "files": ["index.html", "main.js", "package.json"],
+    "files": ["index.html", "main.js", "preload.js", "winhelper.js", "assets/icon.png", "package.json"],
     "directories": { "buildResources": "build", "output": "dist" },
     "win": {
       "icon": "build/icon.png",

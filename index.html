@@ -43,14 +43,27 @@
   html.widget #panel{top:32px;right:4px;width:196px;max-height:calc(100vh - 36px);padding:6px;font-size:11px}
   #close{display:none;margin-left:auto}
   html.widget #close,html.full #close{display:inline-block}
+  /* audio source: output picker in the app, "Share audio" in a plain browser */
+  #output{display:none;max-width:210px;background:#0d1020cc;color:#ddd;border:1px solid #445;border-radius:6px;padding:5px 6px;font:inherit;font-size:13px;-webkit-app-region:no-drag}
+  html.app #output{display:block}
+  html.app #share{display:none}
+  html.widget #output{max-width:150px;padding:2px 4px;font-size:11px}
+  /* settings window: just the panel, full size and easy to read */
+  html.settings canvas,html.settings #ui{display:none}
+  html.settings,html.settings body{overflow:auto;background:#0b0e1c}
+  html.settings #panel{position:static;width:auto;max-height:none;border:0;border-radius:0;padding:14px 16px 24px;font-size:14px;gap:10px;background:none}
+  html.settings #panel select,html.settings #panel input[type=color],html.settings #panel .row2 input{padding:6px;font-size:14px}
+  html.settings #panel summary{padding:9px 10px;font-size:15px}
+  html.settings #panel .body{gap:12px;padding:12px 4px 6px}
+  /* live wallpaper: no controls at all */
+  html.wall #ui,html.wall #panel{display:none !important}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <button id="mic">🎤 Mic</button>
-  <button id="tab">🔊 Tab / system audio</button>
-  <button id="filebtn">📁 Audio file</button>
+  <select id="output" title="Audio output City Pulse listens to (switches the Windows default)"></select>
+  <button id="share">🔊 Share audio</button>
   <button id="gear" aria-expanded="false">⚙ Settings</button>
   <button id="fs">⛶ Full screen</button>
   <span id="hint">Demo beat playing · F full screen · M lights · C color · V view · W weather</span>
@@ -135,20 +148,20 @@
     <label class="row"><input type="checkbox" id="planes"> Planes</label>
   </div></details>
 </div>
-<input type="file" id="file" accept="audio/*" hidden>
 <script>
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const $ = id => document.getElementById(id);
 const qs = new URLSearchParams(location.search);
-const widget = qs.has('widget'), full = qs.has('full');            // full = the app's full-screen window
-const inApp = /Electron/.test(navigator.userAgent);
-if (widget) document.documentElement.classList.add('widget');
-if (full) document.documentElement.classList.add('full');
+// Window kinds: widget, full (full screen), settings (the widget's settings window), wall (live wallpaper); none = plain browser.
+const widget = qs.has('widget'), full = qs.has('full'), settingsMode = qs.has('settings'), wallMode = qs.has('wall');
+const inApp = !!window.cityPulse;                                    // set by the app's preload; absent in a plain browser
+for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'settings'], [wallMode, 'wall'], [inApp, 'app']])
+  if (on) document.documentElement.classList.add(cls);
 
 // ---------- settings (remembered between launches) ----------
 const DEF = { city: 'generic', view: 'fit', scroll: 30, gap: 40, pan: .5,
   mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, bright: 100, meter: true,
-  ground: widget ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: !widget,
+  ground: widget ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
   weather: 'none', wxAmt: 50,
   roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
   search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true };
@@ -473,7 +486,7 @@ function fitRow(list, maxU) {                            // keep only whole buil
 }
 const NEON = [320, 190, 50, 280, 150];                    // cyberpunk sign hues: magenta, cyan, amber, violet, green
 
-let W, H, GY, GH, WY, unit, buildings = [], byBand = [], bridges = [], worldW = 0, stars = [], clouds = [], tourMarks = [];
+let W, H, GY, GH, WY, unit, buildings = [], bridges = [], worldW = 0, stars = [], clouds = [], tourMarks = [];
 let cyber = false, noir = false, synth = false;          // the made-up themed cities (never part of the tour)
 const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
 
@@ -544,13 +557,13 @@ function layout() {
       const side = Math.max(0, (span - cw) / 2);
       const L = fitRow(gen(r, side + 30, fh, .3), side), R = fitRow(gen(r, side + 30, fh, .3), side);
       spec = [...L.reverse(), ...city.b, ...R];
-      startU = (W / unit - specW(spec)) / 2;
+      startU = (W / unit - specW(spec) - 1.6) / 2;   // centre the row including the last building's 3D side face
     } else spec = [...gen(r, span * 1.5, fh, .3).reverse(), ...city.b, ...gen(r, span * 1.5, fh, .3)];
   } else {                                               // made-up cities: Neon City, Cyberpunk, Noir City, Synthwave
     const kit = KITS[themed] ? themed : 'generic', minF = cyber || noir ? .4 : .25;
     unit = Math.max(2.5, Math.min(W, GY) / 110);
     const span = W / unit - 2, mh = GY * (cyber || noir ? .9 : synth ? .55 : .82) / unit - 8;
-    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, minF, kit), span); startU = (W / unit - specW(spec)) / 2; }
+    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, minF, kit), span); startU = (W / unit - specW(spec) - 1.6) / 2; }   // centre including the 3D side face
     else spec = gen(r, span * 4, mh, minF, kit);
   }
 
@@ -560,7 +573,7 @@ function layout() {
     const [gap, style, roof, tiers] = s, wU = wOf(s);
     xU += gapOf(gap);
     const b = { id: buildings.length, cx: (xU + wU / 2) * unit, wpx: wU * unit, half: (wU / 2 + 1.6) * unit,
-      hue: r() * 360, rhue: r() * 360, rk: r(), reacts: true,
+      hue: r() * 360, rhue: r() * 360,
       level: 0, pk: 0, hold: 0, max: .05, prev: 0, avg: 0, flash: 0, hit: 0 };
     if (style[0] === '@') {
       b.lm = LM[style.slice(1)]; b.floors = Math.round(b.lm.h / 2); b.blink = true; b.hU = b.lm.h;
@@ -597,19 +610,14 @@ function layout() {
   }
   renderBack();
 
-  // Give each building its own frequency slice (log-spaced), shuffled so
-  // bass and treble buildings are mixed across the skyline.
-  const n = buildings.length, order = [...Array(n).keys()];
-  for (let i = n - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
-  const lo = 2, hi = 420;                               // ~40 Hz .. ~9 kHz at fftSize 2048
-  order.forEach((b, i) => {
-    const a = Math.floor(lo * Math.pow(hi / lo, i / n));
-    const z = Math.max(a + 1, Math.floor(lo * Math.pow(hi / lo, (i + 1) / n)));
-    Object.assign(buildings[b], { binA: a, binB: z, band: i / n });
-  });
-  byBand = [...buildings].sort((a, b) => a.band - b.band);
+  // Fixed band per building. Landmarks are spread evenly from bass (left-most) to treble (right-most), so each
+  // famous building owns a clear part of the song. The rest step through the bands 0,3,6,1,4,7,2,5… so
+  // neighbours always listen to different parts and the same band recurs regularly across the skyline.
+  const lms = buildings.filter(b => b.lm);
+  lms.forEach((b, i) => { b.band = lms.length > 1 ? Math.round(i * (NB - 1) / (lms.length - 1)) : 0; });
+  buildings.filter(b => !b.lm).forEach((b, i) => { b.band = i * 3 % NB; });
   if (S.view === 'fit') console.assert(buildings.every(b => b.cx - b.wpx / 2 >= -1 && b.cx + b.half <= W + 1) || !!city, 'building cut off');   // side face only sticks out on the right
-  console.assert(buildings.every(b => b.binB > b.binA && isFinite(b.cx) && b.floors > 0), 'bad layout');
+  console.assert(buildings.every(b => b.band >= 0 && b.band < NB && isFinite(b.cx) && b.floors > 0), 'bad layout');
 
   stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: r() * W, y: r() * H * .6, s: r() < .85 ? 1 : 2, sp: .5 + r(), ph: r() * 7 }));
   cars = []; flyers = []; fogs = []; wxKey = ''; cloudKey = '';
@@ -617,58 +625,58 @@ function layout() {
 }
 
 // ---------- audio ----------
-let actx, analyser, bins, src, audioEl;
-async function useSource(make) {
+// In the app City Pulse listens to the Windows default output (what you hear). The output picker switches that
+// default, like Windows sound settings. In a plain browser, "Share audio" asks to capture a tab or the screen.
+let actx, analyser, bins, tbuf, src, stream;
+async function useSystemAudio() {
   actx ??= new AudioContext();
   await actx.resume();
   if (!analyser) {
     analyser = actx.createAnalyser();
     analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.55;
+    analyser.smoothingTimeConstant = 0.6;
     bins = new Uint8Array(analyser.frequencyBinCount);
+    tbuf = new Float32Array(analyser.fftSize);
   }
-  if (src) src.disconnect();
-  if (audioEl) { audioEl.pause(); audioEl = null; }
-  src = await make();
-  src.connect(analyser);
-  $('hint').textContent = 'Listening · F full screen · M lights · C color · V view · W weather';
-}
-
-const streamOpts = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-
-$('mic').onclick = () => useSource(async () =>
-  actx.createMediaStreamSource(await navigator.mediaDevices.getUserMedia({ audio: streamOpts })))
-  .catch(e => alert('Mic not available: ' + e.message));
-
-const useSystemAudio = () => useSource(async () => {
   const desk = { mandatory: { chromeMediaSource: 'desktop' } };   // Electron-only route to Windows system audio
   const s = inApp ? await navigator.mediaDevices.getUserMedia({ audio: desk, video: desk })
-                   : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                  : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
   if (!s.getAudioTracks().length) { s.getTracks().forEach(t => t.stop()); throw new Error('No audio shared — tick "Share audio" in the picker.'); }
   s.getVideoTracks().forEach(t => t.stop());           // only the audio is needed
-  return actx.createMediaStreamSource(s);
-});
-$('tab').onclick = () => useSystemAudio().catch(e => alert(e.message));
-$('close').onclick = () => window.close();
-// In the app: grab system audio on its own. The first try can fail while Windows audio is still starting, so retry.
-if (inApp) (async function tryAudio(n) {
-  try { await useSystemAudio(); console.log('System audio connected'); }
-  catch (e) { if (n > 1) setTimeout(() => tryAudio(n - 1), 2000); else console.warn('System audio unavailable, using demo beat:', e.message); }
-})(6);
+  if (src) src.disconnect();
+  stream?.getTracks().forEach(t => t.stop());
+  stream = s; src = actx.createMediaStreamSource(s); src.connect(analyser);
+  $('hint').textContent = 'Listening · F full screen · M lights · C color · V view · W weather';
+}
+$('share').onclick = () => useSystemAudio().catch(e => alert(e.message));
+$('close').onclick = () => inApp ? cityPulse.closeWindow() : window.close();
 
-$('filebtn').onclick = () => $('file').click();
-$('file').onchange = e => {
-  const f = e.target.files[0]; if (!f) return;
-  useSource(async () => {
-    const el = new Audio(URL.createObjectURL(f));
-    el.loop = true;
-    const s = actx.createMediaElementSource(el);
-    s.connect(actx.destination);                       // so you can hear the file
-    await el.play();
-    audioEl = el;
-    return s;
-  }).catch(e => alert('Could not play file: ' + e.message));
-};
+// Volume of the Windows default output (the meter tops out at it) and the output picker.
+let sysVol = 1, sysMuted = false, outId = null;
+async function pollVolume() {
+  const v = await cityPulse.volume();
+  if (v) {
+    sysVol = v.vol; sysMuted = v.mute;
+    if (outId && v.id !== outId) setTimeout(() => useSystemAudio().catch(() => {}), 400);   // default output changed: listen to the new one
+    if (outId !== v.id) { outId = v.id; fillOutputs(); }
+  }
+}
+async function fillOutputs() {
+  const list = await cityPulse.outputs();
+  if (!list) return;
+  $('output').innerHTML = list.map(o => `<option value="${esc(o.id)}">🔊 ${esc(o.name)}</option>`).join('');
+  $('output').value = (list.find(o => o.default) || {}).id || '';
+}
+$('output').onchange = () => cityPulse.setOutput($('output').value).then(pollVolume);
+
+if (inApp && !settingsMode) {
+  // The first try can fail while Windows audio is still starting, so retry.
+  (async function tryAudio(n) {
+    try { await useSystemAudio(); console.log('System audio connected'); }
+    catch (e) { if (n > 1) setTimeout(() => tryAudio(n - 1), 2000); else console.warn('System audio unavailable, using demo beat:', e.message); }
+  })(6);
+  pollVolume(); setInterval(pollVolume, 500);
+}
 
 // ---------- controls ----------
 $('city').innerHTML = '<option value="generic">Neon City</option><option value="cyber">Cyberpunk</option>' +
@@ -695,8 +703,9 @@ function refreshPanel() {
   hide('traffic', !S.ground.startsWith('street'));
   hide('wxAmt', S.weather === 'none');
   hide('flyers', S.city !== 'cyber');
-  hide('drift', widget);
-  for (const id of ['stars', 'shooting', 'skyBody', 'clouds', 'planes']) hide(id, widget);   // the widget has no sky
+  const forWidget = widget || settingsMode;              // the settings window edits the widget
+  hide('drift', forWidget);
+  for (const id of ['stars', 'shooting', 'skyBody', 'clouds', 'planes']) hide(id, forWidget);   // the widget has no sky
 }
 const RELAYOUT = ['city', 'view', 'gap', 'back', 'ground'];
 const showSetting = k => { const el = $(k); if (el) el.type === 'checkbox' ? el.checked = S[k] : el.value = S[k]; };
@@ -770,18 +779,25 @@ fillPresets();
 pick = hexToHS(S.color); refreshPanel();
 function cycleSelect(id) { const el = $(id); el.selectedIndex = (el.selectedIndex + 1) % el.options.length; el.oninput(); }
 function toggleFs() {
-  if (widget) window.open('index.html?full=1', 'cityPulseFull');      // the app opens it full screen, on the TV if one is connected
-  else if (full) window.close();
+  if (widget) cityPulse.openFull();                    // the app opens it on the display the widget is on
+  else if (full) cityPulse.closeWindow();
   else document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 }
-if (full) { $('fs').textContent = '⛶ Exit full screen'; addEventListener('keydown', e => { if (e.key === 'Escape') window.close(); }); }
-// Presets saved in the widget appear in the full-screen window right away, and vice versa.
+if (full) { $('fs').textContent = '⛶ Exit full screen'; addEventListener('keydown', e => { if (e.key === 'Escape') cityPulse.closeWindow(); }); }
 addEventListener('storage', e => {
-  if (e.key !== 'cityPulsePresets') return;
-  try { mine = JSON.parse(e.newValue || '{}'); } catch { mine = {}; }
-  fillPresets();
+  if (e.key === 'cityPulsePresets') {                  // presets saved in any window appear everywhere right away
+    try { mine = JSON.parse(e.newValue || '{}'); } catch { mine = {}; }
+    fillPresets();
+  } else if (e.key === KEY && !settingsMode) {          // the settings window changed this window's settings: apply them live
+    try { S = { ...DEF, ...JSON.parse(e.newValue || '{}') }; } catch { return; }
+    Object.keys(DEF).forEach(showSetting); pick = hexToHS(S.color); refreshPanel(); layout();
+  }
 });
-$('gear').onclick = () => { $('panel').hidden = !$('panel').hidden; $('gear').classList.toggle('on', !$('panel').hidden); $('gear').setAttribute('aria-expanded', !$('panel').hidden); };
+$('gear').onclick = () => {
+  if (widget) return cityPulse.openSettings();          // the widget is too small for the panel: use the settings window
+  $('panel').hidden = !$('panel').hidden; $('gear').classList.toggle('on', !$('panel').hidden); $('gear').setAttribute('aria-expanded', !$('panel').hidden);
+};
+if (settingsMode) { $('panel').hidden = false; document.title = 'City Pulse Settings'; }
 $('fs').onclick = toggleFs;
 addEventListener('keydown', e => {
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
@@ -803,6 +819,7 @@ function wake() {
   for (const id of ['ui', 'panel']) $(id).classList.remove('hide');
   document.body.classList.remove('idle');
   clearTimeout(idleTimer);
+  if (settingsMode) return;                             // the settings window never fades out
   idleTimer = setTimeout(() => {
     if ($('panel').matches(':hover') || $('panel').contains(document.activeElement)) return wake();
     for (const id of ['ui', 'panel']) $(id).classList.add('hide');
@@ -813,27 +830,42 @@ addEventListener('mousemove', wake); addEventListener('keydown', wake); addEvent
 addEventListener('resize', layout);
 
 // ---------- levels ----------
-function levelFor(b, t) {
-  if (!src) {                                          // demo: fake 120 bpm beat until real audio is picked
-    const beat = Math.pow(1 - (t / 500 % 1), 3);
-    const wob = 0.5 + 0.5 * Math.sin(t / 180 + b.hue);
-    return b.band < 0.3 ? beat : b.band < 0.7 ? 0.3 * beat + 0.4 * wob * Math.random() : 0.6 * Math.random() * wob;
+// The song is split into 8 fixed frequency bands, bass to treble. Every building is assigned one band for good,
+// so a bass building pulses with the kick and a treble building with the hi-hats, and buildings on the same band
+// move together. Each band is analysed once per frame; buildings just read their band.
+const BAND_NAMES = ['Bass', 'Kick', 'Low-mid', 'Mid', 'Upper-mid', 'Presence', 'Treble', 'Air'];
+const NB = BAND_NAMES.length, BIN_LO = 2, BIN_HI = 560;  // ~45 Hz .. ~13 kHz at fftSize 2048
+const bands = Array.from({ length: NB }, (_, i) => ({
+  a: Math.floor(BIN_LO * Math.pow(BIN_HI / BIN_LO, i / NB)), z: Math.floor(BIN_LO * Math.pow(BIN_HI / BIN_LO, (i + 1) / NB)),
+  max: .1, level: 0, avg: 0, flash: 0, hit: 0 }));
+console.assert(bands.every(b => b.z > b.a), 'empty band');
+function bandInput(k, t) {                               // 0..1 loudness of band k right now
+  if (!src) {                                            // demo beat until real audio arrives: kick, snare-ish mids, hats
+    const beat = Math.pow(1 - (t / 500 % 1), 4), off = Math.pow(1 - ((t + 250) / 500 % 1), 6);
+    return k < 2 ? beat : k < 5 ? .25 + .5 * off * (1 - k * .1) : .3 + .5 * Math.pow(1 - (t / 125 % 1), 3) * (k / NB);
   }
+  const b = bands[k];
   let sum = 0;
-  for (let i = b.binA; i < b.binB; i++) sum += bins[i];
-  const v = sum / (b.binB - b.binA) / 255;
-  b.max = Math.max(v, b.max * 0.997, 0.05);            // per-building auto-gain so treble buildings still move
-  return Math.max(0, (v / b.max - 0.15) / 0.85);
+  for (let i = b.a; i < b.z; i++) sum += bins[i];
+  const v = sum / (b.z - b.a) / 255;
+  b.max = Math.max(v, b.max - .01 * (1 / 60), .06);      // slow auto-gain (takes ~10 s to adapt), so quiet passages read as quiet
+  return Math.pow(Math.max(0, (v / b.max - .2) / .8), 1.3);
+}
+function updateBands(t, dt) {
+  // Reactivity = how sharply lights follow the music. Calm: slow, smooth swells. Wild: instant, punchy.
+  const atk = 1 - Math.exp(-dt / (.012 + .3 * calm)), rel = 1 - Math.exp(-dt / (.15 + 1.4 * calm));
+  for (let k = 0; k < NB; k++) {
+    const b = bands[k], v = bandInput(k, t);
+    b.level += (v - b.level) * (v > b.level ? atk : rel);
+    if (v > b.avg * 1.35 + .12 && t - b.hit > 120 + 350 * calm) { b.flash = 1; b.hit = t; }   // a hit in this band
+    else b.flash *= Math.pow(.25 + .6 * calm, dt);       // then a slow fade (slower when calm)
+    b.avg += (v - b.avg) * Math.min(1, dt * 2.5);
+  }
 }
 
-// How lit floor gf of building b is (0..1), per the Lights setting.
+// How lit floor gf of building b is (0..1), per the Lights setting. Calm adds a faint resting glow so the city never goes dark.
 let calm = .4;
-function alphaFor(b, gf) {
-  // Calm mode softens the swing: unlit windows keep a faint glow, lit ones don't hit full blast,
-  // and buildings that sit out the music just glow steadily.
-  const rest = .22 * calm, amp = 1 - .45 * calm;
-  return b.reacts ? rest + (1 - rest) * amp * rawAlpha(b, gf) : rest;
-}
+const alphaFor = (b, gf) => { const rest = .12 * calm; return rest + (1 - rest) * rawAlpha(b, gf); };
 function rawAlpha(b, gf) {
   if (S.mode === 'pulse') return b.level;
   if (S.mode === 'flash') return b.flash;
@@ -890,7 +922,7 @@ function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for th
 
 // Cyberpunk: a neon sign with made-up glyphs, brightening with the building's music.
 function drawSign(g, b, s, cx) {
-  const u = unit * (widget ? 2 : 1), glow = .45 + .55 * (b.reacts ? Math.max(b.level, b.flash) : .3);   // signs are drawn twice as big in the small widget
+  const u = unit * (widget ? 2 : 1), glow = .45 + .55 * Math.max(b.level, b.flash);   // signs are drawn twice as big in the small widget
   const bx = cx - b.wpx / 2, top = GY - b.hU * unit;
   const sw = s.vert ? 1.6 * u : s.len * u, sh = s.vert ? s.len * u : 1.6 * u;
   const x = Math.min(bx + s.fx * Math.max(0, b.wpx - sw), bx + b.wpx - sw * .6), y = Math.max(top + unit, GY - b.hU * unit * s.fy - sh);
@@ -1322,35 +1354,33 @@ function drawWeather(g, t, dt) {
   }
 }
 
-let phase = 0, last = 0, loud = 0, off = 0, spectrum = new Array(12).fill(0);
+let phase = 0, last = 0, meterLvl = 0, off = 0, spectrum = new Array(NB).fill(0);
 function frame(t) {
   const dt = Math.min(.1, (t - last) / 1000); last = t;
+  if (settingsMode) return;                              // the settings window draws no city
   if (!buildings.length) { if (innerWidth && innerHeight) layout(); return; }   // window had no size yet
   phase += dt * S.speed / 25;
   if (analyser) analyser.getByteFrequencyData(bins);
-  // Reactivity: calm = slow, smooth rises and long fades, fewer buildings join in; wild = instant and jumpy.
   calm = 1 - S.react / 100;
-  const atk = 1 - Math.exp(-dt / (.005 + .5 * calm)), rel = 1 - Math.exp(-dt / (.13 + 2.5 * calm));
+  updateBands(t, dt);
 
-  for (const b of buildings) {
-    const v = levelFor(b, t);
-    b.reacts = b.rk < .3 + .7 * S.react / 100;
-    b.level += (v - b.level) * (v > b.level ? atk : rel);
-    const litF = b.level * b.floors;                                     // peak: hold briefly, then drop one floor at a time, same speed everywhere
+  for (const b of buildings) {                           // each building follows its band
+    const band = bands[b.band];
+    b.level = band.level; b.flash = band.flash;
+    const litF = b.level * b.floors;                     // peak: hold briefly, then drop one floor at a time, same speed everywhere
     if (litF >= b.pk) { b.pk = litF; b.hold = t; } else if (t - b.hold > 300) b.pk = Math.max(litF, b.pk - dt * 8);
-    if (v > b.avg * (1.3 + .6 * calm) + .08 && v > .35 + .2 * calm && t - b.hit > 180 + 600 * calm) { b.flash = 1; b.hit = t; }   // beat: flash, then fade slowly
-    else b.flash *= Math.pow(.2 + .6 * calm, dt);
-    b.avg += (v - b.avg) * Math.min(1, dt * 3);
     const lv = S.mode === 'flash' ? b.flash : b.level;
     if (lv > .85 && b.prev < .4) b.rhue = Math.random() * 360;          // "random" effect: new colour on a hit
     b.prev = lv;
   }
-  bassFlash = 0;                                         // roof lights "blink to the bass": strongest bass-building flash
-  for (const b of buildings) if (b.band < .25) bassFlash = Math.max(bassFlash, b.flash);
-  for (let i = 0; i < spectrum.length; i++) {            // 12 bands, low to high, for the hologram equalizers
-    const a = Math.floor(i / spectrum.length * byBand.length), z = Math.max(a + 1, Math.floor((i + 1) / spectrum.length * byBand.length));
-    let s = 0; for (let j = a; j < z; j++) s += byBand[j].level; spectrum[i] = s / (z - a);
-  }
+  bassFlash = Math.max(bands[0].flash, bands[1].flash);  // roof lights "blink to the bass"
+  for (let k = 0; k < NB; k++) spectrum[k] = bands[k].level;   // hologram equalizers
+
+  // Loudness meter: the real signal peak, scaled by the Windows volume, so at 50% volume it tops out halfway.
+  let peak = 0;
+  if (src) { analyser.getFloatTimeDomainData(tbuf); for (let i = 0; i < tbuf.length; i++) peak = Math.max(peak, Math.abs(tbuf[i])); }
+  else peak = .5 + .4 * bands[0].level;                  // demo beat
+  meterLvl = Math.max(Math.min(1, peak) * (sysMuted ? 0 : sysVol), meterLvl * Math.pow(.15, dt));
 
   const prevOff = off;
   if (S.view === 'tour') off = (off + dt * S.scroll * unit * .08) % worldW;
@@ -1369,12 +1399,10 @@ function frame(t) {
   }
   drawFlyers(g, dt, 0, scrollV);
 
-  let total = 0, seen = 0;
   for (const b of buildings) for (const k of wrapK) {
     const cx = b.cx - off + k * worldW;
     if (cx + b.half < 0 || cx - b.half > W) continue;
     drawBuilding(g, b, cx, t);
-    total += S.mode === 'flash' ? b.flash : b.level; seen++;
   }
   if (cyber) drawBridges(g, wrapK);
   drawFlyers(g, dt, 1, scrollV);
@@ -1397,18 +1425,18 @@ function frame(t) {
     if (a > .01) { g.fillStyle = `rgba(255,255,255,${a * .6})`; g.fillText(tourMarks[i].name.toUpperCase(), W / 2, H * .13); }
     g.letterSpacing = '0px';
   }
-  // TV burn-in protection: the whole picture drifts a few pixels very slowly.
-  const tf = S.drift && !widget ? `translate(${Math.round(Math.sin(t / 97000) * 16) / 2}px,${Math.round(Math.sin(t / 71000) * 10) / 2}px)` : '';
-  if (tf !== cv.style.transform) cv.style.transform = tf;   // only touch the style when it actually moves (every few seconds)
+  // TV burn-in protection: the whole picture creeps at most 3 px, one pixel every minute or so (a full cycle takes ~20 min).
+  const tf = S.drift && !widget ? `translate(${Math.round(Math.sin(t / 190000) * 3)}px,${Math.round(Math.sin(t / 140000) * 2)}px)` : '';
+  if (tf !== cv.style.transform) cv.style.transform = tf;   // only touch the style when it actually moves
 
-  // Loudness meter: segmented bar on the right edge.
-  loud = Math.max(seen ? total / seen : 0, loud * .94);
+  // Loudness meter: segmented bar on the right edge, topping out at the Windows volume (thin line marks it).
   if (S.meter) {
-    const segs = 14, mh = Math.min(GY * .5, 160), sh = mh / segs, x = W - 12, on = Math.round(loud * 1.6 * segs);
+    const segs = 20, mh = Math.min(GY * .5, 160), sh = mh / segs, x = W - 12, on = Math.round(meterLvl * segs);
     for (let i = 0; i < segs; i++) {
-      g.fillStyle = i >= on ? '#ffffff14' : i > segs * .8 ? '#ff4040' : i > segs * .55 ? '#ffd040' : '#40ff80';
+      g.fillStyle = i >= on ? '#ffffff14' : i >= segs * .85 ? '#ff4040' : i >= segs * .6 ? '#ffd040' : '#40ff80';
       g.fillRect(x, GY - 10 - (i + 1) * sh, 6, sh - 2);
     }
+    if (inApp) { g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x - 2, GY - 10 - (sysMuted ? 0 : sysVol) * mh - 1, 10, 1.5); }
   }
 }
 

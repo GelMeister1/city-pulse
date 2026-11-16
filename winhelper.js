@@ -1,0 +1,179 @@
+// Small Windows helper: one long-lived PowerShell process with a few C# calls into Windows' audio and window APIs.
+//   volume  -> master volume (0..1), mute and the default output device's id
+//   outputs -> active output devices [{ id, name, default }]
+//   setDefault(id) -> make a device the Windows default output (what the visualizer listens to)
+//   wallpaper(hwnd, x, y, w, h) -> put a window behind the desktop icons; refreshWallpaper() repaints the normal wallpaper
+// Requests are answered one JSON line each, in order. If PowerShell isn't available every call resolves to null.
+const { spawn } = require('child_process');
+
+const CS = String.raw`
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class CP {
+  [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumeratorCo {}
+  [ComImport, Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")] class PolicyConfigCo {}
+
+  [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IMMDeviceEnumerator {
+    int EnumAudioEndpoints(int dataFlow, int stateMask, out IMMDeviceCollection devices);
+    int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
+  }
+  [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IMMDeviceCollection { int GetCount(out int count); int Item(int index, out IMMDevice device); }
+  [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IMMDevice {
+    int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+    int OpenPropertyStore(int access, out IPropertyStore store);
+    int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
+  }
+  [ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IPropertyStore { int GetCount(out int c); int GetAt(int i, out PROPERTYKEY k); int GetValue(ref PROPERTYKEY k, out PROPVARIANT v); }
+  [StructLayout(LayoutKind.Sequential)] struct PROPERTYKEY { public Guid fmtid; public int pid; }
+  [StructLayout(LayoutKind.Explicit)] struct PROPVARIANT { [FieldOffset(0)] public short vt; [FieldOffset(8)] public IntPtr p; [FieldOffset(16)] public IntPtr p2; }
+  [ComImport, Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IAudioEndpointVolume {
+    int RegisterControlChangeNotify(IntPtr p); int UnregisterControlChangeNotify(IntPtr p); int GetChannelCount(out int c);
+    int SetMasterVolumeLevel(float l, ref Guid ctx); int SetMasterVolumeLevelScalar(float l, ref Guid ctx);
+    int GetMasterVolumeLevel(out float l); int GetMasterVolumeLevelScalar(out float l);
+    int SetChannelVolumeLevel(uint ch, float l, ref Guid ctx); int SetChannelVolumeLevelScalar(uint ch, float l, ref Guid ctx);
+    int GetChannelVolumeLevel(uint ch, out float l); int GetChannelVolumeLevelScalar(uint ch, out float l);
+    int SetMute([MarshalAs(UnmanagedType.Bool)] bool m, ref Guid ctx); int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
+  }
+  [ComImport, Guid("f8679f50-850a-41cf-9c72-430f290290c8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IPolicyConfig {
+    int GetMixFormat(IntPtr a, IntPtr b); int GetDeviceFormat(IntPtr a, int b, IntPtr c); int ResetDeviceFormat(IntPtr a);
+    int SetDeviceFormat(IntPtr a, IntPtr b, IntPtr c); int GetProcessingPeriod(IntPtr a, int b, IntPtr c, IntPtr d);
+    int SetProcessingPeriod(IntPtr a, IntPtr b); int GetShareMode(IntPtr a, IntPtr b); int SetShareMode(IntPtr a, IntPtr b);
+    int GetPropertyValue(IntPtr a, IntPtr b, IntPtr c); int SetPropertyValue(IntPtr a, IntPtr b, IntPtr c);
+    int SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string id, int role);
+  }
+
+  static IMMDeviceEnumerator En() { return (IMMDeviceEnumerator)new MMDeviceEnumeratorCo(); }
+  static string Esc(string s) { return s == null ? "" : s.Replace("\\", "\\\\").Replace("\"", "\\\""); }
+  static string Name(IMMDevice d) {
+    IPropertyStore ps; d.OpenPropertyStore(0, out ps);
+    var key = new PROPERTYKEY { fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), pid = 14 };   // PKEY_Device_FriendlyName
+    PROPVARIANT v; ps.GetValue(ref key, out v);
+    return v.vt == 31 ? Marshal.PtrToStringUni(v.p) : "";
+  }
+
+  public static string Volume() {
+    IMMDevice d; En().GetDefaultAudioEndpoint(0, 1, out d);
+    string id; d.GetId(out id);
+    var iid = typeof(IAudioEndpointVolume).GUID; object o; d.Activate(ref iid, 23, IntPtr.Zero, out o);
+    var ev = (IAudioEndpointVolume)o; float vol; bool mute; ev.GetMasterVolumeLevelScalar(out vol); ev.GetMute(out mute);
+    return "{\"vol\":" + vol.ToString(System.Globalization.CultureInfo.InvariantCulture) + ",\"mute\":" + (mute ? "true" : "false") + ",\"id\":\"" + Esc(id) + "\"}";
+  }
+
+  public static string Outputs() {
+    var en = En(); IMMDevice def; en.GetDefaultAudioEndpoint(0, 1, out def); string defId; def.GetId(out defId);
+    IMMDeviceCollection col; en.EnumAudioEndpoints(0, 1, out col); int n; col.GetCount(out n);   // render devices, active only
+    var parts = new List<string>();
+    for (int i = 0; i < n; i++) {
+      IMMDevice d; col.Item(i, out d); string id; d.GetId(out id);
+      parts.Add("{\"id\":\"" + Esc(id) + "\",\"name\":\"" + Esc(Name(d)) + "\",\"default\":" + (id == defId ? "true" : "false") + "}");
+    }
+    return "[" + string.Join(",", parts) + "]";
+  }
+
+  public static void SetDefault(string id) {
+    var pc = (IPolicyConfig)new PolicyConfigCo();
+    for (int role = 0; role < 3; role++) pc.SetDefaultEndpoint(id, role);   // console, multimedia, communications
+  }
+
+  // ---- live wallpaper: parent a window into the WorkerW layer behind the desktop icons ----
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string c, string w);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr p, IntPtr after, string c, string w);
+  [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr res);
+  [DllImport("user32.dll")] static extern IntPtr SetParent(IntPtr child, IntPtr parent);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint flags);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SystemParametersInfo(uint a, uint b, StringBuilder c, uint d);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SystemParametersInfo(uint a, uint b, string c, uint d);
+
+  public static string Wallpaper(long hwnd, int x, int y, int w, int h) {
+    IntPtr progman = FindWindow("Progman", null), r;
+    SendMessageTimeout(progman, 0x052C, new IntPtr(0xD), new IntPtr(1), 0, 1000, out r);   // ask Explorer to create the WorkerW layer
+    SendMessageTimeout(progman, 0x052C, IntPtr.Zero, IntPtr.Zero, 0, 1000, out r);
+    IntPtr worker = FindWindowEx(progman, IntPtr.Zero, "WorkerW", null);                   // Windows 11 24H2 and later
+    if (worker == IntPtr.Zero) EnumWindows((top, l) => {                                     // older Windows: the WorkerW after the icons' window
+      if (FindWindowEx(top, IntPtr.Zero, "SHELLDLL_DefView", null) != IntPtr.Zero) worker = FindWindowEx(IntPtr.Zero, top, "WorkerW", null);
+      return true;
+    }, IntPtr.Zero);
+    if (worker == IntPtr.Zero) return "{\"ok\":false}";
+    SetParent(new IntPtr(hwnd), worker);
+    SetWindowPos(new IntPtr(hwnd), IntPtr.Zero, x, y, w, h, 0x0040 | 0x0004);              // SHOWWINDOW | NOZORDER, coords relative to the layer
+    return "{\"ok\":true}";
+  }
+
+  public static void RefreshWallpaper() {                                                    // repaint the normal wallpaper after we leave
+    var sb = new StringBuilder(520);
+    SystemParametersInfo(0x0073, 520, sb, 0);                                                 // SPI_GETDESKWALLPAPER
+    SystemParametersInfo(0x0014, 0, sb.ToString(), 0x2);                                      // SPI_SETDESKWALLPAPER, broadcast change
+  }
+}
+`;
+
+const PS = `
+$ErrorActionPreference = 'Stop'
+Add-Type -TypeDefinition @'
+${CS}
+'@
+[Console]::Out.WriteLine('{"ready":true}')
+while ($true) {
+  $line = [Console]::In.ReadLine(); if ($line -eq $null) { break }
+  try {
+    $p = $line.Split(' ')
+    switch ($p[0]) {
+      'volume'    { [Console]::Out.WriteLine([CP]::Volume()) }
+      'outputs'   { [Console]::Out.WriteLine([CP]::Outputs()) }
+      'default'   { [CP]::SetDefault([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p[1]))); [Console]::Out.WriteLine('{"ok":true}') }
+      'wallpaper' { [Console]::Out.WriteLine([CP]::Wallpaper([long]$p[1], [int]$p[2], [int]$p[3], [int]$p[4], [int]$p[5])) }
+      'refresh'   { [CP]::RefreshWallpaper(); [Console]::Out.WriteLine('{"ok":true}') }
+      default     { [Console]::Out.WriteLine('null') }
+    }
+  } catch { [Console]::Out.WriteLine('null') }
+}
+`;
+
+let proc = null, buf = '', queue = [], ready = null;
+function start() {
+  if (process.platform !== 'win32' || proc) return;
+  const encoded = Buffer.from(PS, 'utf16le').toString('base64');
+  proc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], { windowsHide: true });
+  ready = new Promise(res => { queue.push(res); });          // the first line is the "ready" signal
+  proc.stdout.setEncoding('utf8');
+  proc.stdout.on('data', d => {
+    buf += d;
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line) continue;
+      let val = null; try { val = JSON.parse(line); } catch {}
+      const res = queue.shift(); if (res) res(val);
+    }
+  });
+  proc.on('exit', () => { proc = null; queue.splice(0).forEach(r => r(null)); });
+  proc.on('error', () => { proc = null; queue.splice(0).forEach(r => r(null)); });
+}
+async function call(cmd) {
+  if (!proc) return null;
+  await ready;
+  if (!proc) return null;
+  return new Promise(res => { queue.push(res); proc.stdin.write(cmd + '\n'); });
+}
+const int = n => Math.round(Number(n)) | 0;
+
+module.exports = {
+  start,
+  stop: () => { if (proc) proc.kill(); },
+  volume: () => call('volume'),
+  outputs: () => call('outputs'),
+  setDefault: id => typeof id === 'string' && id.length < 300 ? call('default ' + Buffer.from(id, 'utf8').toString('base64')) : null,
+  wallpaper: (hwnd, b) => call(`wallpaper ${BigInt(hwnd)} ${int(b.x)} ${int(b.y)} ${int(b.width)} ${int(b.height)}`),
+  refreshWallpaper: () => call('refresh'),
+};
