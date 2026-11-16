@@ -13,10 +13,8 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 if (!app.requestSingleInstanceLock()) app.quit();
 
-// The only page this app ever shows. Anything else is refused. (file: URLs have origin "null",
-// so compare the URL with its query and hash cut off.)
-const INDEX = pathToFileURL(path.join(__dirname, 'index.html')).href;
-const isOurs = url => { try { const u = new URL(url); return u.protocol === 'file:' && u.href.split(/[?#]/)[0] === INDEX; } catch { return false; } };
+// The only page this app ever shows. Anything else is refused.
+const isOurs = require('./isours')(pathToFileURL(path.join(__dirname, 'index.html')).href);
 const PREFS = { contextIsolation: true, sandbox: true, nodeIntegration: false, preload: path.join(__dirname, 'preload.js') };
 const ICON = path.join(__dirname, 'assets', 'icon.png');
 const load = (win, query) => win.loadFile(path.join(__dirname, 'index.html'), { query });
@@ -80,9 +78,9 @@ function openFull(mode = prefs.fullMode || 'one') {
     w.on('closed', () => { if (!alive(fulls).length) closeFull(); });
     return w;
   });
-  // Full screen can cover every screen, taskbar and tray included, so Esc must always get you out,
-  // whichever window has focus. It's claimed only while full screen is showing.
-  globalShortcut.register('Escape', closeFull);
+  // Full screen on every screen covers the taskbar and tray too, so Esc must always get you out, whichever window has focus.
+  // It's claimed only then: on one screen the window's own Esc works and other apps keep theirs.
+  if (mode !== 'one') globalShortcut.register('Escape', closeFull);
   if (control && !control.isDestroyed()) control.setAlwaysOnTop(true, 'screen-saver');   // the Control Center stays reachable
   updateTray();
 }
@@ -118,7 +116,10 @@ async function openSettings(target = 'widget', screenIdx = null) {
 function raise(w) { if (alive(fulls).length) w.setAlwaysOnTop(true, 'screen-saver'); w.show(); w.focus(); }
 
 // prefs.wall = { mode: 'off' | 'one' | 'per' | 'span', display: id (for 'one') }
-async function setWallpaper(cfg) {
+// Calls run one at a time: a second call during the old windows' teardown would otherwise build a set nobody tracks.
+let wallJob = Promise.resolve();
+const setWallpaper = cfg => (wallJob = wallJob.catch(() => {}).then(() => applyWallpaper(cfg)));
+async function applyWallpaper(cfg) {
   if (alive(walls).length) {
     alive(walls).forEach(w => w.destroy()); walls = [];
     await Promise.race([win32.refreshWallpaper(), new Promise(r => setTimeout(r, 3000))]);
@@ -132,9 +133,11 @@ async function setWallpaper(cfg) {
       backgroundColor: '#05060c', title: 'City Pulse Wallpaper', webPreferences: { ...PREFS, backgroundThrottling: false } });
     load(w, { full: '1', wall: '1', ...query });
     w.once('ready-to-show', async () => {
+      if (w.isDestroyed()) return;
       const hwnd = w.getNativeWindowHandle().readBigUInt64LE(0), rel = { x: d.bounds.x - vx, y: d.bounds.y - vy, width: d.bounds.width, height: d.bounds.height };
       const res = await win32.wallpaper(hwnd, rel);
-      if (!res || !res.ok) {                              // Windows didn't allow it: back out quietly
+      if (w.isDestroyed() || !res) return;                // replaced meanwhile, or the helper restarted (it isn't a "no")
+      if (!res.ok) {                                      // Windows didn't allow it: back out quietly
         await setWallpaper({ mode: 'off' });
         tray.displayBalloon?.({ title: 'City Pulse', content: 'Live wallpaper isn’t available on this version of Windows.' });
       } else {
@@ -238,22 +241,25 @@ function updateTray() {
 
 // One native capture, sent to every window that draws a city.
 // prefs.source = { id, input }: id '' = the Windows default output (followed if it changes).
-let stopCapture = null, captureKey = '', defaultOut = null, retry = null;
+// If the chosen device fails, this session falls back to the default output; the saved choice is tried again next launch.
+let stopCapture = null, captureKey = '', defaultOut = null, retry = null, fellBack = false, backoff = 3000, sysVol = null;
 const cityWindows = () => [widget, ...fulls, ...walls].filter(w => w && !w.isDestroyed());
+const currentSource = () => (!fellBack && prefs.source) || { id: '', input: false };
 function startCapture() {
-  const src = prefs.source || { id: '', input: false }, key = `${src.input}:${src.id}:${src.id ? '' : defaultOut}`;
+  const src = currentSource(), key = `${src.input}:${src.id}:${src.id ? '' : defaultOut}`;
   if (stopCapture && key === captureKey) return;
   stopCapture?.(); captureKey = key; clearTimeout(retry);
   stopCapture = audiocap.start(src.id, src.input,
-    f => { const frame = { bins: f.bins, peak: f.peak, source: src.id }; for (const w of cityWindows()) w.webContents.send('audio-frame', frame); },
-    () => {                                              // device unplugged or capture failed: back to the default output, try again shortly
+    f => { backoff = 3000; const frame = { bins: f.bins, peak: f.peak, source: src.id }; for (const w of cityWindows()) w.webContents.send('audio-frame', frame); },
+    () => {                                              // device unplugged or capture failed: back to the default output, try again
       stopCapture = null; captureKey = '';
-      if (src.id) { prefs.source = { id: '', input: false }; savePrefs(); broadcastSources(); }
-      retry = setTimeout(startCapture, 3000);
+      if (src.id) { fellBack = true; broadcastSources(); }
+      retry = setTimeout(startCapture, backoff);
+      backoff = Math.min(60000, backoff * 2);            // each try compiles the C# helper: don't do that every 3 s for days
     });
 }
 async function sourceList() {
-  const [outs, ins] = await Promise.all([win32.outputs(), win32.inputs()]), cur = prefs.source || { id: '' };
+  const [outs, ins] = await Promise.all([win32.outputs(), win32.inputs()]), cur = currentSource();
   return [{ id: '', name: 'Default output (follows Windows)', kind: 'output', selected: !cur.id },
     ...(outs || []).map(o => ({ id: o.id, name: o.name, kind: 'output', selected: cur.id === o.id })),
     ...(ins || []).map(i => ({ id: i.id, name: i.name, kind: 'input', selected: cur.id === i.id }))];
@@ -265,13 +271,15 @@ async function broadcastSources() {
 async function setSource(id) {
   const match = (await sourceList()).find(s => s.id === (id || ''));
   if (!match) return false;
-  prefs.source = { id: match.id, input: match.kind === 'input' }; savePrefs();
+  prefs.source = { id: match.id, input: match.kind === 'input' }; savePrefs(); fellBack = false; backoff = 3000;
   startCapture(); broadcastSources();
   return true;
 }
+// Read once here for every window: the meter's volume and the default output to follow.
 async function watchDefault() {
   const v = await win32.volume();
-  if (v && v.id !== defaultOut) { defaultOut = v.id; if (!(prefs.source || {}).id) startCapture(); broadcastSources(); }
+  sysVol = v;
+  if (v && v.id !== defaultOut) { defaultOut = v.id; if (!currentSource().id) startCapture(); broadcastSources(); }
 }
 
 function openControl() {
@@ -303,7 +311,7 @@ ipcMain.on('close-window', e => {
   if (fulls.includes(w)) closeFull();                     // Esc on any full-screen window closes all of them
   else w?.close();
 });
-ipcMain.handle('volume', e => fromUs(e) ? win32.volume() : null);
+ipcMain.handle('volume', e => fromUs(e) ? sysVol : null);
 ipcMain.handle('sources', e => fromUs(e) ? sourceList() : null);
 ipcMain.handle('set-source', (e, id) => fromUs(e) && typeof id === 'string' ? setSource(id) : false);
 ipcMain.on('open-control', e => { if (fromUs(e)) openControl(); });
@@ -339,13 +347,13 @@ app.whenReady().then(() => {
   tray.setToolTip('City Pulse');
   tray.on('click', openControl);
   startCapture();
-  watchDefault(); setInterval(watchDefault, 2000);
+  watchDefault(); setInterval(watchDefault, 500);
   widget.on('show', updateTray); widget.on('hide', updateTray);
   updateTray();
   if (prefs.wallpaper && !prefs.wall) prefs.wall = { mode: 'one', display: prefs.wallpaper };
   if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall);
   setupUpdates();
-  const rearranged = () => { updateTray(); if (prefs.wall && ['per', 'span'].includes(prefs.wall.mode)) setWallpaper(prefs.wall); };
+  const rearranged = () => { updateTray(); if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall); };
   screen.on('display-added', rearranged); screen.on('display-removed', rearranged);
 });
 

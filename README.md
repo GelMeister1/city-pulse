@@ -100,6 +100,8 @@ node node_modules/electron/install.js
 
 You can also open `index.html` straight in a browser for the full-screen version. Use **🔊 Share audio** and tick "Share audio" in the picker. The browser version has no tray, output menu or wallpaper; those need the app.
 
+`npm test` checks the page-access gate and lays out every city in every view at a few window sizes, in a hidden, muted window.
+
 ## Build the exe
 
 ```bash

@@ -85,7 +85,7 @@ public static class Cap {
     var clock = Stopwatch.StartNew(); long lastData = 0, lastFrame = 0; float peak = 0;
     var fbuf = new float[4096]; var sbuf = new short[4096];
     while (true) {
-      int packet; cap.GetNextPacketSize(out packet);
+      int packet; Marshal.ThrowExceptionForHR(cap.GetNextPacketSize(out packet));   // fails once the device is unplugged: end, so the app falls back
       while (packet > 0) {
         IntPtr data; int frames, flags; long dp, qpc;
         Marshal.ThrowExceptionForHR(cap.GetBuffer(out data, out frames, out flags, out dp, out qpc));
@@ -100,7 +100,7 @@ public static class Cap {
         }
         cap.ReleaseBuffer(frames);
         lastData = clock.ElapsedMilliseconds;
-        cap.GetNextPacketSize(out packet);
+        Marshal.ThrowExceptionForHR(cap.GetNextPacketSize(out packet));
       }
       long now = clock.ElapsedMilliseconds;
       if (now - lastData > 60) {                                     // nothing playing: loopback sends no packets, so feed silence

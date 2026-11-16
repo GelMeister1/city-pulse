@@ -533,7 +533,7 @@ function fitRow(list, maxU) {                            // keep only whole buil
   const out = []; let acc = 0;
   for (let s of list) {
     if (!out.length && s[0] < 0) s = [0, ...s.slice(1)];  // the first building can't overlap a neighbour that isn't there
-    const w = gapOf(s[0]) + wOf(s); if (acc + w > maxU) break; out.push(s); acc += w;
+    const w = gapOf(s[0]) + wOf(s); if (out.length && acc + w > maxU) break; out.push(s); acc += w;   // always keep one, so a tiny window isn't empty
   }
   return out;
 }
@@ -627,9 +627,13 @@ function tourStops() {
 function layout() {
   dpr = devicePixelRatio || 1;
   W = innerWidth; H = innerHeight;
-  for (const c of [cv, lay, acc]) { c.width = W * dpr; c.height = H * dpr; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
+  const tour = S.view === 'tour';
+  for (const c of [cv, lay, acc]) {                      // the blend buffers are only used by the tour
+    const s = c === cv || tour ? dpr : 0;
+    c.width = W * s; c.height = H * s; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
 
-  const r = rng(7), tour = S.view === 'tour', city = !tour && CITIES[S.city], key = tour ? 'none' : themeKey(S.city);
+  const r = rng(7), city = !tour && CITIES[S.city], key = tour ? 'none' : themeKey(S.city);
   theme = THEMES[key]; skies.clear();
   ({ GH, WY, GY } = geom(H, theme, S));                  // the tour keeps the street everywhere, so every city stands on one line
   unit = unitFor(W, H, S);
@@ -718,7 +722,7 @@ function layout() {
   const lms = buildings.filter(b => b.lm);
   lms.forEach((b, i) => { b.band = lms.length > 1 ? Math.round(i * (NB - 1) / (lms.length - 1)) : 0; });
   buildings.filter(b => !b.lm).forEach((b, i) => { b.band = i * 3 % NB; });
-  if (S.view === 'fit') console.assert(buildings.every(b => b.cx - b.wpx / 2 >= -1 && b.cx + b.half <= W + 1) || !!city, 'building cut off');   // side face only sticks out on the right
+  if (S.view === 'fit') console.assert(buildings.every(b => b.cx - b.wpx / 2 >= -1 && b.cx + b.half <= W + 1) || !!city || buildings.length === 1, 'building cut off');   // side face only sticks out on the right
   console.assert(buildings.every(b => b.band >= 0 && b.band < NB && isFinite(b.cx) && b.floors > 0), 'bad layout');
 
   stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: r() * W, y: r() * H * .6, s: r() < .85 ? 1 : 2, sp: .5 + r(), ph: r() * 7 }));
@@ -902,7 +906,7 @@ $('presetDel').onclick = () => {
 };
 fillPresets();
 pick = hexToHS(S.color); refreshPanel();
-function cycleSelect(id) { const el = $(id); el.selectedIndex = (el.selectedIndex + 1) % el.options.length; el.oninput(); }
+function cycleSelect(id) { const el = $(id); if (el.disabled) return; el.selectedIndex = (el.selectedIndex + 1) % el.options.length; el.oninput(); }
 function toggleFs() {
   if (widget) cityPulse.openFull();                    // the app opens it on the display the widget is on
   else if (full) cityPulse.closeWindow();
@@ -915,9 +919,11 @@ addEventListener('storage', e => {
     fillPresets();
   } else if (controlMode) {                            // a screen's city changed somewhere: show it
     if (e.key?.startsWith('cityPulse:')) ccCities();
-  } else if (e.key === KEY && !settingsMode) {          // the settings window changed this window's settings: apply them live
+  } else if (e.key === KEY) {                           // another window changed these settings: apply them live
+    const before = RELAYOUT.map(k => S[k]).join('|');
     try { loadSettings(e.newValue || '{}'); } catch { return; }
-    Object.keys(DEF).forEach(showSetting); pick = hexToHS(S.color); refreshPanel(); layout();
+    Object.keys(DEF).forEach(showSetting); pick = hexToHS(S.color); refreshPanel();
+    if (!noCity && RELAYOUT.map(k => S[k]).join('|') !== before) layout();   // a rebuild re-rolls clouds and cars, so only when the scene changed
   }
 });
 $('gear').onclick = () => {
@@ -932,7 +938,7 @@ $('fs').onclick = toggleFs;
 $('ccOpen').hidden = !(inApp && cityPulse.control);
 $('ccOpen').onclick = () => cityPulse.control.open();
 addEventListener('keydown', e => {
-  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (noCity || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
   if (k === 'f') toggleFs(); else if (k === 'm') cycleSelect('mode'); else if (k === 'c') cycleSelect('effect');
   else if (k === 'v') cycleSelect('view'); else if (k === 'w') cycleSelect('weather');
@@ -1082,7 +1088,7 @@ function drawBuilding(g, b, cx, t) {
   let tip;
   if (b.lm) {
     g.save(); g.translate(cx, GY); g.scale(u, u);
-    b.lm.draw(g, { body, edge, win: a => winStyle(c, a), lit: y => alphaFor(b, Math.floor(y / b.lm.h * b.floors)) });
+    b.lm.draw?.(g, { body, edge, win: a => winStyle(c, a), lit: y => alphaFor(b, Math.floor(y / b.lm.h * b.floors)) });
     g.restore();
     tip = [cx, GY - b.lm.h * u];
   } else {
@@ -1311,7 +1317,8 @@ function sprite(rgb) {
 const rc = document.createElement('canvas'), rcx = rc.getContext('2d');
 function drawWater(g, t) {
   const src = cv, sc = src.width / W, wh = H - WY, band = Math.min(GY, wh * 2);   // the scene, even when drawn into a tour layer
-  rc.width = src.width; rc.height = Math.max(1, Math.ceil(band * sc));
+  const rh = Math.max(1, Math.ceil(band * sc));
+  if (rc.width !== src.width || rc.height !== rh) { rc.width = src.width; rc.height = rh; } else rcx.clearRect(0, 0, rc.width, rc.height);
   rcx.drawImage(src, 0, (GY - band) * sc, src.width, band * sc, 0, 0, src.width, band * sc);
   for (let y = 0; y < wh; y += 2) {
     const sy = (band - y * 2 - 2) * sc;                // squashed reflection: 2 source rows per water row
@@ -1891,7 +1898,7 @@ function start() {
   layout();
   addEventListener('resize', layout);
   // The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.
-  (function loop(t) { frame(t); requestAnimationFrame(loop); })(performance.now());
+  (function loop(t) { requestAnimationFrame(loop); frame(t); })(performance.now());   // book the next frame first, so one throw can't stop the animation
 }
 </script>
 <!-- Plugin files: extra themed cities, real cities and landmarks, written against window.CityPulse. A missing file is just skipped. -->

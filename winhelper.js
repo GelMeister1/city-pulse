@@ -1,9 +1,8 @@
 // Small Windows helper: one long-lived PowerShell process with a few C# calls into Windows' audio and window APIs.
 //   volume  -> master volume (0..1), mute and the default output device's id
-//   outputs -> active output devices [{ id, name, default }]
-//   setDefault(id) -> make a device the Windows default output (what the visualizer listens to)
+//   outputs, inputs -> active output / input devices [{ id, name, default }]
 //   wallpaper(hwnd, x, y, w, h) -> put a window behind the desktop icons; refreshWallpaper() repaints the normal wallpaper
-// Requests are answered one JSON line each, in order. If PowerShell isn't available every call resolves to null.
+// Requests are answered one JSON line each, in order. If PowerShell isn't available every call resolves to null; if it exits it restarts.
 const { spawn } = require('child_process');
 
 const CS = String.raw`
@@ -14,7 +13,6 @@ using System.Text;
 
 public static class CP {
   [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumeratorCo {}
-  [ComImport, Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")] class PolicyConfigCo {}
 
   [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
   interface IMMDeviceEnumerator {
@@ -41,14 +39,6 @@ public static class CP {
     int SetChannelVolumeLevel(uint ch, float l, ref Guid ctx); int SetChannelVolumeLevelScalar(uint ch, float l, ref Guid ctx);
     int GetChannelVolumeLevel(uint ch, out float l); int GetChannelVolumeLevelScalar(uint ch, out float l);
     int SetMute([MarshalAs(UnmanagedType.Bool)] bool m, ref Guid ctx); int GetMute([MarshalAs(UnmanagedType.Bool)] out bool m);
-  }
-  [ComImport, Guid("f8679f50-850a-41cf-9c72-430f290290c8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-  interface IPolicyConfig {
-    int GetMixFormat(IntPtr a, IntPtr b); int GetDeviceFormat(IntPtr a, int b, IntPtr c); int ResetDeviceFormat(IntPtr a);
-    int SetDeviceFormat(IntPtr a, IntPtr b, IntPtr c); int GetProcessingPeriod(IntPtr a, int b, IntPtr c, IntPtr d);
-    int SetProcessingPeriod(IntPtr a, IntPtr b); int GetShareMode(IntPtr a, IntPtr b); int SetShareMode(IntPtr a, IntPtr b);
-    int GetPropertyValue(IntPtr a, IntPtr b, IntPtr c); int SetPropertyValue(IntPtr a, IntPtr b, IntPtr c);
-    int SetDefaultEndpoint([MarshalAs(UnmanagedType.LPWStr)] string id, int role);
   }
 
   static IMMDeviceEnumerator En() { return (IMMDeviceEnumerator)new MMDeviceEnumeratorCo(); }
@@ -80,11 +70,6 @@ public static class CP {
       parts.Add("{\"id\":\"" + Esc(id) + "\",\"name\":\"" + Esc(Name(d)) + "\",\"default\":" + (id == defId ? "true" : "false") + "}");
     }
     return "[" + string.Join(",", parts) + "]";
-  }
-
-  public static void SetDefault(string id) {
-    var pc = (IPolicyConfig)new PolicyConfigCo();
-    for (int role = 0; role < 3; role++) pc.SetDefaultEndpoint(id, role);   // console, multimedia, communications
   }
 
   // ---- live wallpaper: parent a window into the WorkerW layer behind the desktop icons ----
@@ -140,7 +125,6 @@ while ($true) {
       'volume'    { [Console]::Out.WriteLine([CP]::Volume()) }
       'outputs'   { [Console]::Out.WriteLine([CP]::Outputs()) }
       'inputs'    { [Console]::Out.WriteLine([CP]::Inputs()) }
-      'default'   { [CP]::SetDefault([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p[1]))); [Console]::Out.WriteLine('{"ok":true}') }
       'wallpaper' { [Console]::Out.WriteLine([CP]::Wallpaper([long]$p[1], [int]$p[2], [int]$p[3], [int]$p[4], [int]$p[5])) }
       'refresh'   { [CP]::RefreshWallpaper(); [Console]::Out.WriteLine('{"ok":true}') }
       default     { [Console]::Out.WriteLine('null') }
@@ -149,7 +133,7 @@ while ($true) {
 }
 `;
 
-let proc = null, buf = '', queue = [], ready = null;
+let proc = null, buf = '', queue = [], ready = null, stopping = false;
 function start() {
   if (process.platform !== 'win32' || proc) return;
   const encoded = Buffer.from(PS, 'utf16le').toString('base64');
@@ -166,7 +150,7 @@ function start() {
       const res = queue.shift(); if (res) res(val);
     }
   });
-  proc.on('exit', () => { proc = null; queue.splice(0).forEach(r => r(null)); });
+  proc.on('exit', () => { proc = null; buf = ''; queue.splice(0).forEach(r => r(null)); if (!stopping) setTimeout(start, 3000); });
   proc.on('error', () => { proc = null; queue.splice(0).forEach(r => r(null)); });
 }
 async function call(cmd) {
@@ -179,11 +163,10 @@ const int = n => Math.round(Number(n)) | 0;
 
 module.exports = {
   start,
-  stop: () => { if (proc) proc.kill(); },
+  stop: () => { stopping = true; if (proc) proc.kill(); },
   volume: () => call('volume'),
   outputs: () => call('outputs'),
   inputs: () => call('inputs'),
-  setDefault: id => typeof id === 'string' && id.length < 300 ? call('default ' + Buffer.from(id, 'utf8').toString('base64')) : null,
   wallpaper: (hwnd, b) => call(`wallpaper ${BigInt(hwnd)} ${int(b.x)} ${int(b.y)} ${int(b.width)} ${int(b.height)}`),
   refreshWallpaper: () => call('refresh'),
 };
