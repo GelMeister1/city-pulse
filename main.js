@@ -350,7 +350,6 @@ app.whenReady().then(() => {
   watchDefault(); setInterval(watchDefault, 500);
   widget.on('show', updateTray); widget.on('hide', updateTray);
   updateTray();
-  if (prefs.wallpaper && !prefs.wall) prefs.wall = { mode: 'one', display: prefs.wallpaper };
   if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall);
   setupUpdates();
   const rearranged = () => { updateTray(); if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall); };

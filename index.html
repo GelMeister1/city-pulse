@@ -686,7 +686,7 @@ function layout() {
       xU += gapOf(gap);
       const b = { id: buildings.length, theme: seg.theme, cx: (xU + wU / 2) * unit, wpx: wU * unit, half: (wU / 2 + 1.6) * unit,
         hue: r() * 360, rhue: r() * 360,
-        level: 0, pk: 0, hold: 0, max: .05, prev: 0, avg: 0, flash: 0, hit: 0 };
+        level: 0, pk: 0, hold: 0, prev: 0, flash: 0 };
       if (style[0] === '@') {
         b.lm = LM[style.slice(1)]; b.floors = Math.round(b.lm.h / 2); b.blink = true; b.hU = b.lm.h;
       } else {
@@ -856,7 +856,7 @@ for (const k of Object.keys(DEF)) {
 // A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
 const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan'];
 const lookOf = s => Object.fromEntries(Object.keys(DEF).filter(k => !PLACE.includes(k)).map(k => [k, s[k]]));
-const BUILTIN = {
+const BUILTIN = Object.assign(Object.create(null), {
   'Lounge': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
     blinkSpeed: 10, flickAmt: 12, search: false, shooting: false, traffic: 20 },
   'Chill Night': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 15, react: 35, bright: 60, meter: false,
@@ -865,9 +865,14 @@ const BUILTIN = {
     blinkBeat: true, blinkColor: '#ff2aa0', flickAmt: 40, search: true, clouds: false, traffic: 60 },
   'Neon Tour': { ...lookOf(DEF), view: 'tour', scroll: 25, effect: 'drift', bright: 90, meter: false,   // the one preset that also moves you: it's made for the scrolling TV view
     flickAmt: 25, search: true },
-};
-let mine;
-try { mine = JSON.parse(localStorage.getItem('cityPulsePresets') || '{}'); } catch { mine = {}; }
+});
+// Saved presets, as a map with no prototype, so a name like "toString" is just a name. Anything that isn't a map is ignored.
+function readMine(json) {
+  let v = null; try { v = JSON.parse(json || '{}'); } catch {}
+  const isMap = x => !!x && typeof x === 'object' && !Array.isArray(x);
+  return Object.assign(Object.create(null), isMap(v) ? Object.fromEntries(Object.entries(v).filter(([, p]) => isMap(p))) : {});
+}
+let mine = readMine(localStorage.getItem('cityPulsePresets'));
 const saveMine = () => { try { localStorage.setItem('cityPulsePresets', JSON.stringify(mine)); } catch {} };
 const esc = s => s.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
 function fillPresets() {
@@ -915,7 +920,7 @@ function toggleFs() {
 if (full) { $('fs').textContent = '⛶ Exit full screen'; addEventListener('keydown', e => { if (e.key === 'Escape') cityPulse.closeWindow(); }); }
 addEventListener('storage', e => {
   if (e.key === 'cityPulsePresets') {                  // presets saved in any window appear everywhere right away
-    try { mine = JSON.parse(e.newValue || '{}'); } catch { mine = {}; }
+    mine = readMine(e.newValue);
     fillPresets();
   } else if (controlMode) {                            // a screen's city changed somewhere: show it
     if (e.key?.startsWith('cityPulse:')) ccCities();
