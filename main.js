@@ -6,6 +6,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const { pathToFileURL } = require('url');
 const win32 = require('./winhelper');
+const audiocap = require('./audiocap');
 const { autoUpdater } = require('electron-updater');
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -26,7 +27,7 @@ const prefsFile = () => path.join(app.getPath('userData'), 'app-prefs.json');
 let prefs = {};
 const savePrefs = () => { try { fs.writeFileSync(prefsFile(), JSON.stringify(prefs)); } catch {} };
 
-let tray, widget;
+let tray, widget, control;
 let fulls = [], walls = [];                                  // full-screen and wallpaper windows (one per screen in multi-screen modes)
 const settings = {};                                         // one settings window per target (and screen)
 
@@ -83,12 +84,13 @@ function openFull(mode = prefs.fullMode || 'one') {
   // Full screen can cover every screen, taskbar and tray included, so Esc must always get you out,
   // whichever window has focus. It's claimed only while full screen is showing.
   globalShortcut.register('Escape', closeFull);
+  if (control && !control.isDestroyed()) control.setAlwaysOnTop(true, 'screen-saver');   // the Control Center stays reachable
   updateTray();
 }
 function closeFull() {
   globalShortcut.unregister('Escape');
   alive(fulls).forEach(w => w.close()); fulls = [];
-  Object.values(settings).forEach(w => { if (!w.isDestroyed()) w.setAlwaysOnTop(false); });   // back to a normal window
+  [...Object.values(settings), control].forEach(w => { if (w && !w.isDestroyed()) w.setAlwaysOnTop(false); });   // back to normal windows
   updateTray();
 }
 
@@ -202,7 +204,9 @@ function updateTray() {
   const wall = prefs.wall || { mode: 'off' }, fullOpen = alive(fulls).length > 0, fm = prefs.fullMode || 'one';
   const screenName = (d, i) => `Screen ${i + 1}: ${d.label || 'display'} (${d.bounds.width}×${d.bounds.height})`;
   const perScreen = target => list.map((d, i) => ({ label: `${screenName(d, i)}…`, click: () => openSettings(target, i) }));
+  if (control && !control.isDestroyed()) control.webContents.send('control-state', controlState());   // keep the Control Center in step
   tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Control Center…', click: openControl },
     { label: shown ? 'Hide widget' : 'Show widget', click: () => { shown ? widget.hide() : widget.show(); updateTray(); } },
     { label: 'Full screen', submenu: [
       ...(fullOpen ? [{ label: 'Close full screen', click: closeFull }, { type: 'separator' }] : []),
@@ -237,6 +241,65 @@ function updateTray() {
   ]));
 }
 
+// ---- audio: one native capture, sent to every window that draws a city ----
+// prefs.source = { id, input }: id '' = the Windows default output (followed if it changes).
+let stopCapture = null, captureKey = '', defaultOut = null, retry = null;
+const cityWindows = () => [widget, ...fulls, ...walls].filter(w => w && !w.isDestroyed());
+function startCapture() {
+  const src = prefs.source || { id: '', input: false }, key = `${src.input}:${src.id}:${src.id ? '' : defaultOut}`;
+  if (stopCapture && key === captureKey) return;
+  stopCapture?.(); captureKey = key; clearTimeout(retry);
+  stopCapture = audiocap.start(src.id, src.input,
+    f => { const frame = { bins: f.bins, peak: f.peak, source: src.id }; for (const w of cityWindows()) w.webContents.send('audio-frame', frame); },
+    () => {                                              // device unplugged or capture failed: back to the default output, try again shortly
+      stopCapture = null; captureKey = '';
+      if (src.id) { prefs.source = { id: '', input: false }; savePrefs(); broadcastSources(); }
+      retry = setTimeout(startCapture, 3000);
+    });
+}
+async function sourceList() {
+  const [outs, ins] = await Promise.all([win32.outputs(), win32.inputs()]), cur = prefs.source || { id: '' };
+  return [{ id: '', name: 'Default output (follows Windows)', kind: 'output', selected: !cur.id },
+    ...(outs || []).map(o => ({ id: o.id, name: o.name, kind: 'output', selected: cur.id === o.id })),
+    ...(ins || []).map(i => ({ id: i.id, name: i.name, kind: 'input', selected: cur.id === i.id }))];
+}
+async function broadcastSources() {
+  const list = await sourceList();
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('sources', list);
+}
+async function setSource(id) {
+  const match = (await sourceList()).find(s => s.id === (id || ''));
+  if (!match) return false;                              // only devices that actually exist
+  prefs.source = { id: match.id, input: match.kind === 'input' }; savePrefs();
+  startCapture(); broadcastSources();
+  return true;
+}
+// Follow the Windows default output when that's the source, and keep the device lists fresh.
+async function watchDefault() {
+  const v = await win32.volume();
+  if (v && v.id !== defaultOut) { defaultOut = v.id; if (!(prefs.source || {}).id) startCapture(); broadcastSources(); }
+}
+
+// ---- Control Center: a persistent window for everything desktop-wide ----
+function openControl() {
+  if (control && !control.isDestroyed()) { control.show(); return control.focus(); }
+  const d = displayOf(widget), wa = d.workArea, b = prefs.controlBounds;
+  const onScreen = b && screen.getAllDisplays().some(x => b.x >= x.workArea.x && b.y >= x.workArea.y && b.x < x.workArea.x + x.workArea.width && b.y < x.workArea.y + x.workArea.height);
+  control = new BrowserWindow({ width: 440, height: Math.min(720, wa.height - 40), minWidth: 360,
+    ...(onScreen ? { x: b.x, y: b.y } : { x: Math.round(wa.x + (wa.width - 440) / 2), y: Math.round(wa.y + 20) }),
+    title: 'City Pulse Control Center', icon: ICON, autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
+  load(control, { control: '1' });
+  if (alive(fulls).length) control.setAlwaysOnTop(true, 'screen-saver');   // stays reachable over full screen
+  control.on('close', () => { const { x, y } = control.getBounds(); prefs.controlBounds = { x, y }; savePrefs(); });
+}
+function controlState() {
+  const list = screensLR(), wall = prefs.wall || { mode: 'off' };
+  return { fullMode: alive(fulls).length ? (prefs.fullMode || 'one') : 'off', wallMode: wall.mode || 'off',
+    wallScreen: wall.mode === 'one' ? list.findIndex(d => d.id === wall.display) : null,
+    widgetShown: !!(widget && !widget.isDestroyed() && widget.isVisible()),
+    screens: list.map((d, i) => ({ index: i, label: d.label || `Screen ${i + 1}`, w: d.bounds.width, h: d.bounds.height })) };
+}
+
 // Page → app calls. Only our own page may use them.
 const fromUs = e => isOurs(e.senderFrame && e.senderFrame.url);
 ipcMain.on('open-full', e => { if (fromUs(e)) openFull(); });
@@ -248,10 +311,27 @@ ipcMain.on('close-window', e => {
   else w?.close();
 });
 ipcMain.handle('volume', e => fromUs(e) ? win32.volume() : null);
-ipcMain.handle('outputs', e => fromUs(e) ? win32.outputs() : null);
-ipcMain.handle('set-output', (e, id) => fromUs(e) ? win32.setDefault(id) : null);
+ipcMain.handle('sources', e => fromUs(e) ? sourceList() : null);
+ipcMain.handle('set-source', (e, id) => fromUs(e) && typeof id === 'string' ? setSource(id) : false);
+ipcMain.on('open-control', e => { if (fromUs(e)) openControl(); });
+ipcMain.handle('control-state', e => fromUs(e) ? controlState() : null);
+const MODES = ['off', 'one', 'per', 'span'];
+ipcMain.on('control-full', (e, mode) => {
+  if (!fromUs(e) || !MODES.includes(mode)) return;
+  closeFull(); if (mode !== 'off') openFull(mode);
+});
+ipcMain.on('control-wall', (e, mode, idx) => {
+  if (!fromUs(e) || !MODES.includes(mode)) return;
+  const d = mode === 'one' && screensLR()[idx | 0];
+  if (mode === 'one' && !d) return;
+  setWallpaper(mode === 'one' ? { mode, display: d.id } : { mode });
+});
+ipcMain.on('control-widget', (e, shown) => { if (fromUs(e)) { shown ? widget.show() : widget.hide(); updateTray(); } });
+ipcMain.on('control-settings', (e, target, idx) => {
+  if (fromUs(e) && ['widget', 'full', 'wall'].includes(target)) openSettings(target, Number.isInteger(idx) ? idx : null);
+});
 
-app.on('second-instance', () => { widget?.show(); updateTray(); });
+app.on('second-instance', () => { widget?.show(); openControl(); updateTray(); });   // launching again opens the Control Center
 
 app.whenReady().then(() => {
   try { prefs = JSON.parse(fs.readFileSync(prefsFile(), 'utf8')); } catch { prefs = {}; }
@@ -264,7 +344,9 @@ app.whenReady().then(() => {
   createWidget();
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
   tray.setToolTip('City Pulse');
-  tray.on('click', () => { widget.isVisible() ? widget.hide() : widget.show(); updateTray(); });
+  tray.on('click', openControl);                         // the tray icon opens the Control Center; right-click for the quick menu
+  startCapture();
+  watchDefault(); setInterval(watchDefault, 2000);
   widget.on('show', updateTray); widget.on('hide', updateTray);
   updateTray();
   if (prefs.wallpaper && !prefs.wall) prefs.wall = { mode: 'one', display: prefs.wallpaper };   // setting from 0.2.x
@@ -278,6 +360,7 @@ app.whenReady().then(() => {
 // Leaving: take the wallpaper down and repaint the normal one, then stop the helper.
 app.on('before-quit', e => {
   app.quitting = true;
+  stopCapture?.(); clearTimeout(retry);
   if (alive(walls).length) {
     e.preventDefault();
     alive(walls).forEach(w => w.destroy()); walls = [];

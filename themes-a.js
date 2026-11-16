@@ -440,7 +440,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     '..sSSSSwSSSSSSSSwSSSSSSSSSSSSS', '.ss..SSSSSSSSSSSSSSSSSSSSSSSSS', 'ss.......LLLLLLLLLLLLLLLLLLLL.', '...............FF.............'],
     { S: '#1d3a48', s: '#1d3a48', w: '#5d8a9a', L: '#2b5262', F: '#1d3a48' });
   const st = { key: '', snow: [], jel: [], fish: [], ang: null, rk: '', ray: null, gk: '', gg: null,
-    lan: [], shrimp: [], combs: [], sip: null, sipT: -1e9, shark: null, iso: null, spk: [] };
+    lan: [], shrimp: [], bubbles: [], sip: null, sipT: -1e9, shark: null, iso: null, spk: [] };
   function sync(E) {
     const k = keyOf(E); if (st.key === k) return; st.key = k;
     const { W, GY, H, unit: u } = E, px = pxOf(E), w = E.widget;
@@ -453,7 +453,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     for (let s = 0; s < (w ? 1 : 2); s++) { const x0 = Math.random() * W, y0 = GY * (.4 + .25 * s), dir = s ? 1 : -1;
       for (let i = 0; i < (w ? 4 : 7); i++) st.lan.push({ px: px + 1, dir, v: u * 2.4, par: 1, m: 14 * u, x: x0 + (Math.random() - .5) * 12 * u, y: y0 + (Math.random() - .5) * 5 * u, ph: Math.random() * TAU }); }
     st.shrimp = Array.from({ length: w ? 2 : 5 }, () => ({ px: Math.max(1, px - 1), dir: Math.random() < .5 ? 1 : -1, v: u * 1.5, par: 1, m: 4 * u, x: Math.random() * W, y: GY * (.3 + .6 * Math.random()), ph: Math.random() * TAU }));
-    st.combs = Array.from({ length: w ? 1 : 3 }, (_, i) => ({ x: W * (.2 + .3 * i) + Math.random() * W * .1, y: GY * (.2 + .25 * i), ph: Math.random() * TAU }));
+    st.bubbles = Array.from({ length: w ? 4 : 12 }, () => ({ x: Math.random() * W, y: Math.random() * GY, r: u * (.5 + Math.random()), v: u * (1.5 + 2 * Math.random()), ph: Math.random() * TAU }));
     st.sip = { dir: 1, v: u * 1.1, par: .7, m: 32 * u, x: W * .15, y: GY * (w ? .2 : .15) };
     st.shark = w ? null : { dir: -1, v: u * .8, par: .25, m: spW(WSHARK, px * 2) + 4 * u, x: W * .6, y: GY * .08, px: px * 2 };
     st.iso = { dir: 1, v: u * .6, par: 1, m: 6 * u, x: W * .4, px };
@@ -515,17 +515,12 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         if (i % 3 === 0) glow(g, '120,200,255', bx, by, u * (1.2 + 1.5 * wave), .25 + .5 * wave);
         g.fillStyle = `rgba(${150 + 105 * wave | 0},220,255,${a})`; g.fillRect(bx - u * .3, by - u * .3, Math.max(1, u * .6), Math.max(1, u * .6));
       }
-      const rip = 1 + 2 * avg(E.bands, 5, 7);            // comb jellies: rainbow ripples racing down their comb rows
-      for (const c of st.combs) {
-        c.y += Math.sin(t / 2500 + c.ph) * u * .5 * dt; c.x += (Math.sin(t / 3700 + c.ph) * u * .4 - scrollV * .8) * dt;
-        if (c.x < -20) c.x += W + 40; else if (c.x > W + 20) c.x -= W + 40;
-        const rx = u * 2, ry = u * 3.2;
-        g.fillStyle = 'rgba(180,220,255,.08)'; g.strokeStyle = 'rgba(200,235,255,.35)'; g.lineWidth = 1;
-        g.beginPath(); g.ellipse(c.x, c.y, rx, ry, 0, 0, TAU); g.fill(); g.stroke();
-        for (let k = 0; k < 4; k++) for (let j = 0; j < 5; j++) {
-          g.fillStyle = `hsl(${(t * .25 * rip + j * 50 + k * 30) % 360},100%,65%)`;
-          g.fillRect(c.x + (k - 1.5) * rx * .45, c.y - ry * .8 + j * ry * .4, Math.max(1, u * .4), Math.max(1, u * .4));
-        }
+      g.fillStyle = 'rgba(180,230,255,.06)'; g.strokeStyle = 'rgba(200,240,255,.35)'; g.lineWidth = 1;
+      for (const b of st.bubbles) {                      // empty bubbles rising slowly from the seabed
+        b.y -= b.v * dt; b.x += (Math.sin(t / 1500 + b.ph) * u * .5 - scrollV * .8) * dt;
+        if (b.y < -b.r * 2) { b.y = GY + b.r * 2; b.x = Math.random() * W; }
+        if (b.x < -20) b.x += W + 40; else if (b.x > W + 20) b.x -= W + 40;
+        g.beginPath(); g.arc(b.x, b.y, b.r, 0, TAU); g.fill(); g.stroke();
       }
       const pf = E.bands[6].flash;                       // lanternfish: photophores flash white on the treble
       for (const f of st.lan) { swim(f, E); drawPix(g, LANTERN[pf > .5 ? 1 : 0], f.px, f.x, f.y + Math.sin(t / 700 + f.ph) * u * .4, f.dir < 0); }

@@ -68,9 +68,12 @@ public static class CP {
     return "{\"vol\":" + vol.ToString(System.Globalization.CultureInfo.InvariantCulture) + ",\"mute\":" + (mute ? "true" : "false") + ",\"id\":\"" + Esc(id) + "\"}";
   }
 
-  public static string Outputs() {
-    var en = En(); IMMDevice def; en.GetDefaultAudioEndpoint(0, 1, out def); string defId; def.GetId(out defId);
-    IMMDeviceCollection col; en.EnumAudioEndpoints(0, 1, out col); int n; col.GetCount(out n);   // render devices, active only
+  public static string Outputs() { return Endpoints(0); }
+  public static string Inputs() { return Endpoints(1); }
+  static string Endpoints(int flow) {                                          // 0 = outputs (render), 1 = inputs (capture)
+    var en = En(); string defId = "";
+    try { IMMDevice def; en.GetDefaultAudioEndpoint(flow, 1, out def); def.GetId(out defId); } catch {}   // there may be no default input
+    IMMDeviceCollection col; en.EnumAudioEndpoints(flow, 1, out col); int n; col.GetCount(out n);   // active devices only
     var parts = new List<string>();
     for (int i = 0; i < n; i++) {
       IMMDevice d; col.Item(i, out d); string id; d.GetId(out id);
@@ -136,6 +139,7 @@ while ($true) {
     switch ($p[0]) {
       'volume'    { [Console]::Out.WriteLine([CP]::Volume()) }
       'outputs'   { [Console]::Out.WriteLine([CP]::Outputs()) }
+      'inputs'    { [Console]::Out.WriteLine([CP]::Inputs()) }
       'default'   { [CP]::SetDefault([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p[1]))); [Console]::Out.WriteLine('{"ok":true}') }
       'wallpaper' { [Console]::Out.WriteLine([CP]::Wallpaper([long]$p[1], [int]$p[2], [int]$p[3], [int]$p[4], [int]$p[5])) }
       'refresh'   { [CP]::RefreshWallpaper(); [Console]::Out.WriteLine('{"ok":true}') }
@@ -178,6 +182,7 @@ module.exports = {
   stop: () => { if (proc) proc.kill(); },
   volume: () => call('volume'),
   outputs: () => call('outputs'),
+  inputs: () => call('inputs'),
   setDefault: id => typeof id === 'string' && id.length < 300 ? call('default ' + Buffer.from(id, 'utf8').toString('base64')) : null,
   wallpaper: (hwnd, b) => call(`wallpaper ${BigInt(hwnd)} ${int(b.x)} ${int(b.y)} ${int(b.width)} ${int(b.height)}`),
   refreshWallpaper: () => call('refresh'),

@@ -14,7 +14,8 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - The song is split into 8 bands, from bass to treble (Bass, Kick, Low-mid, Mid, Upper-mid, Presence, Treble, Air).
   - Each building is assigned one band for good. Landmarks are spread from bass to treble, so each famous building owns a clear part of the song.
   - Buildings on the same band move together.
-- **Pick your output:** the audio menu lists your speakers, headphones and monitors, like Windows sound settings. Picking one makes it the Windows default, and City Pulse follows it.
+- **Listen to anything:** choose any output (speakers, headphones, TV) or input (microphone, line-in). City Pulse listens to that device directly, so you never have to change your Windows default. "Default output" follows whatever Windows is playing through.
+- **Calm when quiet:** with no music playing, the city sits still.
 - **Loudness meter:** tops out at your Windows volume, so at 50% volume it peaks halfway.
 - **Skylines:**
   - **12 real cities** with hand-drawn landmarks: New York, Chicago, Seattle, San Francisco, Toronto, Dubai, Paris, London, Tokyo, Sydney, Hong Kong and Shanghai.
@@ -42,6 +43,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - **multiple screens:** full screen and the live wallpaper can each run on all screens, with either **its own city on each screen** or **one tour across all of them**. In the tour, cities scroll from screen to screen, and each screen shows its own city name.
   - the controls auto-hide
   - optional burn-in protection creeps the picture a few pixels over about 20 minutes
+- **Control Center:** a window you can keep open on any screen. It has the audio source, full screen and wallpaper modes, a city for each screen, a **Tour on every screen** button, and links to every settings window. Click the tray icon, the ☰ button, or launch City Pulse again to open it.
 - **Lives in the tray:** no taskbar button. The tray icon by the clock shows or hides the widget, and also has full screen, Settings, Start with Windows and Quit.
 - **Live wallpaper (experimental):** puts City Pulse behind your desktop icons on the display you choose, with its own look (tray → Wallpaper settings…). It relies on an unofficial Windows feature, so a future Windows update could break it. If that happens, it switches itself off.
 

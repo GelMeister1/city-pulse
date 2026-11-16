@@ -57,17 +57,44 @@
   html.settings #panel .body{gap:12px;padding:12px 4px 6px}
   /* live wallpaper: no controls at all */
   html.wall #ui,html.wall #panel{display:none !important}
+  /* control center (?control=1): the app's own window, controls only, in the settings panel's style */
+  #cc,#ccOpen{display:none}
+  html.app #ccOpen:not([hidden]){display:inline-block}
+  html.control canvas,html.control #ui,html.control #panel{display:none !important}
+  html.control,html.control body{overflow:auto;background:#0b0e1c}
+  html.control #cc{display:grid;gap:16px;padding:14px 16px 24px;color:#b9bdd0;font-size:14px}
+  #cc h1{margin:0;font-size:18px;font-weight:600;color:#e6e9f5}
+  #cc h2{margin:0 0 6px;font-size:14px;font-weight:600;color:#8fd3ff;letter-spacing:.02em}
+  #cc select{font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:6px;width:100%;min-width:0}
+  #cc .seg{display:flex;flex-wrap:wrap;gap:6px}
+  #cc button{font-size:13px}
+  #cc button.on{border-color:#7cf;color:#fff;background:#16305a}
+  #cc .big{padding:10px;font-size:15px;font-weight:600}
+  #cc .scr{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;align-items:center}
+  #cc .scr small{display:block;color:#778}
+  #cc .note{margin:6px 0 0;font-size:12px;color:#778}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
 <div id="ui">
-  <select id="output" title="Audio output City Pulse listens to (switches the Windows default)"></select>
+  <select id="output" title="Listen to: what City Pulse reacts to"></select>
   <button id="share">🔊 Share audio</button>
   <button id="gear" aria-expanded="false">⚙ Settings</button>
   <button id="fs">⛶ Full screen</button>
+  <button id="ccOpen" title="Control center">☰</button>
   <span id="hint">Demo beat playing · F full screen · M lights · C color · V view · W weather</span>
   <button id="close" title="Close">✕</button>
+</div>
+<div id="cc">
+  <h1>City Pulse</h1>
+  <section><h2>Listen to</h2><select id="ccSource"></select></section>
+  <section><h2>Full screen</h2><div class="seg" id="ccFull"></div></section>
+  <section><h2>Live wallpaper</h2><div class="seg" id="ccWall"></div></section>
+  <button id="ccTour" class="big">Tour on every screen</button>
+  <section><h2>Screens</h2><div class="scr" id="ccScreens"></div>
+    <p class="note">Each screen's city is used when full screen or the wallpaper shows its own city on each screen.</p></section>
+  <section><h2>Widget</h2><div class="seg"><button id="ccWidget">Show widget</button><button id="ccWidgetSet">Widget settings…</button></div></section>
 </div>
 <div id="panel" hidden>
   <div class="presets">
@@ -161,10 +188,12 @@ const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const $ = id => document.getElementById(id);
 const mod = (x, m) => ((x % m) + m) % m;                    // remainder that stays positive (the tour can scroll backwards)
 const qs = new URLSearchParams(location.search);
-// Window kinds: widget, full (full screen), settings (the widget's settings window), wall (live wallpaper); none = plain browser.
-const widget = qs.has('widget'), full = qs.has('full'), settingsMode = qs.has('settings'), wallMode = qs.has('wall');
+// Window kinds: widget, full (full screen), settings (a settings window), wall (live wallpaper), control (the app's control
+// center); none = plain browser. Settings and control windows draw no city and don't listen.
+const widget = qs.has('widget'), full = qs.has('full'), settingsMode = qs.has('settings'), wallMode = qs.has('wall'), controlMode = qs.has('control');
+const noCity = settingsMode || controlMode;
 const inApp = !!window.cityPulse;                                    // set by the app's preload; absent in a plain browser
-for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'settings'], [wallMode, 'wall'], [inApp, 'app']])
+for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'settings'], [wallMode, 'wall'], [controlMode, 'control'], [inApp, 'app']])
   if (on) document.documentElement.classList.add(cls);
 // Whose settings this window uses. The settings window edits whichever one it was opened for (?settings=1&for=…).
 const TARGET = settingsMode ? (['widget', 'full', 'wall'].includes(qs.get('for')) ? qs.get('for') : 'widget')
@@ -525,7 +554,7 @@ const themeKey = city => city !== 'none' && THEMES[city] ? city : 'none';   // N
 let dpr = 1, W, H, GY, GH, WY, unit, buildings = [], worldW = 0, stars = [], clouds = [], tourMarks = [];
 let theme = THEMES.none;                                 // the active theme (in the tour: the city nearest the screen centre's)
 let spanLeftU = 0;                                       // span mode: this screen's left edge in world units, past screen 0's
-let tourRuns = [];                                       // the tour's theme stretches: { T, x0, x1 } in world px, end to end
+let tourRuns = [], tileU = 0;                            // the tour's theme stretches { T, x0, x1 } (world px, end to end); its back-row tile width (units)
 // Tour stretches meet in a soft band FEATHER world units wide, where each side's sky, ground and effects fade into the other's.
 const FEATHER = 40, ss = x => x * x * (3 - 2 * x);
 // The stretch at world x, the neighbour across its nearer edge, and that neighbour's share (1/2 on the edge, 0 from half a band in).
@@ -541,34 +570,31 @@ const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
 const bc = document.createElement('canvas'), bg = bc.getContext('2d');
 let backW = 0;
 function renderBack() {
-  const r = rng(13), city = CITIES[S.city], fixed = city ? city.back : [theme.back.h, theme.back.density];
-  // The tour's row slides at half speed past stretches of every look, so it's baked without colour (black bodies, faint white
-  // windows) and each stretch tints its own part as it's drawn (see frame). Heights and density do follow the stretches: each
-  // part takes the look of the stretch it's in front of when centred on screen (back x ↔ world x = 2x - W/2, less span mode's
-  // screen offset), blended over a wide band where stretches meet.
-  const tour = tourRuns.length > 0, tb = theme.back;
-  const backAt = x => tour ? blendAt(mod(2 * x - W / 2 - spanLeftU * unit, worldW), FEATHER * unit) : [theme, theme, 0];
+  const r = rng(13), city = CITIES[S.city], tb = theme.back, tour = S.view === 'tour';
+  // The tour's row slides at half speed past stretches of every look, so it's a colourless tile (black bodies, faint white
+  // windows) two screens wide that repeats seamlessly, and each stretch tints its own part as it's drawn (see frame).
+  const [hf, density] = tour ? [.7, .8] : city ? city.back : [tb.h, tb.density];
   const tallest = Math.max(...buildings.map(b => b.lm ? b.lm.h : b.tiers.reduce((a, t) => a + t.h, 0))) * unit;
-  const baseH = Math.min(tallest * .8, GY * .75);
-  backW = Math.ceil(S.view === 'tour' ? worldW / 2 : W + Math.max(0, worldW - W) / 2);
+  const refH = Math.min(tallest * .8, GY * .75) * hf;
+  backW = Math.ceil(tour ? tileU * unit : W + Math.max(0, worldW - W) / 2);
   bc.width = backW; bc.height = Math.ceil(GY);
   if (!S.back) return;
   const u = unit, cw = 2 * u, fh = 2.2 * u;
-  for (let x = -u * 4; x < backW;) {
-    const w = (8 + Math.floor(r() * 10)) * u, [A, B, bw] = backAt(x + w / 2), ba = A.back, bb = B.back;
-    const [hf, density] = tourRuns.length ? [.7 * (ba.h + (bb.h - ba.h) * bw), .8 * (ba.density + (bb.density - ba.density) * bw)] : fixed;
-    const h = baseH * hf * (.45 + .55 * r()), top = GY - h, show = r() < density, ant = r() < .3;
-    if (show) {
-      bg.fillStyle = tour ? '#000' : tb.body;
-      bg.fillRect(x, top, w, h);
-      if (ant) bg.fillRect(x + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);   // the odd antenna
-    }
-    const cols = Math.floor((w - u) / cw), left = x + (w - cols * cw) / 2;
+  for (let x = tour ? 0 : -u * 4; x < backW;) {
+    const w = (8 + Math.floor(r() * 10)) * u, h = refH * (.45 + .55 * r()), top = GY - h, show = r() < density, ant = r() < .3;
+    const cols = Math.floor((w - u) / cw), left = x + (w - cols * cw) / 2, wins = [];
     for (let y = GY - fh; y > top + u; y -= fh) for (let k = 0; k < cols; k++) {
       const on = r() < .16, c = r();
-      if (!show || !on) continue;
-      bg.fillStyle = tour ? 'rgba(255,255,255,.28)' : (tb.win && tb.win(c)) || 'rgba(150,160,220,.28)';
-      bg.fillRect(left + k * cw + cw * .27, y + fh * .25, cw * .46, fh * .5);
+      if (show && on) wins.push([left + k * cw + cw * .27, y + fh * .25, c]);
+    }
+    if (show) for (const dx of tour && x + w > backW ? [0, -backW] : [0]) {   // the tile's last building also starts it, so it wraps without a seam
+      bg.fillStyle = tour ? '#000' : tb.body;
+      bg.fillRect(x + dx, top, w, h);
+      if (ant) bg.fillRect(x + dx + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);   // the odd antenna
+      for (const [wx, wy, c] of wins) {
+        bg.fillStyle = tour ? 'rgba(255,255,255,.28)' : (tb.win && tb.win(c)) || 'rgba(150,160,220,.28)';
+        bg.fillRect(wx + dx, wy, cw * .46, fh * .5);
+      }
     }
     x += w + (r() < .5 ? 0 : u * 1.5);
   }
@@ -614,11 +640,20 @@ function layout() {
   env(last, 0, 0);
   let startU = 0;
   const segs = [];                                       // runs of buildings sharing a theme; named runs get a tour caption
-  if (tour) {                                            // every city in a row: real ones with made-up blocks between, themed ones in their own style
-    const mh = tourMaxH();
+  if (tour) {                                            // every city in a row: real ones with made-up blocks either side, themed ones in their own style
+    // Every stretch is at least a screen and a blend band wide, so a screen never shows more than two cities. Span mode
+    // sizes them by its widest screen, so every window builds the same world.
+    const mh = tourMaxH(), minU = (spanMode && screens.length ? Math.max(...screens.map(([w, h]) => w / unitFor(w, h, S))) : W / unit) + FEATHER + 2;
+    // gen() counts raw gaps but the row is laid out with the Spacing slider's, so top up until the laid-out row is wide enough
+    const fill = (want, ...a) => { const sp = gen(r, want, ...a); while (specW(sp) < want) sp.push(...gen(r, want - specW(sp), ...a)); return sp; };
+    tileU = 2 * Math.ceil(minU);
     for (const c of tourStops()) {
-      if (c.b) { segs.push({ theme: 'none', spec: gen(r, 25, mh * .5, .3) }, { theme: 'none', spec: c.b, name: c.name }); continue; }
-      const T = THEMES[c.theme], spec = gen(r, 110 + 30 * r(), T.maxF * mh / .85 - 8, T.minF, T.kit);   // same heights in units as the city on its own
+      if (c.b) {
+        const side = Math.max(12.5, (minU - specW(c.b)) / 2);   // the same filler either side, so the landmarks stay centred
+        segs.push({ theme: 'none', spec: fill(side, mh * .5, .3).reverse() }, { theme: 'none', spec: c.b, name: c.name }, { theme: 'none', spec: fill(side, mh * .5, .3) });
+        continue;
+      }
+      const T = THEMES[c.theme], spec = fill(Math.max(110 + 30 * r(), minU), T.maxF * mh / .85 - 8, T.minF, T.kit);   // same heights in units as the city on its own
       spec[0] = [2, ...spec[0].slice(1)];                // a clear gap, so the new style doesn't overlap the last city
       segs.push({ theme: c.theme, spec, name: c.name });
     }
@@ -696,9 +731,13 @@ function layout() {
 }
 
 // ---------- audio ----------
-// In the app City Pulse listens to the Windows default output (what you hear). The output picker switches that
-// default, like Windows sound settings. In a plain browser, "Share audio" asks to capture a tab or the screen.
-let actx, analyser, bins, tbuf, src, stream;
+// In the app, the app itself captures the chosen output or input natively and sends every window analysed frames (the
+// same bins an AnalyserNode gives); Chromium's desktop capture is only the fallback when no frame comes. The app never
+// fakes a beat: no sound means a calm, still city. In a plain browser, "Share audio" captures a tab or the screen, and a
+// demo beat plays until then.
+let actx, analyser, abins, tbuf, src, stream;
+let bins = null, natBins = null, natPeak = 0, natT = -1e9, natKind = 'output';   // bins: what this frame analyses (null = no sound)
+const nativeLive = () => performance.now() - natT < 1000;
 async function useSystemAudio() {
   actx ??= new AudioContext();
   await actx.resume();
@@ -706,7 +745,7 @@ async function useSystemAudio() {
     analyser = actx.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.6;
-    bins = new Uint8Array(analyser.frequencyBinCount);
+    abins = new Uint8Array(analyser.frequencyBinCount);
     tbuf = new Float32Array(analyser.fftSize);
   }
   const desk = { mandatory: { chromeMediaSource: 'desktop' } };   // Electron-only route to Windows system audio
@@ -714,6 +753,7 @@ async function useSystemAudio() {
                   : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
   if (!s.getAudioTracks().length) { s.getTracks().forEach(t => t.stop()); throw new Error('No audio shared — tick "Share audio" in the picker.'); }
   s.getVideoTracks().forEach(t => t.stop());           // only the audio is needed
+  if (natBins) { s.getTracks().forEach(t => t.stop()); return; }   // native frames arrived meanwhile: they win
   if (src) src.disconnect();
   stream?.getTracks().forEach(t => t.stop());
   stream = s; src = actx.createMediaStreamSource(s); src.connect(analyser);
@@ -722,30 +762,47 @@ async function useSystemAudio() {
 $('share').onclick = () => useSystemAudio().catch(e => alert(e.message));
 $('close').onclick = () => inApp ? cityPulse.closeWindow() : window.close();
 
-// Volume of the Windows default output (the meter tops out at it) and the output picker.
+// Volume of the Windows default output: the meter tops out at it while listening to an output.
 let sysVol = 1, sysMuted = false, outId = null;
 async function pollVolume() {
   const v = await cityPulse.volume();
-  if (v) {
-    sysVol = v.vol; sysMuted = v.mute;
-    if (outId && v.id !== outId) setTimeout(() => useSystemAudio().catch(() => {}), 400);   // default output changed: listen to the new one
-    if (outId !== v.id) { outId = v.id; fillOutputs(); }
-  }
+  if (!v) return;
+  sysVol = v.vol; sysMuted = v.mute;
+  if (src && outId && v.id !== outId) setTimeout(() => useSystemAudio().catch(() => {}), 400);   // fallback capture: the default output changed, follow it
+  outId = v.id;
 }
-async function fillOutputs() {
-  const list = await cityPulse.outputs();
-  if (!list) return;
-  $('output').innerHTML = list.map(o => `<option value="${esc(o.id)}">🔊 ${esc(o.name)}</option>`).join('');
-  $('output').value = (list.find(o => o.default) || {}).id || '';
+// "Listen to": every output and input the app can capture, in the toolbar and the control center. Shared by all windows.
+let sourceList = [], sourceKinds = new Map();
+async function fillSources(list) {
+  list ??= await cityPulse.sources();
+  if (!Array.isArray(list)) return;
+  sourceList = list; sourceKinds = new Map(list.map(x => [x.id || '', x.kind]));
+  const group = (kind, label) => {
+    const items = list.map((x, i) => [x, i]).filter(([x]) => (x.kind || 'output') === kind);
+    return items.length ? `<optgroup label="${label}">${items.map(([x, i]) =>
+      `<option value="${i}">${kind === 'input' ? '🎤' : '🔊'} ${esc(x.name || (x.id ? x.id : 'Default output'))}</option>`).join('')}</optgroup>` : '';
+  };
+  for (const el of [$('output'), $('ccSource')]) { el.innerHTML = group('output', 'Outputs') + group('input', 'Inputs'); el.value = String(list.findIndex(x => x.selected)); }
 }
-$('output').onchange = () => cityPulse.setOutput($('output').value).then(pollVolume);
+for (const el of [$('output'), $('ccSource')]) el.onchange = () => { const x = sourceList[+el.value]; if (x) cityPulse.setSource(x.id); };
 
 if (inApp && !settingsMode) {
-  // The first try can fail while Windows audio is still starting, so retry.
-  (async function tryAudio(n) {
-    try { await useSystemAudio(); console.log('System audio connected'); }
-    catch (e) { if (n > 1) setTimeout(() => tryAudio(n - 1), 2000); else console.warn('System audio unavailable, using demo beat:', e.message); }
-  })(6);
+  if (cityPulse.sources) { fillSources().catch(e => console.warn('Audio sources unavailable:', e.message)); cityPulse.onSources?.(fillSources); }
+  else $('output').hidden = true;
+}
+if (inApp && !noCity) {
+  $('hint').textContent = 'F full screen · M lights · C color · V view · W weather';
+  cityPulse.onAudio?.(f => {
+    natBins = f.bins; natPeak = f.peak || 0; natT = performance.now(); natKind = sourceKinds.get(f.source || '') || 'output';
+    if (stream) { stream.getTracks().forEach(t => t.stop()); src.disconnect(); stream = src = null; }   // native capture took over
+  });
+  // Chromium's capture only if no native frame comes in the first 1.5 s; it can fail while Windows audio starts, so retry.
+  setTimeout(function tryAudio(n = 6) {
+    if (natBins) return;
+    useSystemAudio().then(() => console.log('System audio connected (fallback)'), e => {
+      if (n > 1) setTimeout(() => tryAudio(n - 1), 2000); else console.warn('System audio unavailable:', e.message);
+    });
+  }, 1500);
   pollVolume(); setInterval(pollVolume, 500);
 }
 
@@ -860,6 +917,8 @@ addEventListener('storage', e => {
   if (e.key === 'cityPulsePresets') {                  // presets saved in any window appear everywhere right away
     try { mine = JSON.parse(e.newValue || '{}'); } catch { mine = {}; }
     fillPresets();
+  } else if (controlMode) {                            // a screen's city changed somewhere: show it
+    if (e.key?.startsWith('cityPulse:')) ccCities();
   } else if (e.key === KEY && !settingsMode) {          // the settings window changed this window's settings: apply them live
     try { loadSettings(e.newValue || '{}'); } catch { return; }
     Object.keys(DEF).forEach(showSetting); pick = hexToHS(S.color); refreshPanel(); layout();
@@ -874,6 +933,8 @@ if (settingsMode) {
   document.title = `City Pulse Settings — ${{ widget: 'Widget', full: 'Full screen', wall: 'Wallpaper' }[TARGET]}${perScreen ? `, screen ${screenI + 1}` : ''}`;
 }
 $('fs').onclick = toggleFs;
+$('ccOpen').hidden = !(inApp && cityPulse.control);
+$('ccOpen').onclick = () => cityPulse.control.open();
 addEventListener('keydown', e => {
   if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
   const k = e.key.toLowerCase();
@@ -904,7 +965,7 @@ function wake() {
   for (const id of ['ui', 'panel']) $(id).classList.remove('hide');
   document.body.classList.remove('idle');
   clearTimeout(idleTimer);
-  if (settingsMode) return;                             // the settings window never fades out
+  if (noCity) return;                                   // settings and control windows never fade out
   idleTimer = setTimeout(() => {
     if ($('panel').matches(':hover') || $('panel').contains(document.activeElement)) return wake();
     for (const id of ['ui', 'panel']) $(id).classList.add('hide');
@@ -924,7 +985,8 @@ const bands = Array.from({ length: NB }, (_, i) => ({
   max: .1, level: 0, avg: 0, flash: 0, hit: 0 }));
 console.assert(bands.every(b => b.z > b.a), 'empty band');
 function bandInput(k, t) {                               // 0..1 loudness of band k right now
-  if (!src) {                                            // demo beat until real audio arrives: kick, snare-ish mids, hats
+  if (!bins) {                                          // no sound: a demo beat (kick, snare-ish mids, hats) until audio is shared
+    if (inApp) return 0;                                 // the app never fakes a beat: no sound, still city
     const beat = Math.pow(1 - (t / 500 % 1), 4), off = Math.pow(1 - ((t + 250) / 500 % 1), 6);
     return k < 2 ? beat : k < 5 ? .25 + .5 * off * (1 - k * .1) : .3 + .5 * Math.pow(1 - (t / 125 % 1), 3) * (k / NB);
   }
@@ -1384,10 +1446,12 @@ function groundLayer(g, T, t, dt, scrollV) {            // a theme's own ground,
 }
 function frame(t) {
   const dt = Math.min(.1, (t - last) / 1000); last = t;
-  if (settingsMode) return;                              // the settings window draws no city
+  if (noCity) return;                                    // settings and control windows draw no city
   if (!buildings.length) { if (innerWidth && innerHeight) layout(); return; }   // window had no size yet
   phase += dt * S.speed / 25;
-  if (analyser) analyser.getByteFrequencyData(bins);
+  if (nativeLive()) bins = natBins;                     // native frames (the app), else Chromium's capture, else no sound
+  else if (src) { analyser.getByteFrequencyData(abins); bins = abins; }
+  else bins = null;
   calm = 1 - S.react / 100;
   updateBands(t, dt);
 
@@ -1404,10 +1468,12 @@ function frame(t) {
   for (let k = 0; k < NB; k++) spectrum[k] = bands[k].level;   // hologram equalizers
 
   // Loudness meter: the real signal peak, scaled by the Windows volume, so at 50% volume it tops out halfway.
-  let peak = 0;
-  if (src) { analyser.getFloatTimeDomainData(tbuf); for (let i = 0; i < tbuf.length; i++) peak = Math.max(peak, Math.abs(tbuf[i])); }
-  else peak = .5 + .4 * bands[0].level;                  // demo beat
-  meterLvl = Math.max(Math.min(1, peak) * (sysMuted ? 0 : sysVol), meterLvl * Math.pow(.15, dt));
+  // An input (a microphone) isn't played through the speakers, so its meter isn't scaled by the Windows volume.
+  let peak = 0, vol = sysMuted ? 0 : sysVol;
+  if (nativeLive()) { peak = natPeak; if (natKind === 'input') vol = 1; }
+  else if (src) { analyser.getFloatTimeDomainData(tbuf); for (let i = 0; i < tbuf.length; i++) peak = Math.max(peak, Math.abs(tbuf[i])); }
+  else if (!inApp) peak = .5 + .4 * bands[0].level;      // demo beat
+  meterLvl = Math.max(Math.min(1, peak) * vol, meterLvl * Math.pow(.15, dt));
 
   const prevOff = off, prevTravel = travel, tour = S.view === 'tour';
   let bo;                                                // back skyline offset
@@ -1421,7 +1487,7 @@ function frame(t) {
     if (tour) off = mod(off + dir * dt * S.scroll * unit * .08, worldW);
     else off = S.view === 'pan' ? S.pan * Math.max(0, worldW - W) : 0;
     travel += tour ? dir * dt * S.scroll * unit * .08 : off - prevOff;   // keeps going across the tour's wrap-around, so street lamps never jump
-    bo = tour ? mod(off / 2, backW) : off / 2;
+    bo = tour ? mod(travel / 2, backW) : off / 2;        // travel never wraps, so the tile doesn't jump when the world does
   }
   const moved = travel - prevTravel, scrollV = dt && Math.abs(moved) < W ? moved / dt : 0;   // span mode's first frame jumps from 0
   // Tour: the active theme (weather, cloud deck) is the city nearest the screen centre's; skies and grounds blend per stretch.
@@ -1489,7 +1555,7 @@ function frame(t) {
       g.fillStyle = i >= on ? '#ffffff14' : i >= segs * .85 ? '#ff4040' : i >= segs * .6 ? '#ffd040' : '#40ff80';
       g.fillRect(x, GY - 10 - (i + 1) * sh, 6, sh - 2);
     }
-    if (inApp) { g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x - 2, GY - 10 - (sysMuted ? 0 : sysVol) * mh - 1, 10, 1.5); }
+    if (inApp && !(nativeLive() && natKind === 'input')) { g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x - 2, GY - 10 - (sysMuted ? 0 : sysVol) * mh - 1, 10, 1.5); }
   }
 }
 
@@ -1765,6 +1831,61 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
   });
 }
 
+// ---------- control center (?control=1) ----------
+// The app's own window: what to listen to, where the city shows, which city each screen gets, and the widget. The app
+// (cityPulse.control) owns the windows and pushes its state; each screen's city goes straight into that screen's settings.
+let ccState = null, ccScreensKey = '';
+function screenSettings(target, i) {                     // a screen's own settings, or the shared ones it starts from, like its window does
+  const shared = `cityPulse:${target}`;
+  try { return JSON.parse(localStorage.getItem(`${shared}:${i}`) || localStorage.getItem(shared) || (target === 'wall' && localStorage.getItem('cityPulse:full')) || '{}'); }
+  catch { return {}; }
+}
+function ccCities() { for (const el of document.querySelectorAll('#ccScreens select')) el.value = screenSettings(el.dataset.t, +el.dataset.i).city || DEF.city; }
+function ccSeg(el, items) {                              // a row of buttons: [label, current?, action]
+  el.innerHTML = items.map(([label, on], i) => `<button data-i="${i}"${on ? ' class="on"' : ''}>${esc(label)}</button>`).join('');
+  el.onclick = e => { const b = e.target.closest('button'); if (b) items[+b.dataset.i][2](); };
+}
+function ccRender(st) {
+  const C = cityPulse.control, name = x => x.label || `Screen ${x.index + 1}`;
+  ccState = st;
+  ccSeg($('ccFull'), [['Off', st.fullMode === 'off', () => C.setFull('off')], ['On the widget’s screen', st.fullMode === 'one', () => C.setFull('one')],
+    ['All screens: own city each', st.fullMode === 'per', () => C.setFull('per')], ['All screens: one tour across', st.fullMode === 'span', () => C.setFull('span')]]);
+  ccSeg($('ccWall'), [['Off', st.wallMode === 'off', () => C.setWall('off')],
+    ...st.screens.map(x => [`${name(x)} only`, st.wallMode === 'one' && st.wallScreen === x.index, () => C.setWall('one', x.index)]),
+    ['All screens: own city each', st.wallMode === 'per', () => C.setWall('per')], ['All screens: one tour across', st.wallMode === 'span', () => C.setWall('span')]]);
+  $('ccWidget').textContent = st.widgetShown ? 'Hide widget' : 'Show widget';
+  $('ccWidget').classList.toggle('on', !!st.widgetShown);
+  const key = JSON.stringify(st.screens);
+  if (key === ccScreensKey) return;                      // rebuild the screen rows only when the screens change
+  ccScreensKey = key;
+  const pickCity = (t, i) => `<select data-t="${t}" data-i="${i}" aria-label="${t === 'full' ? 'Full-screen' : 'Wallpaper'} city">${$('city').innerHTML}</select>`;
+  const more = (t, i) => `<button data-t="${t}" data-i="${i}">More settings…</button>`;
+  $('ccScreens').innerHTML = '<span></span><b>Full screen</b><b>Wallpaper</b>' + st.screens.map(x =>
+    `<span>${esc(name(x))}<small>${x.w}×${x.h}</small></span>${pickCity('full', x.index)}${pickCity('wall', x.index)}<span></span>${more('full', x.index)}${more('wall', x.index)}`).join('');
+  for (const el of document.querySelectorAll('#ccScreens select')) el.onchange = () => {
+    const t = el.dataset.t, i = +el.dataset.i, s = screenSettings(t, i), T = THEMES[themeKey(el.value)];
+    s.city = el.value;
+    if (T.weather && (s.weather || 'none') === 'none') s.weather = T.weather;   // as picking it in Settings does
+    try { localStorage.setItem(`cityPulse:${t}:${i}`, JSON.stringify(s)); } catch {}
+  };
+  for (const b of document.querySelectorAll('#ccScreens button')) b.onclick = () => C.openSettings(b.dataset.t, +b.dataset.i);
+  ccCities();
+}
+function startControl() {
+  document.title = 'City Pulse';
+  if (!inApp || !cityPulse.control) return;
+  const C = cityPulse.control;
+  $('ccTour').onclick = () => {                          // one tour across every screen: wherever the city is showing, else full screen
+    const f = ccState && ccState.fullMode !== 'off', w = ccState && ccState.wallMode !== 'off';
+    if (f || !w) C.setFull('span');
+    if (w) C.setWall('span');
+  };
+  $('ccWidget').onclick = () => C.setWidget(!(ccState && ccState.widgetShown));
+  $('ccWidgetSet').onclick = () => C.openSettings('widget', null);
+  C.state().then(ccRender);
+  C.onState(ccRender);
+}
+
 // Start-up that needs every plugin's themes, cities and landmarks: run by the last script on the page, after the plugins.
 function start() {
   for (const [k, c] of Object.entries(CITIES)) if (!c.b.every(okSpec)) { console.error(`City Pulse: city "${k}" ignored: it uses an unknown window style or landmark.`); delete CITIES[k]; }
@@ -1773,6 +1894,7 @@ function start() {
     `<optgroup label="Real cities">${Object.entries(CITIES).map(([k, c]) => opt(k, c.name)).join('')}</optgroup>`;
   if (![...$('city').options].some(o => o.value === S.city)) S.city = 'generic';   // its plugin is gone
   showSetting('city'); refreshPanel();
+  if (controlMode) return startControl();
   layout();
   addEventListener('resize', layout);
   // The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.
