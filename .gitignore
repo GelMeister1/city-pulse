@@ -1,0 +1,14 @@
+# Dependencies (Electron is ~300 MB; `npm install` restores it)
+node_modules/
+
+# Build output (for the future installer)
+dist/
+out/
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.log

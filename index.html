@@ -1,0 +1,1420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>City Pulse</title>
+<style>
+  html,body{margin:0;height:100%;background:#05060c;overflow:hidden;font-family:system-ui,sans-serif}
+  canvas{display:block;width:100vw;height:100vh}
+  body.pan canvas{cursor:grab}
+  #ui{position:fixed;top:12px;left:12px;right:12px;display:flex;gap:6px;flex-wrap:wrap;transition:opacity .5s}
+  #ui.hide,#panel.hide{opacity:0;pointer-events:none}
+  button{background:#0d1020cc;color:#ddd;border:1px solid #445;border-radius:6px;padding:6px 10px;font:inherit;font-size:13px;cursor:pointer}
+  button:hover,button:focus-visible{border-color:#aab;outline:none}
+  button.on{border-color:#7cf;color:#fff}
+  #hint{color:#889;font-size:12px;align-self:center}
+  body.idle,body.idle canvas{cursor:none}
+  #panel{position:fixed;top:52px;right:12px;width:220px;max-height:calc(100vh - 64px);overflow:hidden auto;box-sizing:border-box;
+    background:#0b0e1cf2;border:1px solid #2c3352;border-radius:10px;padding:10px;color:#b9bdd0;font-size:12px;
+    display:grid;gap:6px;transition:opacity .5s;-webkit-app-region:no-drag}
+  #panel[hidden],#panel [hidden]{display:none}
+  #panel label{display:grid;gap:3px}
+  #panel label.row{display:flex;align-items:center;gap:6px}
+  #panel select,#panel input[type=color]{font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:3px}
+  #panel input[type=range]{width:100%;accent-color:#6fc3ff}
+  #panel input[type=checkbox]{accent-color:#6fc3ff}
+  #panel summary{cursor:pointer;font-weight:600;color:#8fd3ff;background:#151b36;border-radius:6px;padding:6px 8px;
+    list-style:none;display:flex;justify-content:space-between;letter-spacing:.02em}
+  #panel summary:hover{background:#1b2347}
+  #panel summary::after{content:'▸';color:#5d7bb0}
+  #panel details[open] summary::after{content:'▾'}
+  #panel .body{display:grid;gap:8px;padding:8px 4px 4px}
+  #panel .presets{display:grid;gap:6px;padding-bottom:4px}
+  #panel .row2{display:flex;gap:4px}
+  #panel .row2 input{flex:1;min-width:0;font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:3px 5px}
+  #panel .presets button{padding:3px 8px;font-size:inherit}
+  html.widget #panel .body{gap:5px;padding-top:5px}
+  /* desktop widget (Electron, ?widget=1): transparent, draggable top bar, compact buttons */
+  html.widget,html.widget body{background:transparent}
+  html.widget #ui{top:0;left:0;right:0;padding:4px;gap:4px;background:#05060cdd;border-radius:8px;-webkit-app-region:drag}
+  html.widget #ui button{-webkit-app-region:no-drag;padding:3px 6px;font-size:11px}
+  html.widget #hint{display:none}
+  html.widget #panel{top:32px;right:4px;width:196px;max-height:calc(100vh - 36px);padding:6px;font-size:11px}
+  #close{display:none;margin-left:auto}
+  html.widget #close,html.full #close{display:inline-block}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <button id="mic">🎤 Mic</button>
+  <button id="tab">🔊 Tab / system audio</button>
+  <button id="filebtn">📁 Audio file</button>
+  <button id="gear" aria-expanded="false">⚙ Settings</button>
+  <button id="fs">⛶ Full screen</button>
+  <span id="hint">Demo beat playing · F full screen · M lights · C color · V view · W weather</span>
+  <button id="close" title="Close">✕</button>
+</div>
+<div id="panel" hidden>
+  <div class="presets">
+    <label>Preset <select id="preset"></select></label>
+    <div class="row2"><input id="presetName" placeholder="Name this look…" maxlength="30"><button id="presetSave">Save</button></div>
+    <button id="presetDel" hidden>Delete this preset</button>
+  </div>
+  <details name="sect" open><summary>Skyline</summary><div class="body">
+    <label>City <select id="city"></select></label>
+    <label>View <select id="view">
+      <option value="fit">Fit</option>
+      <option value="pan">Pan</option>
+      <option value="tour">Tour</option>
+    </select></label>
+    <label>Scroll speed <input type="range" id="scroll" min="1" max="100"></label>
+    <label>Spacing <input type="range" id="gap" min="0" max="300"></label>
+  </div></details>
+  <details name="sect"><summary>Lights</summary><div class="body">
+    <label>Style <select id="mode">
+      <option value="floors">Floors</option>
+      <option value="pulse">Pulse</option>
+      <option value="flash">Beat flash</option>
+    </select></label>
+    <label class="row"><input type="checkbox" id="peak"> Peak marker</label>
+    <label>Color <select id="effect">
+      <option value="rainbow">Spectrum</option>
+      <option value="wave">Wave</option>
+      <option value="fade">Fade</option>
+      <option value="static">Solid</option>
+      <option value="breathing">Breathing</option>
+      <option value="random">Random</option>
+    </select></label>
+    <label>Pick color <input type="color" id="color"></label>
+    <label>Color speed <input type="range" id="speed" min="1" max="100"></label>
+    <label>Reactivity <input type="range" id="react" min="0" max="100"></label>
+    <label>Brightness <input type="range" id="bright" min="5" max="100"></label>
+    <label class="row"><input type="checkbox" id="meter"> Loudness meter</label>
+  </div></details>
+  <details name="sect"><summary>Scene</summary><div class="body">
+    <label>Ground <select id="ground">
+      <option value="street">Street</option>
+      <option value="streetWater">Street &amp; water</option>
+      <option value="parkWater">Park &amp; water</option>
+      <option value="none">None</option>
+    </select></label>
+    <label>Traffic <input type="range" id="traffic" min="0" max="100"></label>
+    <label class="row"><input type="checkbox" id="detail"> 3D detail</label>
+    <label class="row"><input type="checkbox" id="back"> Back skyline</label>
+    <label class="row"><input type="checkbox" id="captions"> City names</label>
+    <label class="row"><input type="checkbox" id="drift"> Burn-in protection</label>
+  </div></details>
+  <details name="sect"><summary>Weather</summary><div class="body">
+    <label>Weather <select id="weather">
+      <option value="none">Clear</option>
+      <option value="rain">Rain</option>
+      <option value="snow">Snow</option>
+      <option value="storm">Thunderstorm</option>
+      <option value="fog">Fog</option>
+      <option value="petals">Cherry blossoms</option>
+      <option value="leaves">Autumn leaves</option>
+    </select></label>
+    <label>Amount <input type="range" id="wxAmt" min="5" max="100"></label>
+  </div></details>
+  <details name="sect"><summary>Ambient</summary><div class="body">
+    <label class="row"><input type="checkbox" id="roofLights"> Roof lights</label>
+    <label>Blink speed <input type="range" id="blinkSpeed" min="1" max="100"></label>
+    <label class="row"><input type="checkbox" id="blinkSync"> Blink together</label>
+    <label class="row"><input type="checkbox" id="blinkBeat"> Blink to the bass</label>
+    <label>Light color <input type="color" id="blinkColor"></label>
+    <label class="row"><input type="checkbox" id="flicker"> Window flicker</label>
+    <label>Flicker amount <input type="range" id="flickAmt" min="1" max="100"></label>
+    <label class="row"><input type="checkbox" id="search"> Searchlights</label>
+    <label class="row"><input type="checkbox" id="flyers"> Flying cars</label>
+    <label class="row"><input type="checkbox" id="stars"> Stars</label>
+    <label class="row"><input type="checkbox" id="shooting"> Shooting stars</label>
+    <label class="row"><input type="checkbox" id="skyBody"> Moon</label>
+    <label class="row"><input type="checkbox" id="clouds"> Clouds</label>
+    <label class="row"><input type="checkbox" id="planes"> Planes</label>
+  </div></details>
+</div>
+<input type="file" id="file" accept="audio/*" hidden>
+<script>
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+const widget = qs.has('widget'), full = qs.has('full');            // full = the app's full-screen window
+const inApp = /Electron/.test(navigator.userAgent);
+if (widget) document.documentElement.classList.add('widget');
+if (full) document.documentElement.classList.add('full');
+
+// ---------- settings (remembered between launches) ----------
+const DEF = { city: 'generic', view: 'fit', scroll: 30, gap: 40, pan: .5,
+  mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, bright: 100, meter: true,
+  ground: widget ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: !widget,
+  weather: 'none', wxAmt: 50,
+  roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
+  search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true };
+let S;
+const KEY = full ? 'cityPulse:full' : 'cityPulse';                  // widget and full screen keep their own settings; presets are shared
+try { S = { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { S = { ...DEF }; }
+if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+
+// ---------- buildings ----------
+// Window styles, in units: cw = column pitch, ch = floor pitch, ww/wh = window size as a share of the cell.
+// One style per building, so every building keeps the same kind of window top to bottom.
+const STY = {
+  grid:   { cw: 2,   ch: 2,   ww: .5,  wh: .55 },          // square windows
+  tall:   { cw: 1.6, ch: 2.6, ww: .4,  wh: .7 },           // tall narrow
+  wide:   { cw: 3,   ch: 1.8, ww: .8,  wh: .45 },          // wide, short
+  ribbon: { cw: 0,   ch: 1.6, ww: 1,   wh: .4 },           // one glass strip per floor
+  pairs:  { cw: 1.5, ch: 2.2, ww: .6,  wh: .6, skip: 3 },  // windows in pairs
+  slim:   { cw: 1.2, ch: 1.5, ww: .45, wh: .5 },           // dense, small (tall towers)
+  cols:   { cw: 1.4, ch: 3.5, ww: .35, wh: .85 },          // vertical slits
+};
+const taper = (w0, w1, h, n) => Array.from({ length: n }, (_, i) => [w0 + (w1 - w0) * i / (n - 1), h / n]);
+
+// Landmarks with hand-drawn silhouettes. Drawn in units, origin at ground centre, y up = negative.
+// L.lit(y) = how lit the lights at height y are (0..1), L.win(a) = light colour, L.body / L.edge = structure colours.
+function latticeTower({ hw, top, decks, arches, ant }) {
+  const inArch = (x, y) => arches.some(([aw, ah, ay]) => Math.abs(x) < aw && y > ay && y < ay + ah * (1 - (x / aw) ** 2));
+  return (g, L) => {
+    g.fillStyle = L.body; g.beginPath();
+    g.moveTo(hw(0), 0);
+    for (let y = 0; y <= top; y += .5) g.lineTo(hw(y), -y);
+    for (let y = top; y >= 0; y -= .5) g.lineTo(-hw(y), -y);
+    g.closePath();
+    for (const [aw, ah, ay] of arches) {                 // arch openings between the legs
+      g.moveTo(aw, -ay); g.quadraticCurveTo(aw, -ay - ah * 1.3, 0, -ay - ah); g.quadraticCurveTo(-aw, -ay - ah * 1.3, -aw, -ay); g.closePath();
+    }
+    g.fill('evenodd');
+    for (const [y, w, th] of decks) g.fillRect(-w, -y - th, 2 * w, th);
+    g.fillRect(-ant[2], -ant[1], ant[2] * 2, ant[1] - ant[0]);
+    if (L.edge) {                                        // criss-cross girders
+      g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
+      for (let y = 0; y < top - 2; y += 2.5) {
+        const a = hw(y), b = hw(y + 2.5);
+        for (const s of [-1, 1]) { g.moveTo(s * a, -y); g.lineTo(s * b * .72, -y - 2.5); g.moveTo(s * a * .72, -y); g.lineTo(s * b, -y - 2.5); }
+      }
+      g.stroke();
+    }
+    for (let y = 1; y < top; y += 1.6) {                 // lattice lights
+      g.fillStyle = L.win(L.lit(y)); const w = hw(y);
+      for (const k of [.9, .62, .35]) for (const s of [-1, 1]) {
+        const x = s * w * k; if (!inArch(x, y)) g.fillRect(x - .22, -y - .22, .44, .44);
+      }
+    }
+    for (const [y, w, th] of decks) { g.fillStyle = L.win(L.lit(y)); for (let x = -w + .5; x < w; x += 1) g.fillRect(x - .2, -y - th / 2 - .2, .4, .4); }
+  };
+}
+const LM = {
+  eiffel: { w: 26, h: 80, draw: latticeTower({
+    hw: y => y <= 18 ? 5.5 + 7.5 * (1 - y / 18) ** 2 : y <= 37.5 ? 5.5 - 2.5 * (y - 18) / 19.5 : y <= 67 ? 3 - 2.1 * Math.sqrt((y - 37.5) / 29.5) : .9,
+    top: 67, decks: [[18, 7.5, 1.8], [37.5, 4.2, 1.4], [65.5, 1.5, 2]], arches: [[8.5, 11.5, 0], [3.6, 7, 19.8]], ant: [67, 80, .25] }) },
+  tokyotower: { w: 22, h: 76, draw: latticeTower({
+    hw: y => y <= 34 ? 2.6 + 8.4 * (1 - y / 34) ** 1.6 : y <= 58 ? 2.6 - 1.6 * (y - 34) / 24 : .9,
+    top: 58, decks: [[30, 5.5, 4], [56, 2.2, 2]], arches: [[7, 9, 0]], ant: [58, 76, .3] }) },
+  needle: { w: 15, h: 72, draw(g, L) {
+    const hw = y => y < 30 ? .9 + 4.6 * (1 - y / 30) ** 2 : .9 + 1.6 * ((y - 30) / 16) ** 2;
+    g.strokeStyle = g.fillStyle = L.body; g.lineWidth = .7; g.beginPath();
+    for (const s of [-1, 1]) { g.moveTo(s * hw(0), 0); for (let y = 1; y <= 46; y++) g.lineTo(s * hw(y), -y); }   // hourglass legs
+    g.stroke();
+    g.fillRect(-.6, -46, 1.2, 46);                       // core
+    g.fillRect(-2.4, -14.6, 4.8, .8);                    // lower platform ring
+    g.beginPath();                                       // saucer + roof
+    [[-2.5, -46], [-7.2, -49.6], [-6.4, -50.8], [-5, -51.2], [-1.4, -54], [1.4, -54], [5, -51.2], [6.4, -50.8], [7.2, -49.6], [2.5, -46]]
+      .forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+    g.fill();
+    g.beginPath(); g.moveTo(-.6, -54); g.lineTo(0, -72); g.lineTo(.6, -54); g.fill();   // spire
+    if (L.edge) { g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath(); g.moveTo(-7.2, -49.6); g.lineTo(7.2, -49.6); g.moveTo(-5, -51.2); g.lineTo(5, -51.2); g.stroke(); }
+    for (let y = 1; y < 45; y += 2) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.3, -y - .6, .6, .6); }   // elevator lights climbing the core
+    g.fillStyle = L.win(L.lit(47.5));                    // lights under the saucer
+    for (let i = 0; i <= 6; i++) { const f = i / 6; for (const s of [-1, 1]) g.fillRect(s * (2.5 + 4.5 * f) - .2, -46 - 3.5 * f - .2, .4, .4); }
+    g.fillStyle = L.win(L.lit(50));                      // restaurant windows
+    for (let x = -6.5; x < 6.4; x += .9) g.fillRect(x, -50.6, .55, .7);
+  } },
+  bigben: { w: 9, h: 63, draw(g, L) {
+    g.fillStyle = L.body;
+    g.fillRect(-3, -36, 6, 36);                          // shaft
+    g.fillRect(-3.7, -44.5, 7.4, 8.5);                   // clock stage
+    g.fillRect(-3.9, -45.3, 7.8, .8);                    // cornice
+    g.fillRect(-3.2, -50, 6.4, 4.7);                     // belfry
+    g.beginPath(); g.moveTo(-3.6, -50); g.lineTo(0, -60.5); g.lineTo(3.6, -50); g.fill();   // spire
+    for (const x of [-3.6, -1.6, 1.6, 3.6]) { g.beginPath(); g.moveTo(x - .45, -50); g.lineTo(x, -53.5); g.lineTo(x + .45, -50); g.fill(); }   // pinnacles
+    g.fillRect(-.12, -63, .24, 2.6);                     // finial
+    if (L.edge) {                                        // stone pilasters and ledges
+      g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
+      for (const x of [-3, -1.5, 1.5, 3]) { g.moveTo(x, 0); g.lineTo(x, -36); }
+      for (let y = 6; y < 36; y += 6) { g.moveTo(-3, -y); g.lineTo(3, -y); }
+      g.rect(-3.7, -44.5, 7.4, 8.5); g.stroke();
+    }
+    for (let y = 3; y < 34; y += 3.4) { g.fillStyle = L.win(L.lit(y)); for (const x of [-2.25, -.25, 1.75]) g.fillRect(x, -y - 2, .5, 2); }   // shaft slits
+    g.fillStyle = L.win(Math.max(L.lit(40), .2));        // clock face, always softly lit
+    g.beginPath(); g.arc(0, -40.2, 2.6, 0, 7); g.fill();
+    g.strokeStyle = L.body; g.lineWidth = .25; g.beginPath();
+    g.moveTo(0, -40.2); g.lineTo(0, -42.2); g.moveTo(0, -40.2); g.lineTo(1.3, -40.2); g.stroke();
+    g.fillStyle = L.win(L.lit(47.5));                    // belfry arches
+    for (const x of [-2.1, -.7, .7, 2.1]) { g.fillRect(x - .35, -48.6, .7, 2.4); g.beginPath(); g.arc(x, -48.6, .35, Math.PI, 0); g.fill(); }
+  } },
+  chrysler: { w: 13, h: 100, draw(g, L) {
+    g.fillStyle = L.body;
+    g.fillRect(-6.5, -24, 13, 24);                       // base block
+    g.fillRect(-5, -58, 10, 34);                         // main shaft
+    g.fillRect(-4, -64, 8, 6);                           // setback below the crown
+    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(s * 5, -58); g.lineTo(s * 6.2, -57); g.lineTo(s * 5, -56); g.fill(); }   // eagle gargoyles
+    const arches = [];                                   // the terraced sunburst crown: stacked arches, each narrower
+    for (let i = 0; i < 6; i++) arches.push({ w: 4 - i * .6, y: -64 - i * 2.4 });
+    for (const a of arches) { g.beginPath(); g.ellipse(0, a.y, a.w, 3, 0, Math.PI, 2 * Math.PI); g.fill(); }
+    g.beginPath(); g.moveTo(-.7, -76); g.lineTo(0, -100); g.lineTo(.7, -76); g.fill();   // needle spire
+    if (L.edge) {
+      g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
+      for (const x of [-5, -2.5, 2.5, 5]) { g.moveTo(x, -24); g.lineTo(x, -58); }
+      g.moveTo(-6.5, -24); g.lineTo(6.5, -24); g.stroke();
+    }
+    for (let y = 1.5; y < 57; y += 2.2) {                // windows
+      g.fillStyle = L.win(L.lit(y)); const hw = y < 24 ? 5.6 : 4.2;
+      for (let x = -hw; x <= hw - .5; x += 1.4) g.fillRect(x, -y - 1, .5, 1);
+    }
+    for (const a of arches) {                            // the famous triangle windows in each arch
+      g.fillStyle = L.win(Math.max(L.lit(-a.y), .25));
+      for (let k = -2; k <= 2; k++) {
+        const ang = Math.PI * 1.5 + k * .45, x = Math.cos(ang) * a.w * .72, y = a.y + Math.sin(ang) * 2.1;
+        g.beginPath(); g.moveTo(x - .3, y + .45); g.lineTo(x, y - .5); g.lineTo(x + .3, y + .45); g.fill();
+      }
+    }
+  } },
+  empire: { w: 15, h: 108, draw(g, L) {
+    g.fillStyle = L.body;
+    g.fillRect(-7.5, -10, 15, 10);                       // five-storey base
+    g.fillRect(-5.5, -64, 11, 54);                       // main shaft
+    g.fillRect(-1.6, -64, 3.2, 54.5);                    // centre bay standing slightly proud
+    g.fillRect(-4.5, -68, 9, 4); g.fillRect(-3.5, -72, 7, 4); g.fillRect(-2.6, -76, 5.2, 4);   // the setbacks
+    g.fillRect(-1.8, -84, 3.6, 8);                       // crown tower
+    g.fillRect(-.9, -92, 1.8, 8); g.fillRect(-.5, -98, 1, 6);   // mooring mast
+    g.beginPath(); g.moveTo(-.4, -98); g.lineTo(0, -108); g.lineTo(.4, -98); g.fill();   // antenna
+    for (let y = 11; y < 63; y += 2) {                   // tall paired windows between piers
+      g.fillStyle = L.win(L.lit(y));
+      for (let x = -5; x < 4.8; x += 1.25) if (Math.abs(x + .3) > 1.2) g.fillRect(x, -y - 1.3, .45, 1.3);
+    }
+    g.fillStyle = L.win(Math.max(L.lit(80), .3));        // the famous lit crown
+    for (const [y, w] of [[-79, 3], [-82, 3], [-88, 1.4]]) g.fillRect(-w / 2, y, w, 1);
+  } },
+  hancock: { w: 15, h: 104, draw(g, L) {
+    const hw = y => 7.5 - 2.5 * y / 76;                  // tapers from bottom to top
+    g.fillStyle = L.body; g.beginPath(); g.moveTo(-7.5, 0); g.lineTo(-5, -76); g.lineTo(5, -76); g.lineTo(7.5, 0); g.fill();
+    g.fillRect(-2.9, -104, .6, 28); g.fillRect(2.3, -100, .6, 24);   // twin antennas
+    for (let y = 1; y < 75; y += 1.6) {
+      g.fillStyle = L.win(L.lit(y)); const w = hw(y) - .6;
+      for (let x = -w; x < w - .3; x += 1) g.fillRect(x, -y - .8, .5, .7);
+    }
+    g.strokeStyle = '#26272f'; g.lineWidth = .55; g.beginPath();   // the giant X-braces: the Hancock's signature, so always drawn
+    for (let y = 0; y < 76; y += 15.2) {
+      const a = hw(y), b = hw(y + 15.2);
+      g.moveTo(-a, -y); g.lineTo(b, -y - 15.2); g.moveTo(a, -y); g.lineTo(-b, -y - 15.2);
+      g.moveTo(-a, -y); g.lineTo(a, -y);
+    }
+    g.stroke();
+  } },
+  burjarab: { w: 14, h: 62, draw(g, L) {
+    g.fillStyle = L.body; g.beginPath();                 // the sail: straight mast on the right, billowing curve on the left
+    g.moveTo(4, 0); g.lineTo(4, -54); g.quadraticCurveTo(-9, -40, -6, 0); g.fill();
+    g.fillRect(3.6, -62, .8, 8);                         // mast tip
+    g.beginPath(); g.ellipse(-4.6, -40, 2.4, .5, 0, 0, 7); g.fill();   // helipad
+    g.fillRect(-3, -40, 2.4, .5);
+    for (let s = .03; s < .95; s += .03) {               // floors fanning across the sail, following its curved edge
+      const y = 2 * (1 - s) * s * 40 + s * s * 54, xl = (1 - s) ** 2 * -6 + 2 * (1 - s) * s * -9 + s * s * 4 + .6;
+      g.fillStyle = L.win(L.lit(y));
+      for (let x = xl; x < 3.4; x += .9) g.fillRect(x, -y - .6, .5, .5);
+    }
+    if (L.edge) { g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath(); g.moveTo(4, 0); g.lineTo(-1, -50); g.stroke(); }
+  } },
+  gherkin: { w: 11, h: 42, draw(g, L) {
+    const hw = y => y < 14 ? 4.2 + .8 * y / 14 : 5 * Math.sqrt(Math.max(0, 1 - ((y - 14) / 28) ** 2));
+    g.fillStyle = L.body; g.beginPath(); g.moveTo(hw(0), 0);
+    for (let y = 0; y <= 42; y += .5) g.lineTo(hw(y), -y);
+    for (let y = 42; y >= 0; y -= .5) g.lineTo(-hw(y), -y);
+    g.fill();
+    for (let y = 1; y < 40; y += 1.4) {                  // windows, skipping the dark spiral bands
+      g.fillStyle = L.win(L.lit(y)); const w = hw(y + .6) - .6;
+      for (let x = -w; x < w - .4; x += .9) if (((x + y * .6) % 4 + 4) % 4 > 1.2) g.fillRect(x, -y - .9, .55, .8);
+    }
+  } },
+};
+
+// Skylines: [gap before, window style | '@landmark', roof [type, height] | null, tiers bottom-up [width, height, noWindows?]].
+// All sizes in units. back = [height, density] of the hazy skyline behind it: low for cities without big towers.
+const CITIES = {
+  nyc: { name: 'New York', back: [1, 1], b: [
+    [0, 'grid', null, [[10, 30]]],
+    [.5, 'wide', ['antenna', 5], [[9, 42]]],
+    [.5, '@empire'],                                                             // Empire State
+    [.5, 'pairs', null, [[11, 35], [8, 10]]],
+    [.5, 'grid', null, [[6, 88]]],                                               // 432 Park
+    [.5, '@chrysler'],                                                           // Chrysler Building
+    [.5, 'cols', ['pyramid', 4], [[12, 28]]],
+    [1.5, 'slim', ['antenna', 18], taper(14, 6, 85, 6)],                          // One WTC
+    [.5, 'ribbon', null, [[10, 24]]],
+    [.5, 'grid', ['dome', 4], [[9, 38], [7, 6]]],
+  ]},
+  chicago: { name: 'Chicago', back: [1, 1], b: [
+    [0, 'ribbon', null, [[12, 26]]],
+    [.5, 'cols', null, [[11, 70]]],                                              // Aon Center
+    [.5, 'slim', ['antenna2', 12], [[16, 60], [12, 20], [8, 12]]],               // Willis Tower
+    [.5, 'grid', null, [[10, 32]]],
+    [.5, 'tall', ['spire', 10], [[10, 45], [8, 15], [5, 10]]],                   // Trump Tower
+    [.5, 'pairs', ['pyramid', 5], [[9, 30]]],
+    [.5, '@hancock'],                                                            // John Hancock Center
+    [.5, 'ribbon', null, [[6, 30]]], [1, 'ribbon', null, [[6, 30]]],             // Marina City
+    [.5, 'wide', null, [[12, 22]]],
+  ]},
+  seattle: { name: 'Seattle', back: [.6, .8], b: [
+    [0, 'wide', null, [[12, 20]]],
+    [.5, 'grid', ['antenna', 4], [[10, 35]]],
+    [.5, 'slim', null, [[12, 62], [9, 10]]],                                     // Columbia Center
+    [.5, 'tall', ['pyramid', 6], [[9, 48]]],
+    [.5, 'ribbon', null, [[10, 30]]],
+    [2, '@needle'],                                                              // Space Needle
+    [2, 'pairs', null, [[11, 18]]],
+    [.5, 'cols', null, [[8, 26]]],
+  ]},
+  sf: { name: 'San Francisco', back: [.6, .8], b: [
+    [0, 'grid', null, [[10, 22]]],
+    [.5, 'ribbon', ['dome', 5], [[12, 75]]],                                     // Salesforce Tower
+    [.5, 'pairs', null, [[10, 40]]],
+    [.5, 'slim', ['spire', 6], taper(12, 1.5, 60, 12)],                           // Transamerica
+    [.5, 'wide', ['antenna', 4], [[11, 34]]],
+    [.5, 'tall', null, [[9, 48], [7, 8]]],
+    [3, 'cols', null, [[3, 14], [3.6, 2]]],                                       // Coit Tower
+    [3, 'grid', null, [[12, 16]]],
+  ]},
+  dubai: { name: 'Dubai', back: [.8, .5], b: [
+    [0, 'ribbon', ['pyramid', 8], [[7, 50]]],                                    // Emirates Towers
+    [1, 'ribbon', ['pyramid', 7], [[6, 42]]],
+    [1, 'slim', ['dome', 4], [[9, 55]]],
+    [1.5, 'slim', ['spire', 16], taper(16, 3, 105, 9)],                           // Burj Khalifa
+    [1.5, 'tall', null, [[10, 48]]],
+    [.5, '@burjarab'],                                                           // Burj Al Arab
+    [.5, 'grid', ['antenna', 5], [[11, 38]]],
+    [.5, 'cols', null, [[8, 60]]],                                               // Cayan Tower
+  ]},
+  paris: { name: 'Paris', back: [.28, .7], b: [
+    [0, 'pairs', ['pyramid', 3], [[14, 12]]],
+    [0, 'pairs', ['pyramid', 3], [[12, 13]]],
+    [1, 'cols', null, [[12, 45]]],                                               // Montparnasse
+    [1, 'pairs', ['pyramid', 3], [[14, 12]]],
+    [1.5, '@eiffel'],                                                            // Eiffel Tower
+    [1.5, 'pairs', ['dome', 6], [[12, 14], [6, 4]]],                             // Les Invalides
+    [.5, 'pairs', ['pyramid', 3], [[14, 12]]],
+    [3, 'ribbon', null, [[10, 28]]], [.5, 'grid', null, [[12, 34]]],             // La Défense
+  ]},
+  tokyo: { name: 'Tokyo', back: [.9, 1], b: [
+    [0, 'grid', null, [[10, 30]]],
+    [.5, 'slim', ['antenna', 6], [[11, 48]]],
+    [.5, '@tokyotower'],                                                         // Tokyo Tower
+    [1, 'ribbon', null, [[12, 36]]],
+    [.5, 'tall', ['antenna2', 6], [[10, 44]]],
+    [1.5, 'ribbon', ['antenna', 14], [...taper(6, 3.5, 55, 5), [7, 2], [3.5, 12], [5, 1.6], [2.5, 10]]], // Skytree
+    [1.5, 'pairs', null, [[12, 26]]],
+    [.5, 'wide', ['dome', 4], [[10, 38]]],
+  ]},
+  london: { name: 'London', back: [.45, .7], b: [
+    [0, '@bigben'],                                                              // Elizabeth Tower (Big Ben)
+    [1, 'pairs', null, [[14, 14]]],
+    [.5, 'ribbon', null, [[10, 30], [12, 10]]],                                  // Walkie-Talkie
+    [.5, '@gherkin'],                                                            // Gherkin
+    [.5, 'grid', null, [[10, 40]]],
+    [.5, 'slim', ['spire', 5], taper(14, 1.5, 72, 10)],                           // The Shard
+    [1, 'cols', null, [[11, 36]]],
+    [.5, 'wide', null, [[12, 18]]],
+  ]},
+};
+
+// Made-up buildings: used for the generic city, the cyberpunk city and to fill the sides of real skylines.
+const GEN_STYLES = ['grid', 'tall', 'wide', 'ribbon', 'pairs', 'slim', 'cols'];
+const GEN_ROOFS = [null, null, null, ['antenna', 5], ['antenna2', 6], ['spire', 8], ['pyramid', 5], ['dome', 4]];
+// Building kits for the made-up cities: window styles, roofs, how often towers are tall, setback shrink, gaps.
+const KITS = {
+  generic: { styles: GEN_STYLES, roofs: GEN_ROOFS, tall: .35, shrink: .75, w0: 6 },
+  cyber:   { styles: ['slim', 'grid', 'cols', 'ribbon', 'slim', 'wide'], roofs: [null, ['antenna', 7], ['antenna2', 9], ['antenna', 12], ['spire', 10], null],
+             tall: .5, shrink: .85, w0: 7, gaps: [-1, .3] },
+  noir:  { styles: ['tall', 'cols', 'pairs', 'slim', 'tall'], roofs: [['ziggurat', 6], ['deco', 9], ['spire', 11], null, ['ziggurat', 4], ['antenna', 6]],
+             tall: .45, shrink: .78, w0: 7, gaps: [0, .5], setbacks: true },   // Art Deco: stepped setbacks and ornate crowns
+  synth:   { styles: ['grid', 'ribbon', 'wide', 'cols'], roofs: [null, null, ['antenna', 5], ['pyramid', 4]], tall: .3, shrink: .8, w0: 7 },
+};
+function gen(r, widthU, maxHU, minFrac, kitName = 'generic') {
+  const kit = KITS[kitName], out = [];
+  let lastShort = false;
+  for (let acc = 0; acc < widthU;) {
+    // Height rhythm: a mix of tall, mid and short, but never two short buildings side by side.
+    const roll = r(), kind = roll < kit.tall ? 2 : roll < .8 || lastShort ? 1 : 0;
+    const band = [[minFrac, .45], [.45, .75], [.75, 1]][kind];
+    const lo = Math.max(minFrac, band[0]), hi = Math.max(lo, band[1]);
+    const w = kit.w0 + Math.floor(r() * 10), h = maxHU * (lo + (hi - lo) * r());
+    lastShort = kind === 0;
+    const n = kit.setbacks ? 2 + Math.floor(r() * 3) : r() < .5 ? 1 : r() < .6 ? 2 : 3;
+    const split = [[1], [.7, .3], [.6, .25, .15], [.5, .22, .16, .12], [.45, .2, .15, .12, .08]][n - 1];
+    const tiers = split.map((f, i) => [w * Math.pow(kit.shrink, i), h * f]);
+    const gap = kit.gaps ? (r() < .5 ? kit.gaps[0] : kit.gaps[1]) : r() < .3 ? -1.5 : r() < .6 ? .5 : 1.5;
+    out.push([gap, kit.styles[Math.floor(r() * kit.styles.length)], kit.roofs[Math.floor(r() * kit.roofs.length)], tiers]);
+    acc += gap + w;
+  }
+  return out;
+}
+const gapOf = g => g < 0 ? g : g * S.gap / 100;          // overlaps stay; real gaps scale with the spacing slider
+const wOf = s => s[1][0] === '@' ? LM[s[1].slice(1)].w : Math.max(...s[3].map(t => t[0]));
+const hOf = s => s[1][0] === '@' ? LM[s[1].slice(1)].h : s[3].reduce((a, t) => a + t[1], 0) + (s[2] ? s[2][1] : 0);
+const specW = spec => spec.reduce((a, s) => a + gapOf(s[0]) + wOf(s), 0);
+const specH = spec => Math.max(...spec.map(hOf));
+function fitRow(list, maxU) {                            // keep only whole buildings that fit
+  const out = []; let acc = 0;
+  for (let s of list) {
+    if (!out.length && s[0] < 0) s = [0, ...s.slice(1)];  // the first building can't overlap a neighbour that isn't there
+    const w = gapOf(s[0]) + wOf(s); if (acc + w > maxU) break; out.push(s); acc += w;
+  }
+  return out;
+}
+const NEON = [320, 190, 50, 280, 150];                    // cyberpunk sign hues: magenta, cyan, amber, violet, green
+
+let W, H, GY, GH, WY, unit, buildings = [], byBand = [], bridges = [], worldW = 0, stars = [], clouds = [], tourMarks = [];
+let cyber = false, noir = false, synth = false;          // the made-up themed cities (never part of the tour)
+const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
+
+// Back skyline: a hazier second row behind the city that fills the sky above short buildings.
+// It never changes with the music, so it's drawn once into its own canvas and slid behind (half speed = depth).
+const bc = document.createElement('canvas'), bg = bc.getContext('2d');
+let backW = 0;
+function renderBack() {
+  const r = rng(13);
+  const [hf, density] = S.view === 'tour' ? [.7, .8] : cyber || noir ? [1.1, 1] : synth ? [.6, .6] : (CITIES[S.city] || { back: [1, 1] }).back;
+  const bodyC = cyber ? '#120a20' : noir ? '#0d0d0f' : synth ? '#170a2c' : '#0b0c19';
+  const winC = c => cyber ? (c < .5 ? 'rgba(255,90,210,.25)' : 'rgba(80,220,255,.25)') : noir ? 'rgba(210,170,100,.16)'
+    : synth ? (c < .5 ? 'rgba(255,80,200,.28)' : 'rgba(80,230,255,.28)') : 'rgba(150,160,220,.28)';
+  const tallest = Math.max(...buildings.map(b => b.lm ? b.lm.h : b.tiers.reduce((a, t) => a + t.h, 0))) * unit;
+  const refH = Math.min(tallest * .8, GY * .75) * hf;
+  backW = Math.ceil(S.view === 'tour' ? worldW / 2 : W + Math.max(0, worldW - W) / 2);
+  bc.width = backW; bc.height = Math.ceil(GY);
+  if (!S.back) return;
+  const u = unit, cw = 2 * u, fh = 2.2 * u;
+  for (let x = -u * 4; x < backW;) {
+    const w = (8 + Math.floor(r() * 10)) * u, h = refH * (.45 + .55 * r()), top = GY - h, show = r() < density, ant = r() < .3;
+    if (show) {
+      bg.fillStyle = bodyC;
+      bg.fillRect(x, top, w, h);
+      if (ant) bg.fillRect(x + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);   // the odd antenna
+    }
+    const cols = Math.floor((w - u) / cw), left = x + (w - cols * cw) / 2;
+    for (let y = GY - fh; y > top + u; y -= fh) for (let k = 0; k < cols; k++) {
+      const on = r() < .16, c = r();
+      if (!show || !on) continue;
+      bg.fillStyle = winC(c);
+      bg.fillRect(left + k * cw + cw * .27, y + fh * .25, cw * .46, fh * .5);
+    }
+    x += w + (r() < .5 ? 0 : u * 1.5);
+  }
+}
+
+function layout() {
+  const dpr = devicePixelRatio || 1;
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const r = rng(7), city = CITIES[S.city], themed = S.view === 'tour' ? '' : S.city;
+  cyber = themed === 'cyber'; noir = themed === 'noir'; synth = themed === 'synth';
+
+  // Ground: a street or park strip under the buildings, and optionally a thin band of water at the very bottom.
+  // Synthwave always gets its glowing perspective grid instead.
+  const groundH = synth ? Math.round(H * (widget ? .1 : .14)) : S.ground === 'none' ? 0 : Math.max(widget ? 6 : 9, Math.round(H * (widget ? .045 : .032)));
+  const waterH = !synth && S.ground.endsWith('Water') ? Math.max(4, Math.round(H * .022)) : 0;
+  const wallH = waterH && groundH ? Math.max(3, Math.round(H * .012)) : 0;   // retaining wall between street/park and river
+  GH = groundH; WY = H - waterH; GY = WY - wallH - groundH;
+  let spec, startU = 0, marks = [];
+  if (S.view === 'tour') {                               // every city in a row, with made-up blocks between them
+    const all = Object.values(CITIES), mh = Math.max(...all.map(c => specH(c.b)));
+    unit = Math.max(1.8, GY * .85 / mh);
+    spec = [];
+    for (const c of all) {
+      spec.push(...gen(r, 25, mh * .5, .3));
+      marks.push([c.name, spec.length, spec.length + c.b.length]);   // which buildings belong to this city, for the caption
+      spec.push(...c.b);
+    }
+  } else if (city) {
+    const cw = specW(city.b), ch = specH(city.b);
+    unit = Math.max(1.8, Math.min(W * .95 / cw, GY * .85 / ch));
+    const span = W / unit - 2, fh = ch * .7;             // -2 leaves room for the 3D side faces; fillers up to 70% of the landmarks
+    if (S.view === 'fit') {
+      const side = Math.max(0, (span - cw) / 2);
+      const L = fitRow(gen(r, side + 30, fh, .3), side), R = fitRow(gen(r, side + 30, fh, .3), side);
+      spec = [...L.reverse(), ...city.b, ...R];
+      startU = (W / unit - specW(spec)) / 2;
+    } else spec = [...gen(r, span * 1.5, fh, .3).reverse(), ...city.b, ...gen(r, span * 1.5, fh, .3)];
+  } else {                                               // made-up cities: Neon City, Cyberpunk, Noir City, Synthwave
+    const kit = KITS[themed] ? themed : 'generic', minF = cyber || noir ? .4 : .25;
+    unit = Math.max(2.5, Math.min(W, GY) / 110);
+    const span = W / unit - 2, mh = GY * (cyber || noir ? .9 : synth ? .55 : .82) / unit - 8;
+    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, minF, kit), span); startU = (W / unit - specW(spec)) / 2; }
+    else spec = gen(r, span * 4, mh, minF, kit);
+  }
+
+  buildings = [];
+  let xU = startU;
+  for (const s of spec) {
+    const [gap, style, roof, tiers] = s, wU = wOf(s);
+    xU += gapOf(gap);
+    const b = { id: buildings.length, cx: (xU + wU / 2) * unit, wpx: wU * unit, half: (wU / 2 + 1.6) * unit,
+      hue: r() * 360, rhue: r() * 360, rk: r(), reacts: true,
+      level: 0, pk: 0, hold: 0, max: .05, prev: 0, avg: 0, flash: 0, hit: 0 };
+    if (style[0] === '@') {
+      b.lm = LM[style.slice(1)]; b.floors = Math.round(b.lm.h / 2); b.blink = true; b.hU = b.lm.h;
+    } else {
+      const st = STY[style]; let floors = 0;
+      b.tiers = tiers.map(([w, h, noWin]) => {
+        const f = noWin ? 0 : Math.max(1, Math.floor(h / st.ch + 1e-6));   // windows stretch to fill the tier evenly
+        const t = { w, h, f, base: floors }; floors += f; return t;
+      });
+      Object.assign(b, { st, roof, floors, hU: tiers.reduce((a, t) => a + t[1], 0),
+        blink: (roof && ['antenna', 'antenna2', 'spire', 'crown'].includes(roof[0])) || floors > 34,
+        search: floors > 25 && r() < .2 });             // about 1 in 5 tall buildings carries a searchlight
+      if (cyber) {                                       // neon signs and the odd hologram billboard
+        b.signs = [];
+        const n = r() < .65 ? 1 + (r() < .4 ? 1 : 0) : 0;
+        for (let i = 0; i < n; i++) b.signs.push({ vert: r() < .65, fy: .2 + .6 * r(), fx: r(), len: 5 + 7 * r(), hue: NEON[Math.floor(r() * NEON.length)], seed: Math.floor(r() * 1e6) });
+        if (tiers[0][0] >= 9 && b.hU > 40 && r() < .3) b.holo = { fy: .45 + .3 * r(), h: 7 + 5 * r() };
+      }
+    }
+    buildings.push(b);
+    xU += wU;
+  }
+  worldW = (xU - startU) * unit;
+  tourMarks = marks.map(([name, a, z]) => ({ name, mid: (buildings[a].cx + buildings[z - 1].cx) / 2 }));
+  if (noir) {                                          // one rooftop near the left third carries the bat spotlight
+    const cands = buildings.filter(b => !b.lm && b.floors > 12 && b.floors < 40);
+    const pickB = (cands.length ? cands : buildings).reduce((a, b) => Math.abs(b.cx - W * .3) < Math.abs(a.cx - W * .3) ? b : a);
+    pickB.bat = true;
+  }
+  bridges = [];
+  if (cyber) for (let i = 0; i + 1 < buildings.length; i++) {   // skybridges between neighbouring towers
+    const a = buildings[i], c = buildings[i + 1];
+    if (!a.lm && !c.lm && r() < .35) bridges.push({ a, c, y: Math.min(a.hU, c.hU) * (.35 + .4 * r()) });
+  }
+  renderBack();
+
+  // Give each building its own frequency slice (log-spaced), shuffled so
+  // bass and treble buildings are mixed across the skyline.
+  const n = buildings.length, order = [...Array(n).keys()];
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  const lo = 2, hi = 420;                               // ~40 Hz .. ~9 kHz at fftSize 2048
+  order.forEach((b, i) => {
+    const a = Math.floor(lo * Math.pow(hi / lo, i / n));
+    const z = Math.max(a + 1, Math.floor(lo * Math.pow(hi / lo, (i + 1) / n)));
+    Object.assign(buildings[b], { binA: a, binB: z, band: i / n });
+  });
+  byBand = [...buildings].sort((a, b) => a.band - b.band);
+  if (S.view === 'fit') console.assert(buildings.every(b => b.cx - b.wpx / 2 >= -1 && b.cx + b.half <= W + 1) || !!city, 'building cut off');   // side face only sticks out on the right
+  console.assert(buildings.every(b => b.binB > b.binA && isFinite(b.cx) && b.floors > 0), 'bad layout');
+
+  stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: r() * W, y: r() * H * .6, s: r() < .85 ? 1 : 2, sp: .5 + r(), ph: r() * 7 }));
+  cars = []; flyers = []; fogs = []; wxKey = ''; cloudKey = '';
+  document.body.classList.toggle('pan', S.view === 'pan');
+}
+
+// ---------- audio ----------
+let actx, analyser, bins, src, audioEl;
+async function useSource(make) {
+  actx ??= new AudioContext();
+  await actx.resume();
+  if (!analyser) {
+    analyser = actx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.55;
+    bins = new Uint8Array(analyser.frequencyBinCount);
+  }
+  if (src) src.disconnect();
+  if (audioEl) { audioEl.pause(); audioEl = null; }
+  src = await make();
+  src.connect(analyser);
+  $('hint').textContent = 'Listening · F full screen · M lights · C color · V view · W weather';
+}
+
+const streamOpts = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
+$('mic').onclick = () => useSource(async () =>
+  actx.createMediaStreamSource(await navigator.mediaDevices.getUserMedia({ audio: streamOpts })))
+  .catch(e => alert('Mic not available: ' + e.message));
+
+const useSystemAudio = () => useSource(async () => {
+  const desk = { mandatory: { chromeMediaSource: 'desktop' } };   // Electron-only route to Windows system audio
+  const s = inApp ? await navigator.mediaDevices.getUserMedia({ audio: desk, video: desk })
+                   : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  if (!s.getAudioTracks().length) { s.getTracks().forEach(t => t.stop()); throw new Error('No audio shared — tick "Share audio" in the picker.'); }
+  s.getVideoTracks().forEach(t => t.stop());           // only the audio is needed
+  return actx.createMediaStreamSource(s);
+});
+$('tab').onclick = () => useSystemAudio().catch(e => alert(e.message));
+$('close').onclick = () => window.close();
+// In the app: grab system audio on its own. The first try can fail while Windows audio is still starting, so retry.
+if (inApp) (async function tryAudio(n) {
+  try { await useSystemAudio(); console.log('System audio connected'); }
+  catch (e) { if (n > 1) setTimeout(() => tryAudio(n - 1), 2000); else console.warn('System audio unavailable, using demo beat:', e.message); }
+})(6);
+
+$('filebtn').onclick = () => $('file').click();
+$('file').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  useSource(async () => {
+    const el = new Audio(URL.createObjectURL(f));
+    el.loop = true;
+    const s = actx.createMediaElementSource(el);
+    s.connect(actx.destination);                       // so you can hear the file
+    await el.play();
+    audioEl = el;
+    return s;
+  }).catch(e => alert('Could not play file: ' + e.message));
+};
+
+// ---------- controls ----------
+$('city').innerHTML = '<option value="generic">Neon City</option><option value="cyber">Cyberpunk</option>' +
+  '<option value="noir">Noir City</option><option value="synth">Synthwave</option>' +
+  Object.entries(CITIES).map(([k, c]) => `<option value="${k}">${c.name}</option>`).join('');
+let pick;                                              // hue/saturation of the chosen solid colour
+function hexToHS(hex) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
+  let h = !d ? 0 : mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  h = (h * 60 + 360) % 360;
+  return { h, s: d ? d / (1 - Math.abs(2 * l - 1)) * 100 : 0 };
+}
+const hide = (id, yes) => { $(id).parentElement.hidden = yes; };
+function refreshPanel() {
+  hide('color', !['static', 'breathing'].includes(S.effect));
+  hide('scroll', S.view !== 'tour');
+  hide('peak', S.mode !== 'floors');
+  $('city').disabled = S.view === 'tour';
+  for (const id of ['blinkSpeed', 'blinkSync', 'blinkBeat', 'blinkColor']) hide(id, !S.roofLights);
+  hide('blinkSpeed', !S.roofLights || S.blinkBeat); hide('blinkSync', !S.roofLights || S.blinkBeat);
+  hide('flickAmt', !S.flicker);
+  hide('captions', S.view !== 'tour');
+  hide('traffic', !S.ground.startsWith('street'));
+  hide('wxAmt', S.weather === 'none');
+  hide('flyers', S.city !== 'cyber');
+  hide('drift', widget);
+  for (const id of ['stars', 'shooting', 'skyBody', 'clouds', 'planes']) hide(id, widget);   // the widget has no sky
+}
+const RELAYOUT = ['city', 'view', 'gap', 'back', 'ground'];
+const showSetting = k => { const el = $(k); if (el) el.type === 'checkbox' ? el.checked = S[k] : el.value = S[k]; };
+for (const k of Object.keys(DEF)) {
+  const el = $(k); if (!el) continue;                  // pan is set by dragging, not a control
+  showSetting(k);
+  el.oninput = () => {
+    S[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value;
+    S.preset = ''; $('preset').value = '';             // a hand-made change means you're no longer on a preset
+    if (k === 'city' && ['cyber', 'noir'].includes(S.city) && S.weather === 'none') { S.weather = 'rain'; showSetting('weather'); }   // cyberpunk and Noir City rain by default
+    save();
+    if (RELAYOUT.includes(k) && W) layout();
+    if (k === 'color') pick = hexToHS(S.color);
+    refreshPanel();
+  };
+}
+
+// ---------- presets ----------
+// A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
+const PLACE = ['city', 'view', 'scroll', 'gap', 'pan'];
+const lookOf = s => Object.fromEntries(Object.keys(DEF).filter(k => !PLACE.includes(k)).map(k => [k, s[k]]));
+const BUILTIN = {
+  'Background': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
+    blinkSpeed: 10, flickAmt: 12, search: false, shooting: false, traffic: 20 },
+  'Chill Night': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 15, react: 35, bright: 60, meter: false,
+    blinkSpeed: 15, flickAmt: 15, search: false },
+  'Party': { ...lookOf(DEF), mode: 'flash', effect: 'random', speed: 70, react: 85, bright: 100,
+    blinkBeat: true, blinkColor: '#ff2aa0', flickAmt: 40, search: true, clouds: false, traffic: 60 },
+  'Neon Tour': { ...lookOf(DEF), view: 'tour', scroll: 25, effect: 'wave', bright: 90, meter: false,   // the one preset that also moves you: it's made for the scrolling TV view
+    flickAmt: 25, search: true },
+};
+let mine;
+try { mine = JSON.parse(localStorage.getItem('cityPulsePresets') || '{}'); } catch { mine = {}; }
+const saveMine = () => { try { localStorage.setItem('cityPulsePresets', JSON.stringify(mine)); } catch {} };
+const esc = s => s.replace(/[&<>"]/g, c => `&#${c.charCodeAt(0)};`);
+function fillPresets() {
+  const opt = n => `<option value="${esc(n)}">${esc(n)}</option>`;
+  $('preset').innerHTML = '<option value="">Custom</option>' +
+    `<optgroup label="Built in">${Object.keys(BUILTIN).map(opt).join('')}</optgroup>` +
+    (Object.keys(mine).length ? `<optgroup label="My presets">${Object.keys(mine).map(opt).join('')}</optgroup>` : '');
+  $('preset').value = S.preset in BUILTIN || S.preset in mine ? S.preset : '';
+  $('presetDel').hidden = !(S.preset in mine);
+}
+$('preset').oninput = () => {
+  const name = $('preset').value, p = BUILTIN[name] || mine[name];
+  S.preset = name;
+  if (p) {
+    const relayout = RELAYOUT.some(k => k in p && p[k] !== S[k]);
+    Object.assign(S, p);
+    if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // presets saved by older versions
+    Object.keys(DEF).forEach(showSetting);
+    pick = hexToHS(S.color);
+    if (relayout) layout();
+  }
+  save(); refreshPanel(); $('presetDel').hidden = !(name in mine);
+};
+$('presetSave').onclick = () => {
+  const name = $('presetName').value.trim();
+  if (!name) return $('presetName').focus();
+  if (name in BUILTIN) return alert('That name is used by a built-in preset. Pick another.');
+  mine[name] = lookOf(S); saveMine();
+  S.preset = name; save(); fillPresets();
+  $('presetName').value = '';
+};
+$('presetDel').onclick = () => {
+  if (!(S.preset in mine) || !confirm(`Delete preset "${S.preset}"?`)) return;
+  delete mine[S.preset]; saveMine();
+  S.preset = ''; save(); fillPresets();
+};
+fillPresets();
+pick = hexToHS(S.color); refreshPanel();
+function cycleSelect(id) { const el = $(id); el.selectedIndex = (el.selectedIndex + 1) % el.options.length; el.oninput(); }
+function toggleFs() {
+  if (widget) window.open('index.html?full=1', 'cityPulseFull');      // the app opens it full screen, on the TV if one is connected
+  else if (full) window.close();
+  else document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+}
+if (full) { $('fs').textContent = '⛶ Exit full screen'; addEventListener('keydown', e => { if (e.key === 'Escape') window.close(); }); }
+// Presets saved in the widget appear in the full-screen window right away, and vice versa.
+addEventListener('storage', e => {
+  if (e.key !== 'cityPulsePresets') return;
+  try { mine = JSON.parse(e.newValue || '{}'); } catch { mine = {}; }
+  fillPresets();
+});
+$('gear').onclick = () => { $('panel').hidden = !$('panel').hidden; $('gear').classList.toggle('on', !$('panel').hidden); $('gear').setAttribute('aria-expanded', !$('panel').hidden); };
+$('fs').onclick = toggleFs;
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  const k = e.key.toLowerCase();
+  if (k === 'f') toggleFs(); else if (k === 'm') cycleSelect('mode'); else if (k === 'c') cycleSelect('effect');
+  else if (k === 'v') cycleSelect('view'); else if (k === 'w') cycleSelect('weather');
+});
+
+// Pan view: drag or scroll the skyline to choose which part is shown.
+function nudge(px) { S.pan = Math.min(1, Math.max(0, S.pan + px / Math.max(1, worldW - W))); }
+cv.addEventListener('wheel', e => { if (S.view !== 'pan') return; e.preventDefault(); nudge(e.deltaY + e.deltaX); save(); }, { passive: false });
+let dragX = null;
+cv.addEventListener('pointerdown', e => { if (S.view === 'pan') { dragX = e.clientX; cv.setPointerCapture(e.pointerId); } });
+cv.addEventListener('pointermove', e => { if (dragX !== null) { nudge(dragX - e.clientX); dragX = e.clientX; } });
+cv.addEventListener('pointerup', () => { dragX = null; save(); });
+
+let idleTimer;
+function wake() {
+  for (const id of ['ui', 'panel']) $(id).classList.remove('hide');
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if ($('panel').matches(':hover') || $('panel').contains(document.activeElement)) return wake();
+    for (const id of ['ui', 'panel']) $(id).classList.add('hide');
+    document.body.classList.add('idle');
+  }, 3000);
+}
+addEventListener('mousemove', wake); addEventListener('keydown', wake); addEventListener('input', wake); wake();
+addEventListener('resize', layout);
+
+// ---------- levels ----------
+function levelFor(b, t) {
+  if (!src) {                                          // demo: fake 120 bpm beat until real audio is picked
+    const beat = Math.pow(1 - (t / 500 % 1), 3);
+    const wob = 0.5 + 0.5 * Math.sin(t / 180 + b.hue);
+    return b.band < 0.3 ? beat : b.band < 0.7 ? 0.3 * beat + 0.4 * wob * Math.random() : 0.6 * Math.random() * wob;
+  }
+  let sum = 0;
+  for (let i = b.binA; i < b.binB; i++) sum += bins[i];
+  const v = sum / (b.binB - b.binA) / 255;
+  b.max = Math.max(v, b.max * 0.997, 0.05);            // per-building auto-gain so treble buildings still move
+  return Math.max(0, (v / b.max - 0.15) / 0.85);
+}
+
+// How lit floor gf of building b is (0..1), per the Lights setting.
+let calm = .4;
+function alphaFor(b, gf) {
+  // Calm mode softens the swing: unlit windows keep a faint glow, lit ones don't hit full blast,
+  // and buildings that sit out the music just glow steadily.
+  const rest = .22 * calm, amp = 1 - .45 * calm;
+  return b.reacts ? rest + (1 - rest) * amp * rawAlpha(b, gf) : rest;
+}
+function rawAlpha(b, gf) {
+  if (S.mode === 'pulse') return b.level;
+  if (S.mode === 'flash') return b.flash;
+  const lit = b.level * b.floors;
+  if (gf < Math.floor(lit)) return 1;
+  if (gf < lit) return lit % 1;
+  return S.peak && b.pk > 1 && gf === Math.ceil(b.pk) - 1 ? .8 : 0;
+}
+
+// Colour of a building right now, per the chosen effect: { h, s, m } where m scales brightness.
+function colorOf(b, phase) {
+  switch (S.effect) {
+    case 'static':    return { h: pick.h, s: pick.s, m: 1 };
+    case 'breathing': return { h: pick.h, s: pick.s, m: .3 + .7 * (.5 + .5 * Math.sin(phase * 1.5)) };
+    case 'random':    return { h: b.rhue, s: 100, m: 1 };
+    case 'fade':      return { h: phase * 15 % 360, s: 100, m: 1 };
+    case 'wave':      return { h: ((b.cx / W * 300 - phase * 60) % 360 + 360) % 360, s: 100, m: 1 };
+    default:          return { h: (b.hue + phase * 15) % 360, s: 100, m: 1 };
+  }
+}
+const winStyle = (c, a) => { const br = S.bright / 100; return `hsl(${c.h},${c.s * (.4 + .6 * a)}%,${4 + 6 * br + 55 * a * br * c.m}%)`; };
+
+// Idle window flicker: a few dark windows switch on and off slowly, like people at home.
+function hash(a, b, c) {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12;
+  return (h >>> 0) / 4294967296;
+}
+function flick(id, f, c, t) {
+  const k = hash(id, f, c), period = 7000 + k * 10000;
+  return hash(id * 7 + Math.floor((t + k * period) / period), f, c) < S.flickAmt / 100 * .25;   // slider 20 ≈ 1 in 20 windows
+}
+
+// ---------- draw ----------
+function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for the blinking light
+  const h = hU * unit, u = unit;
+  g.beginPath();
+  if (type === 'antenna') g.rect(cx - u * .25, y - h, u * .5, h);
+  else if (type === 'antenna2') { g.rect(cx - tw / 4 - u * .25, y - h, u * .5, h); g.rect(cx + tw / 4 - u * .25, y - h * .8, u * .5, h * .8); g.fill(); return [cx - tw / 4, y - h]; }
+  else if (type === 'dome') g.ellipse(cx, y, tw / 2, h, 0, Math.PI, 2 * Math.PI);
+  else if (type === 'ziggurat') { for (let i = 0; i < 3; i++) g.rect(cx - tw * (.4 - i * .12), y - h * (i + 1) / 3, tw * (.8 - i * .24), h / 3 + .5); }   // Art Deco stepped crown
+  else if (type === 'deco') {                           // Art Deco arched crown with a needle
+    for (let i = 0; i < 3; i++) g.ellipse(cx, y - h * i * .18, tw * (.4 - i * .1), h * .22, 0, Math.PI, 2 * Math.PI);
+    g.moveTo(cx - u * .3, y - h * .5); g.lineTo(cx, y - h); g.lineTo(cx + u * .3, y - h * .5);
+  }
+  else {
+    const base = type === 'spire' ? Math.min(tw * .3, 3 * u) : tw, th = type === 'crown' ? h * .5 : h;
+    g.moveTo(cx - base / 2, y); g.lineTo(cx, y - th); g.lineTo(cx + base / 2, y);
+    if (type === 'crown') { g.moveTo(cx - u * .4, y - th * .8); g.lineTo(cx, y - h); g.lineTo(cx + u * .4, y - th * .8); }
+  }
+  g.fill();
+  return [cx, y - h];
+}
+
+// Cyberpunk: a neon sign with made-up glyphs, brightening with the building's music.
+function drawSign(g, b, s, cx) {
+  const u = unit * (widget ? 2 : 1), glow = .45 + .55 * (b.reacts ? Math.max(b.level, b.flash) : .3);   // signs are drawn twice as big in the small widget
+  const bx = cx - b.wpx / 2, top = GY - b.hU * unit;
+  const sw = s.vert ? 1.6 * u : s.len * u, sh = s.vert ? s.len * u : 1.6 * u;
+  const x = Math.min(bx + s.fx * Math.max(0, b.wpx - sw), bx + b.wpx - sw * .6), y = Math.max(top + unit, GY - b.hU * unit * s.fy - sh);
+  const col = `hsl(${s.hue},100%,${45 + 25 * glow}%)`;
+  g.fillStyle = `hsla(${s.hue},100%,60%,${.16 * glow})`; g.fillRect(x - u * .6, y - u * .6, sw + u * 1.2, sh + u * 1.2);   // halo
+  g.fillStyle = '#07020b'; g.fillRect(x, y, sw, sh);
+  g.strokeStyle = col; g.lineWidth = Math.max(1, u * .15); g.strokeRect(x + .5, y + .5, sw - 1, sh - 1);
+  g.fillStyle = col;
+  const n = Math.floor((s.vert ? sh : sw) / (u * 1.2));
+  for (let i = 0; i < n; i++) {                        // each glyph = a few strokes picked from a 2x3 grid
+    const gx = s.vert ? x + u * .35 : x + u * .4 + i * u * 1.2, gy = s.vert ? y + u * .4 + i * u * 1.2 : y + u * .35;
+    for (let k = 0; k < 6; k++) if (hash(s.seed, i, k) < .45) g.fillRect(gx + (k % 2) * u * .45, gy + Math.floor(k / 2) * u * .3, u * .45, u * .18);
+  }
+}
+// Cyberpunk: a big hologram billboard that shows a live equalizer.
+function drawHolo(g, b, cx) {
+  const u = unit, w = b.wpx * .8, h = b.holo.h * u, x = cx - w / 2, y = GY - b.hU * u * b.holo.fy;
+  if (Math.random() < .02) return;                     // the occasional dropout flicker
+  const gr = g.createLinearGradient(x, y, x + w, y + h);
+  gr.addColorStop(0, 'rgba(60,230,255,.22)'); gr.addColorStop(1, 'rgba(255,60,200,.22)');
+  g.fillStyle = gr; g.fillRect(x, y, w, h);
+  const n = spectrum.length, bw = w / n;
+  for (let i = 0; i < n; i++) {
+    const bh = h * .85 * Math.min(1, spectrum[i] * 1.1);
+    g.fillStyle = `hsla(${190 + i * 11},100%,65%,.75)`; g.fillRect(x + i * bw + bw * .15, y + h - bh, bw * .7, bh);
+  }
+  g.fillStyle = 'rgba(255,255,255,.06)'; for (let sy = y; sy < y + h; sy += 3) g.fillRect(x, sy, w, 1);   // scanlines
+  g.strokeStyle = 'rgba(120,240,255,.6)'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
+}
+
+function drawBuilding(g, b, cx, t) {
+  const u = unit, body = '#000';
+  let c = colorOf(b, phase);
+  if (noir) c = { h: c.h, s: c.s * .3, m: c.m * .7 };   // Noir City: washed-out, dimmer window colours
+  const edge = S.detail ? '#2c2e3a' : null;
+  let tip;
+  if (b.lm) {
+    g.save(); g.translate(cx, GY); g.scale(u, u);
+    b.lm.draw(g, { body, edge, win: a => winStyle(c, a), lit: y => alphaFor(b, Math.floor(y / b.lm.h * b.floors)) });
+    g.restore();
+    tip = [cx, GY - b.lm.h * u];
+  } else {
+    const st = b.st, side = cyber ? '#100a18' : synth ? '#12062a' : noir ? '#0b0b0c' : '#0c0d12', topc = cyber ? '#1c1228' : synth ? '#1e0a3c' : noir ? '#151515' : '#17181f';
+    let y = GY;
+    for (const tr of b.tiers) {
+      const tw = tr.w * u, th = tr.h * u, x0 = cx - tw / 2;
+      if (S.detail) {                                   // side and top faces so it reads as a block, not a flat box
+        const d = Math.min(1.6 * u, tw * .18), rise = d * .5;
+        g.fillStyle = side; g.beginPath();
+        g.moveTo(x0 + tw, y); g.lineTo(x0 + tw + d, y); g.lineTo(x0 + tw + d, y - th - rise); g.lineTo(x0 + tw, y - th); g.fill();
+        g.fillStyle = topc; g.beginPath();
+        g.moveTo(x0, y - th); g.lineTo(x0 + d, y - th - rise); g.lineTo(x0 + tw + d, y - th - rise); g.lineTo(x0 + tw, y - th); g.fill();
+      }
+      g.fillStyle = body; g.fillRect(x0, y - th, tw + .5, th + .5);
+      if (tr.f) {
+        const fh = th / tr.f;                           // floor pitch, stretched to fill the tier
+        const cols = st.cw ? Math.max(1, Math.floor((tw - u) / (st.cw * u))) : 0;
+        const cw = st.cw * u, left = cx - cols * cw / 2, ww = Math.max(1, cw * st.ww);
+        for (let f = 0; f < tr.f; f++) {
+          const gf = tr.base + f, a = alphaFor(b, gf), style = winStyle(c, a);
+          const wy = y - (f + 1) * fh + fh * (1 - st.wh) / 2, wh = Math.max(1, fh * st.wh);
+          g.fillStyle = style;
+          if (!cols) { g.fillRect(x0 + u * .6, wy, tw - u * 1.2, wh); continue; }
+          const fl = S.flicker && a < .05 + .22 * calm;   // "dark" includes calm mode's faint resting glow
+          for (let k = 0; k < cols; k++) {
+            if (st.skip && k % st.skip === st.skip - 1) continue;
+            const wx = left + k * cw + (cw - ww) / 2;
+            if (fl && flick(b.id, gf, k, t)) { g.fillStyle = `hsl(40,60%,${12 + 12 * S.bright / 100}%)`; g.fillRect(wx, wy, ww, wh); g.fillStyle = style; }
+            else g.fillRect(wx, wy, ww, wh);
+          }
+        }
+        if (edge && !widget) {                          // ledge every 6 floors (full screen only; too busy at widget size)
+          g.fillStyle = edge;
+          for (let f = 5; f < tr.f - 1; f += 6) g.fillRect(x0, y - (f + 1) * fh - .5, tw, Math.max(1, u * .15));
+        }
+      }
+      if (synth) { g.strokeStyle = b.id % 2 ? 'rgba(255,79,216,.8)' : 'rgba(62,240,255,.8)'; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }   // neon outlines
+      else if (edge && !widget) { g.strokeStyle = edge; g.lineWidth = 1; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }
+      if (S.weather === 'snow') { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }   // snow on ledges
+      y -= th;
+    }
+    const top = b.tiers[b.tiers.length - 1];
+    tip = b.roof ? (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u)) : [cx, y];
+    if (b.holo) drawHolo(g, b, cx);
+    if (b.signs) for (const s of b.signs) drawSign(g, b, s, cx);
+  }
+  if (b.bat) drawBatSignal(g, tip, t);
+  if (S.search && b.search && !noir) {                // searchlight: a soft beam sweeping slowly from the roof (Noir City has just the one)
+    const ang = -Math.PI / 2 + Math.sin(t / 2600 + b.hue) * .55, len = H * 1.3, spread = .045;
+    const grad = g.createLinearGradient(tip[0], tip[1], tip[0] + Math.cos(ang) * len, tip[1] + Math.sin(ang) * len);
+    grad.addColorStop(0, `rgba(255,255,235,${.22 * S.bright / 100})`); grad.addColorStop(1, 'rgba(255,255,235,0)');
+    g.fillStyle = grad; g.beginPath(); g.moveTo(tip[0], tip[1]);
+    g.lineTo(tip[0] + Math.cos(ang - spread) * len, tip[1] + Math.sin(ang - spread) * len);
+    g.lineTo(tip[0] + Math.cos(ang + spread) * len, tip[1] + Math.sin(ang + spread) * len); g.fill();
+  }
+  if (S.roofLights && b.blink) {                        // aircraft warning light
+    let on;
+    if (S.blinkBeat) on = bassFlash;                    // flash on bass hits, then fade
+    else {
+      const period = 3.2 - S.blinkSpeed / 100 * 2.8;    // 3.2 s (slow) .. 0.4 s (fast)
+      on = ((t / 1000 + (S.blinkSync ? 0 : b.hue / 360 * period)) % period) < period * .15 ? 1 : 0;
+    }
+    if (on > .05) {
+      g.globalAlpha = on;
+      g.fillStyle = S.blinkColor + '59'; g.beginPath(); g.arc(tip[0], tip[1], Math.max(2.5, u), 0, 7); g.fill();
+      g.fillStyle = S.blinkColor; g.beginPath(); g.arc(tip[0], tip[1], Math.max(1, u * .35), 0, 7); g.fill();
+      g.globalAlpha = 1;
+    }
+  }
+}
+
+// Noir City: one rooftop spotlight with the shadow of a real-looking bat caught in its soft, round pool of light.
+// An original, naturalistic silhouette (raised wings, finger-tip points along the membrane), not any brand's emblem.
+// Right half (x 0..1 = body to wingtip, y down), mirrored for the left. Starts at the top of the head.
+const BAT = [
+  ['L', .04, -.33], ['L', .07, -.44], ['L', .1, -.3], ['L', .12, -.18],   // ear and head
+  ['L', .16, -.1],                                                          // shoulder
+  ['Q', .3, -.25, .48, -.5], ['L', .52, -.52],                              // leading edge up to the raised wrist
+  ['Q', .75, -.4, .98, -.28],                                               // long outer finger to the wingtip
+  ['Q', .84, -.18, .86, .02],                                               // membrane sagging between finger tips
+  ['Q', .7, -.06, .62, .16],
+  ['Q', .42, -.02, .2, .2],
+  ['L', .14, .32], ['L', .05, .3], ['L', -.03, .34],                        // foot and tail membrane
+];
+let batSprite;
+function getBatSprite() {                                  // drawn once, opaque, so the two halves never show a seam
+  if (batSprite) return batSprite;
+  const c = document.createElement('canvas'); c.width = 400; c.height = 220;
+  const x = c.getContext('2d'); x.fillStyle = '#0a0a0c';
+  for (const sx of [1, -1]) {
+    x.save(); x.translate(200, 110); x.scale(sx * 190, 190);
+    x.beginPath(); x.moveTo(-.03, -.3);
+    for (const [k, ...p] of BAT) k === 'L' ? x.lineTo(...p) : x.quadraticCurveTo(...p);
+    x.closePath(); x.fill(); x.restore();
+  }
+  return batSprite = c;
+}
+function drawBatSignal(g, tip, t) {
+  const r = Math.min(W, H) * .09;
+  const tx = Math.min(W * .85, Math.max(W * .2, tip[0] + W * .18)) + Math.sin(t / 5200) * W * .015, ty = H * .17 + Math.sin(t / 4100) * H * .008;
+  const beam = g.createLinearGradient(tip[0], tip[1], tx, ty);
+  beam.addColorStop(0, 'rgba(255,245,215,.26)'); beam.addColorStop(1, 'rgba(255,245,215,.06)');
+  g.fillStyle = beam; g.beginPath();
+  g.moveTo(tip[0] - unit * .4, tip[1]); g.lineTo(tx - r * .8, ty + r * .5); g.lineTo(tx + r * .8, ty - r * .5); g.lineTo(tip[0] + unit * .4, tip[1]); g.fill();
+  const pool = g.createRadialGradient(tx, ty, 0, tx, ty, r * 1.15);   // soft round pool of light on the clouds, no hard rim
+  pool.addColorStop(0, 'rgba(255,244,210,.55)'); pool.addColorStop(.6, 'rgba(255,244,210,.3)'); pool.addColorStop(1, 'rgba(255,244,210,0)');
+  g.fillStyle = pool; g.fillRect(tx - r * 1.15, ty - r * 1.15, r * 2.3, r * 2.3);
+  const bw = r * 1.35, bh = bw * 220 / 400;
+  g.save(); g.translate(tx, ty); g.rotate(-.12 + Math.sin(t / 3700) * .04);   // tilted and drifting, like a real bat crossing the beam
+  g.globalAlpha = .8; g.drawImage(getBatSprite(), -bw / 2, -bh / 2, bw, bh); g.restore();
+}
+
+// Cyberpunk skybridges, drawn once both towers are in place.
+function drawBridges(g, wrapK) {
+  const u = unit;
+  for (const { a, c, y } of bridges) for (const k of wrapK) {
+    const x0 = a.cx + a.wpx / 2 - off + k * worldW, x1 = c.cx - c.wpx / 2 - off + k * worldW;
+    if (x1 < 0 || x0 > W || x1 - x0 < u) continue;
+    const by = GY - y * u;
+    g.fillStyle = '#050309'; g.fillRect(x0, by - u, x1 - x0, u * 1.2);
+    g.fillStyle = 'rgba(80,220,255,.55)';
+    for (let x = x0 + u * .6; x < x1 - u * .6; x += u * 1.4) g.fillRect(x, by - u * .55, u * .7, u * .3);
+  }
+}
+
+let plane = null, nextPlane = 6000, shoot = null, nextShoot = 4000, bassFlash = 0, cloudKey = '';
+// Synthwave: a big striped sun sinking behind neon-edged mountains.
+function drawSynthSun(g, sky) {
+  const r = Math.min(W, H) * .19, cx = W / 2, cy = GY * .42;   // high enough to clear the towers
+  const sun = g.createLinearGradient(0, cy - r, 0, cy + r);
+  sun.addColorStop(0, '#ffe66d'); sun.addColorStop(.55, '#ff8a5c'); sun.addColorStop(1, '#ff3d8b');
+  g.fillStyle = 'rgba(255,90,150,.18)'; g.beginPath(); g.arc(cx, cy, r * 1.25, 0, 7); g.fill();   // haze
+  g.fillStyle = sun; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+  g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();   // stripes cut through the lower half, growing thicker
+  g.fillStyle = sky;
+  for (let i = 0; i < 8; i++) g.fillRect(cx - r, cy - r * .05 + i * r * .15, r * 2, 1 + i * r * .02);
+  g.restore();
+  g.fillStyle = '#1a0634'; g.beginPath(); g.moveTo(0, GY);  // mountains along the horizon
+  const pts = [];
+  for (let x = 0; x <= W + 40; x += 40) pts.push([x, GY - (hash(x, 9, 9) * .5 + .2 * Math.abs(Math.sin(x / 210))) * GY * .2]);
+  pts.forEach(([x, y]) => g.lineTo(x, y)); g.lineTo(W, GY); g.fill();
+  g.strokeStyle = 'rgba(255,61,240,.6)'; g.lineWidth = 1.5; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+}
+let flashA = 0, bolt = null, lastBolt = 0, nextBolt = 9000;
+function drawSky(g, t, dt) {
+  const sky = g.createLinearGradient(0, 0, 0, synth ? GY : H);
+  if (cyber) { sky.addColorStop(0, '#05010d'); sky.addColorStop(.7, '#1d0630'); sky.addColorStop(1, '#3a0a48'); }
+  else if (noir) { sky.addColorStop(0, '#040405'); sky.addColorStop(1, '#1c1a16'); }
+  else if (synth) { sky.addColorStop(0, '#0b0020'); sky.addColorStop(.45, '#2b0a4a'); sky.addColorStop(.8, '#7a1a6a'); sky.addColorStop(1, '#ff5f7e'); }
+  else { sky.addColorStop(0, '#03040a'); sky.addColorStop(1, '#1b1640'); }
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+  if (synth) drawSynthSun(g, sky);
+  if (cyber) {                                         // neon haze over the horizon
+    const hz = g.createLinearGradient(0, GY * .55, 0, GY);
+    hz.addColorStop(0, 'rgba(255,40,170,0)'); hz.addColorStop(1, 'rgba(255,40,170,.16)');
+    g.fillStyle = hz; g.fillRect(0, GY * .55, W, GY * .45);
+  }
+  const m = Math.min(W, H);
+  // Thunderstorm: lightning on big bass hits (or now and then on its own) lights up the whole sky.
+  if (S.weather === 'storm') {
+    if ((bassFlash > .9 && t - lastBolt > 3500 && Math.random() < .3) || t > nextBolt) {
+      flashA = 1; lastBolt = t; nextBolt = t + 12000 + Math.random() * 14000;
+      let x = W * (.15 + .7 * Math.random()), y = 0; bolt = [[x, y]];
+      while (y < GY * (.45 + .3 * Math.random())) { x += (Math.random() - .5) * m * .06; y += m * (.02 + .03 * Math.random()); bolt.push([x, y]); }
+    }
+    if (flashA > .02) {
+      g.fillStyle = `rgba(190,200,255,${flashA * .35})`; g.fillRect(0, 0, W, H);
+      if (bolt && flashA > .3) { g.strokeStyle = `rgba(255,255,255,${flashA})`; g.lineWidth = 2; g.beginPath(); bolt.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); }
+      flashA *= Math.pow(.02, dt);
+    }
+  }
+  const clearSky = !cyber && !noir && !['rain', 'storm', 'fog'].includes(S.weather);   // smog and rain clouds hide the stars
+  if (clearSky && S.stars) for (const s of stars) { g.fillStyle = `rgba(255,255,255,${.25 + .55 * (.5 + .5 * Math.sin(t / 700 * s.sp + s.ph))})`; g.fillRect(s.x, s.y, s.s, s.s); }
+  if (clearSky && S.shooting) {
+    if (!shoot && t > nextShoot) shoot = { x: W * (.1 + .7 * Math.random()), y: H * (.03 + .2 * Math.random()), life: 0 };
+    if (shoot) {
+      shoot.life += dt;
+      const p = shoot.life / .9, len = m * .12, hx = shoot.x + p * m * .35, hy = shoot.y + p * m * .14;
+      const grad = g.createLinearGradient(hx, hy, hx - len, hy - len * .4);
+      grad.addColorStop(0, `rgba(255,255,255,${.9 * (1 - p)})`); grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.strokeStyle = grad; g.lineWidth = 1.5; g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx - len, hy - len * .4); g.stroke();
+      if (p >= 1) { shoot = null; nextShoot = t + 6000 + Math.random() * 14000; }
+    }
+  }
+  if (S.skyBody && clearSky && !synth) {
+    g.fillStyle = '#ece8d6'; g.beginPath(); g.arc(W * .82, H * .16, m * .045, 0, 7); g.fill();
+    g.fillStyle = '#060716'; g.beginPath(); g.arc(W * .82 + m * .018, H * .16 - m * .008, m * .04, 0, 7); g.fill();   // crescent
+  }
+  // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and Noir City.
+  const over = noir || ['rain', 'storm'].includes(S.weather), key = `${over},${W},${H}`;
+  if (key !== cloudKey) {
+    cloudKey = key;
+    clouds = Array.from({ length: over ? 28 : 11 }, () => ({ x: Math.random() * W * 1.2 - W * .1, y: H * (over ? -.03 + Math.random() * .33 : .04 + Math.random() * .3),
+      w: W * (over ? .14 + Math.random() * .2 : .07 + Math.random() * .12), v: 3 + Math.random() * 7 }));
+  }
+  g.fillStyle = noir ? 'rgba(30,30,33,.72)' : S.weather === 'storm' ? 'rgba(34,34,54,.7)' : over ? 'rgba(44,44,68,.55)'
+    : cyber ? 'rgba(120,40,140,.25)' : synth ? 'rgba(255,90,170,.16)' : 'rgba(70,70,120,.22)';
+  if (S.clouds || over) for (const c of clouds) {
+    c.x += c.v * dt; if (c.x - c.w > W) c.x = -c.w;
+    g.beginPath();
+    g.ellipse(c.x, c.y, c.w * .5, c.w * .12, 0, 0, 7);
+    g.ellipse(c.x - c.w * .18, c.y - c.w * .07, c.w * .22, c.w * .12, 0, 0, 7);
+    g.ellipse(c.x + c.w * .12, c.y - c.w * .1, c.w * .26, c.w * .15, 0, 0, 7);
+    g.fill();
+  }
+  if (!S.planes) return;
+  if (!plane && t > nextPlane) { const d = Math.random() < .5 ? 1 : -1; plane = { x: d > 0 ? -20 : W + 20, y: H * (.06 + .22 * Math.random()), v: d * W / 28 }; }
+  if (plane) {
+    plane.x += plane.v * dt;
+    g.fillStyle = '#ff4a4a'; g.fillRect(plane.x, plane.y, 2, 2);
+    if (t % 1000 < 120) { g.fillStyle = '#fff'; g.fillRect(plane.x + 4, plane.y - 1, 3, 3); }
+    if (plane.x < -40 || plane.x > W + 40) { plane = null; nextPlane = t + 15000 + Math.random() * 25000; }
+  }
+}
+
+// Cyberpunk flying cars: little light pairs gliding between the towers, some behind, some in front.
+let flyers = [];
+function drawFlyers(g, dt, layer, scrollV) {
+  if (!cyber || !S.flyers) return;
+  if (!flyers.length) flyers = Array.from({ length: 10 }, (_, i) => ({ layer: i % 2, dir: Math.random() < .5 ? 1 : -1, x: Math.random() * W,
+    y: GY * (.18 + .55 * Math.random()), v: unit * (8 + Math.random() * 10), hue: NEON[i % 3] }));
+  const u = unit;
+  for (const f of flyers) {
+    if (f.layer !== layer) continue;
+    f.x += (f.dir * f.v - scrollV * (layer ? 1 : .5)) * dt;
+    if (f.x > W + 60) f.x = -60; else if (f.x < -60) f.x = W + 60;
+    const front = f.x + f.dir * u * 1.1, back = f.x - f.dir * u * 1.1;
+    const tr = g.createLinearGradient(back, 0, back - f.dir * u * 8, 0);
+    tr.addColorStop(0, `hsla(${f.hue},100%,60%,.35)`); tr.addColorStop(1, `hsla(${f.hue},100%,60%,0)`);
+    g.fillStyle = tr; g.fillRect(Math.min(back, back - f.dir * u * 8), f.y - u * .12, u * 8, u * .24);   // light trail
+    g.fillStyle = '#0a0a12'; g.fillRect(f.x - u * 1.1, f.y - u * .3, u * 2.2, u * .6);
+    g.fillStyle = `hsl(${f.hue},100%,75%)`; g.fillRect(front - u * .2, f.y - u * .15, u * .4, u * .3);
+    g.fillStyle = '#ff3355'; g.fillRect(back - u * .15, f.y - u * .12, u * .3, u * .24);
+  }
+}
+
+// Ground: street (or park) under the buildings, with streetlights and slow traffic; thin water at the very bottom.
+let cars = [], travel = 0;
+let gridT = 0;
+function drawGround(g, dt, scrollV) {
+  if (synth) {                                           // Synthwave: neon perspective grid rolling toward you
+    const gh = H - GY, vx = W / 2, step = W * .08;
+    gridT = (gridT + dt * .35) % 1;
+    const fl = g.createLinearGradient(0, GY, 0, H);
+    fl.addColorStop(0, '#1a0033'); fl.addColorStop(1, '#05000c');
+    g.fillStyle = fl; g.fillRect(0, GY, W, gh);
+    g.strokeStyle = 'rgba(255,60,220,.65)'; g.lineWidth = 1; g.beginPath();
+    for (let i = 0; i < 12; i++) { const y = GY + gh * ((i + gridT) / 12) ** 2; g.moveTo(0, y); g.lineTo(W, y); }
+    for (let k = -24; k <= 24; k++) { const xb = vx + k * step - (travel % step); g.moveTo(vx + (xb - vx) * .08, GY); g.lineTo(xb, H); }
+    g.stroke();
+    g.fillStyle = 'rgba(255,79,216,.9)'; g.fillRect(0, GY, W, 1.5);   // glowing horizon line
+    return;
+  }
+  if (S.ground === 'none') return;
+  const u = unit, gh = GH, park = S.ground === 'parkWater';
+  if (park) {
+    g.fillStyle = '#050d08'; g.fillRect(0, GY, W, gh);
+    g.fillStyle = 'rgba(200,190,150,.08)'; g.fillRect(0, GY + gh * .55, W, Math.max(1, gh * .12));   // footpath
+    const sp = 9 * u;                                     // trees, spaced irregularly
+    for (let k = Math.floor((travel - 6 * u) / sp); k * sp - travel < W + 6 * u; k++) {
+      const x = k * sp - travel + hash(k, 1, 2) * sp * .6, r = (1.4 + hash(k, 3, 4) * 1.2) * u, top = GY + gh * .3;
+      g.fillStyle = '#04080a'; g.fillRect(x - u * .2, top - u * 1.2, u * .4, u * 1.4);
+      g.fillStyle = '#030907'; g.beginPath(); g.arc(x, top - u * 1.2 - r * .6, r, 0, 7); g.arc(x + r * .6, top - u * 1.2 - r * .3, r * .7, 0, 7); g.fill();
+    }
+  } else {
+    g.fillStyle = '#121219'; g.fillRect(0, GY, W, gh * .2);                       // sidewalk
+    g.fillStyle = '#08080c'; g.fillRect(0, GY + gh * .2, W, gh * .8);             // asphalt
+    g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(0, GY + gh * .2, W, 1);    // curb
+    g.fillStyle = 'rgba(230,190,90,.4)';                                           // dashed centre line
+    const dash = 3 * u, mid = GY + gh * .6;
+    for (let x = -((travel % (dash * 2)) + dash * 2); x < W; x += dash * 2) g.fillRect(x, mid - .5, dash, Math.max(1, gh * .04));
+    // cars: far lane drives left (taillights toward us), near lane drives right
+    const target = Math.round(W / (u * 14) * S.traffic / 100 * 2);
+    while (cars.length < target) { const dir = Math.random() < .5 ? 1 : -1; cars.push({ dir, x: Math.random() * W, v: u * (5 + Math.random() * 4) }); }
+    if (cars.length > target) cars.length = target;
+    const L = Math.max(7, u * 3), ch = Math.max(3, gh * .22);
+    for (const c of cars) {
+      c.x += (c.dir * c.v - scrollV) * dt;
+      if (c.x > W + 60) c.x = -60; else if (c.x < -60) c.x = W + 60;
+      const cy = c.dir > 0 ? GY + gh * .82 : GY + gh * .42, fx = c.x + c.dir * L / 2, bx = c.x - c.dir * L / 2;
+      const beam = g.createLinearGradient(fx, 0, fx + c.dir * L * 2.2, 0);
+      beam.addColorStop(0, 'rgba(255,240,200,.22)'); beam.addColorStop(1, 'rgba(255,240,200,0)');
+      g.fillStyle = beam; g.fillRect(Math.min(fx, fx + c.dir * L * 2.2), cy - ch * .5, L * 2.2, ch * .6);
+      g.fillStyle = '#14141c'; g.fillRect(c.x - L / 2, cy - ch, L, ch); g.fillRect(c.x - L * .25, cy - ch * 1.5, L * .5, ch * .6);
+      g.fillStyle = '#fff3c8'; g.fillRect(fx - c.dir * 1.5 - .75, cy - ch * .75, 1.5, Math.max(1, ch * .3));
+      g.fillStyle = '#ff2a2a'; g.fillRect(bx - .75, cy - ch * .75, 1.5, Math.max(1, ch * .3));
+    }
+  }
+  // street lamps along the sidewalk, each with a warm pool of light
+  const sp = 24 * u, lampH = Math.max(gh * 1.4, 4.5 * u), glow = sprite('255,200,120');
+  for (let k = Math.floor(travel / sp) - 1; k * sp - travel < W + sp; k++) {
+    const x = k * sp - travel + sp / 2, ly = GY + gh * .15 - lampH;
+    g.fillStyle = '#1a1a22'; g.fillRect(x - .5, ly, Math.max(1, u * .2), lampH);
+    g.globalAlpha = .45; g.drawImage(glow, x - u * 3, ly - u * 3, u * 6, u * 6); g.globalAlpha = 1;
+    g.fillStyle = 'rgba(255,200,120,.07)'; g.beginPath(); g.ellipse(x, GY + gh * .5, u * 4, gh * .4, 0, 0, 7); g.fill();
+  }
+  if (WY - GY > gh) {                                    // retaining wall between the street (or park) and the river
+    const wy = GY + gh, wh = WY - wy;
+    g.fillStyle = '#16161d'; g.fillRect(0, wy, W, wh);
+    g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(0, wy, W, 1);            // coping along the top
+    g.fillStyle = '#0d0d12';                                                   // block joints
+    const bw = 4 * u;
+    for (let x = -(travel % bw); x < W; x += bw) g.fillRect(x, wy + 1, 1, wh);
+    g.fillRect(0, wy + wh * .55, W, 1);
+  }
+}
+// Soft round glow, drawn once per colour and reused (gradients rebuilt every frame are costly).
+const sprites = {};
+function sprite(rgb) {
+  if (sprites[rgb]) return sprites[rgb];
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d'), rg = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  rg.addColorStop(0, `rgba(${rgb},1)`); rg.addColorStop(1, `rgba(${rgb},0)`);
+  x.fillStyle = rg; x.fillRect(0, 0, 128, 128);
+  return sprites[rgb] = c;
+}
+// Water: a thin band at the very bottom that mirrors the lit city just above the ground, with a gentle ripple.
+// The strip to mirror is copied out once per frame; slicing it straight off the screen canvas costs a full copy per slice.
+const rc = document.createElement('canvas'), rcx = rc.getContext('2d');
+function drawWater(g, t) {
+  const src = g.canvas, sc = src.width / W, wh = H - WY, band = Math.min(GY, wh * 2);
+  rc.width = src.width; rc.height = Math.max(1, Math.ceil(band * sc));
+  rcx.drawImage(src, 0, (GY - band) * sc, src.width, band * sc, 0, 0, src.width, band * sc);
+  for (let y = 0; y < wh; y += 2) {
+    const sy = (band - y * 2 - 2) * sc;                // squashed reflection: 2 source rows per water row
+    if (sy < 0) break;
+    const dx = Math.sin(y * .6 + t / 380) * (1 + y * .15);
+    g.drawImage(rc, 0, sy, rc.width, 2 * sc, dx, WY + y, W, 2);
+  }
+  const tint = g.createLinearGradient(0, WY, 0, H);
+  tint.addColorStop(0, 'rgba(4,6,18,.45)'); tint.addColorStop(1, 'rgba(4,6,18,.85)');
+  g.fillStyle = tint; g.fillRect(0, WY, W, wh);
+  g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(0, WY, W, 1);   // waterline
+}
+
+// Weather particles, in screen space.
+let wx = [], wxKey = '', fogs = [];
+function drawWeather(g, t, dt) {
+  const type = S.weather === 'storm' ? 'rain' : S.weather, amt = S.wxAmt / 100;
+  if (type === 'none') return;
+  const key = S.weather + S.wxAmt + W + H;
+  if (key !== wxKey) {
+    wxKey = key;
+    const per = { rain: 1100, snow: 3200, petals: 13000, leaves: 13000 }[type];   // pixels of screen per particle
+    const n = per ? Math.round(W * H / per * amt * (S.weather === 'storm' ? 1.6 : 1)) : 0;
+    wx = Array.from({ length: n }, () => ({ x: Math.random() * W * 1.2, y: Math.random() * H, s: Math.random(), rot: Math.random() * 6, spin: (Math.random() - .5) * 3 }));
+  }
+  if (type === 'rain') {
+    g.strokeStyle = cyber ? 'rgba(200,170,255,.3)' : 'rgba(170,190,255,.28)'; g.lineWidth = 1; g.beginPath();
+    for (const p of wx) {
+      const sp = H * (1.1 + p.s * .6), len = 10 + p.s * 14;
+      p.y += sp * dt; p.x -= sp * .15 * dt;
+      if (p.y > H) { p.y = -20; p.x = Math.random() * W * 1.2; }
+      g.moveTo(p.x, p.y); g.lineTo(p.x + len * .15, p.y - len);
+    }
+    g.stroke();
+  } else if (type === 'snow') {
+    g.fillStyle = 'rgba(235,240,255,.8)';
+    for (const p of wx) {
+      p.y += (18 + p.s * 30) * dt; p.x += Math.sin(t / 1300 + p.rot) * 12 * dt;
+      if (p.y > H) { p.y = -5; p.x = Math.random() * W; }
+      const r = 1 + p.s * 1.8; g.fillRect(p.x, p.y, r, r);
+    }
+  } else if (type === 'petals' || type === 'leaves') {
+    const cols = type === 'petals' ? ['#ffb7d5', '#ff9ec4', '#ffd1e3'] : ['#d2691e', '#b5651d', '#e0a030', '#a0371c'];
+    g.globalAlpha = .85;
+    for (const p of wx) {
+      p.y += (22 + p.s * 25) * dt; p.x += (Math.sin(t / 900 + p.rot) * 25 + 10) * dt; p.rot += p.spin * dt;
+      if (p.y > H || p.x > W + 20) { p.y = -10; p.x = Math.random() * W - 40; }
+      const sz = 2.5 + p.s * 2.5;
+      g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.fillStyle = cols[Math.floor(p.s * cols.length)];
+      if (type === 'petals') { g.beginPath(); g.ellipse(0, 0, sz, sz * .55, 0, 0, 7); g.fill(); } else g.fillRect(-sz, -sz * .5, sz * 2, sz);
+      g.restore();
+    }
+    g.globalAlpha = 1;
+  } else if (type === 'fog') {                           // mist drifting between the buildings; the slider adds more banks and a thicker haze
+    const nWant = 6 + Math.round(18 * amt), rgb = cyber ? '200,90,210' : synth ? '255,110,200' : '150,150,190';
+    if (fogs.length !== nWant) fogs = Array.from({ length: nWant }, () => ({ x: Math.random() * W, y: GY * (.35 + .62 * Math.random()), w: W * (.35 + .4 * Math.random()), v: 5 + Math.random() * 10 }));
+    const haze = g.createLinearGradient(0, GY * .3, 0, GY);
+    haze.addColorStop(0, `rgba(${rgb},0)`); haze.addColorStop(1, `rgba(${rgb},${.32 * amt})`);
+    g.fillStyle = haze; g.fillRect(0, GY * .3, W, H - GY * .3);
+    const puff = sprite(rgb);
+    g.globalAlpha = .12 + .22 * amt;
+    for (const f of fogs) {
+      f.x += f.v * dt; if (f.x - f.w / 2 > W) f.x = -f.w / 2;
+      g.drawImage(puff, f.x - f.w / 2, f.y - f.w * .11, f.w, f.w * .22);   // flattened glow = a bank of mist
+    }
+    g.globalAlpha = 1;
+  }
+}
+
+let phase = 0, last = 0, loud = 0, off = 0, spectrum = new Array(12).fill(0);
+function frame(t) {
+  const dt = Math.min(.1, (t - last) / 1000); last = t;
+  if (!buildings.length) { if (innerWidth && innerHeight) layout(); return; }   // window had no size yet
+  phase += dt * S.speed / 25;
+  if (analyser) analyser.getByteFrequencyData(bins);
+  // Reactivity: calm = slow, smooth rises and long fades, fewer buildings join in; wild = instant and jumpy.
+  calm = 1 - S.react / 100;
+  const atk = 1 - Math.exp(-dt / (.005 + .5 * calm)), rel = 1 - Math.exp(-dt / (.13 + 2.5 * calm));
+
+  for (const b of buildings) {
+    const v = levelFor(b, t);
+    b.reacts = b.rk < .3 + .7 * S.react / 100;
+    b.level += (v - b.level) * (v > b.level ? atk : rel);
+    const litF = b.level * b.floors;                                     // peak: hold briefly, then drop one floor at a time, same speed everywhere
+    if (litF >= b.pk) { b.pk = litF; b.hold = t; } else if (t - b.hold > 300) b.pk = Math.max(litF, b.pk - dt * 8);
+    if (v > b.avg * (1.3 + .6 * calm) + .08 && v > .35 + .2 * calm && t - b.hit > 180 + 600 * calm) { b.flash = 1; b.hit = t; }   // beat: flash, then fade slowly
+    else b.flash *= Math.pow(.2 + .6 * calm, dt);
+    b.avg += (v - b.avg) * Math.min(1, dt * 3);
+    const lv = S.mode === 'flash' ? b.flash : b.level;
+    if (lv > .85 && b.prev < .4) b.rhue = Math.random() * 360;          // "random" effect: new colour on a hit
+    b.prev = lv;
+  }
+  bassFlash = 0;                                         // roof lights "blink to the bass": strongest bass-building flash
+  for (const b of buildings) if (b.band < .25) bassFlash = Math.max(bassFlash, b.flash);
+  for (let i = 0; i < spectrum.length; i++) {            // 12 bands, low to high, for the hologram equalizers
+    const a = Math.floor(i / spectrum.length * byBand.length), z = Math.max(a + 1, Math.floor((i + 1) / spectrum.length * byBand.length));
+    let s = 0; for (let j = a; j < z; j++) s += byBand[j].level; spectrum[i] = s / (z - a);
+  }
+
+  const prevOff = off;
+  if (S.view === 'tour') off = (off + dt * S.scroll * unit * .08) % worldW;
+  else off = S.view === 'pan' ? S.pan * Math.max(0, worldW - W) : 0;
+  const moved = S.view === 'tour' ? dt * S.scroll * unit * .08 : off - prevOff;
+  travel += moved;                                       // keeps going across the tour's wrap-around, so street lamps never jump
+  const scrollV = dt ? moved / dt : 0;
+
+  const g = ctx, wrapK = S.view === 'tour' ? [0, 1] : [0];
+  g.clearRect(0, 0, W, H);
+  if (!widget) drawSky(g, t, dt);                      // the widget never draws a sky: the desktop shows behind
+  if (S.back && backW) {                                // back skyline, sliding at half speed for depth
+    const bo = S.view === 'tour' ? (off / 2) % backW : off / 2;
+    g.drawImage(bc, -bo, 0);
+    if (S.view === 'tour') g.drawImage(bc, backW - bo, 0);
+  }
+  drawFlyers(g, dt, 0, scrollV);
+
+  let total = 0, seen = 0;
+  for (const b of buildings) for (const k of wrapK) {
+    const cx = b.cx - off + k * worldW;
+    if (cx + b.half < 0 || cx - b.half > W) continue;
+    drawBuilding(g, b, cx, t);
+    total += S.mode === 'flash' ? b.flash : b.level; seen++;
+  }
+  if (cyber) drawBridges(g, wrapK);
+  drawFlyers(g, dt, 1, scrollV);
+  drawGround(g, dt, scrollV);
+  if (WY < H) drawWater(g, t);
+  drawWeather(g, t, dt);
+
+  // City name fades in near the top as each skyline scrolls into the middle of the tour.
+  if (S.view === 'tour' && S.captions) {
+    const mid = (off + W / 2) % worldW, size = Math.max(14, Math.min(W, H) * .032);
+    g.font = `300 ${size}px system-ui, sans-serif`; g.textAlign = 'center'; g.letterSpacing = `${size * .35}px`;
+    // One name at a time: the nearest city's, fully bright when its centre is at screen centre, fading to
+    // nothing exactly halfway to the next city, where the next name starts fading in.
+    const wrapD = x => x - Math.round(x / worldW) * worldW, n = tourMarks.length;
+    let i = 0;
+    tourMarks.forEach((m, k) => { if (Math.abs(wrapD(m.mid - mid)) < Math.abs(wrapD(tourMarks[i].mid - mid))) i = k; });
+    const d = wrapD(tourMarks[i].mid - mid), nb = tourMarks[(i + (d < 0 ? 1 : n - 1)) % n];
+    const half = Math.abs(wrapD(nb.mid - tourMarks[i].mid)) / 2 || W;
+    let a = Math.max(0, 1 - Math.abs(d) / half); a = a * a * (3 - 2 * a);   // smoothstep: gentle in, gentle out
+    if (a > .01) { g.fillStyle = `rgba(255,255,255,${a * .6})`; g.fillText(tourMarks[i].name.toUpperCase(), W / 2, H * .13); }
+    g.letterSpacing = '0px';
+  }
+  // TV burn-in protection: the whole picture drifts a few pixels very slowly.
+  const tf = S.drift && !widget ? `translate(${Math.round(Math.sin(t / 97000) * 16) / 2}px,${Math.round(Math.sin(t / 71000) * 10) / 2}px)` : '';
+  if (tf !== cv.style.transform) cv.style.transform = tf;   // only touch the style when it actually moves (every few seconds)
+
+  // Loudness meter: segmented bar on the right edge.
+  loud = Math.max(seen ? total / seen : 0, loud * .94);
+  if (S.meter) {
+    const segs = 14, mh = Math.min(GY * .5, 160), sh = mh / segs, x = W - 12, on = Math.round(loud * 1.6 * segs);
+    for (let i = 0; i < segs; i++) {
+      g.fillStyle = i >= on ? '#ffffff14' : i > segs * .8 ? '#ff4040' : i > segs * .55 ? '#ffd040' : '#40ff80';
+      g.fillRect(x, GY - 10 - (i + 1) * sh, 6, sh - 2);
+    }
+  }
+}
+
+layout();
+// The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.
+(function loop(t) { frame(t); requestAnimationFrame(loop); })(performance.now());
+</script>
+</body>
+</html>
