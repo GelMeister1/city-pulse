@@ -83,6 +83,10 @@
       <option value="tour">Tour</option>
     </select></label>
     <label>Scroll speed <input type="range" id="scroll" min="1" max="100"></label>
+    <label>Scroll direction <select id="scrollDir">
+      <option value="rtl">Right to left</option>
+      <option value="ltr">Left to right</option>
+    </select></label>
     <label>Spacing <input type="range" id="gap" min="0" max="300"></label>
   </div></details>
   <details name="sect"><summary>Lights</summary><div class="body">
@@ -155,6 +159,7 @@
 <script>
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const $ = id => document.getElementById(id);
+const mod = (x, m) => ((x % m) + m) % m;                    // remainder that stays positive (the tour can scroll backwards)
 const qs = new URLSearchParams(location.search);
 // Window kinds: widget, full (full screen), settings (the widget's settings window), wall (live wallpaper); none = plain browser.
 const widget = qs.has('widget'), full = qs.has('full'), settingsMode = qs.has('settings'), wallMode = qs.has('wall');
@@ -172,7 +177,7 @@ const spanMode = !settingsMode && qs.get('mode') === 'span';
 const perScreen = qs.has('screen') && (qs.get('mode') === 'per' || (settingsMode && qs.get('mode') !== 'span'));
 
 // ---------- settings (remembered between launches) ----------
-const DEF = { city: 'generic', view: 'fit', scroll: 30, gap: 40, pan: .5,
+const DEF = { city: 'generic', view: 'fit', scroll: 30, scrollDir: 'rtl', gap: 40, pan: .5,
   mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, loudFill: false, cityLine: false, lineH: 70, bright: 100, meter: true,
   ground: TARGET === 'widget' ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
   weather: 'none', wxAmt: 50,
@@ -746,7 +751,7 @@ function hexToHS(hex) {
 const hide = (id, yes) => { $(id).parentElement.hidden = yes; };
 function refreshPanel() {
   hide('color', !['static', 'breathing'].includes(S.effect));
-  hide('scroll', S.view !== 'tour');
+  hide('scroll', S.view !== 'tour'); hide('scrollDir', S.view !== 'tour');
   hide('peak', S.mode !== 'floors');
   hide('cityLine', S.mode !== 'floors');                // heights only mean something in the Floors style
   hide('lineH', S.mode !== 'floors' || !S.cityLine);
@@ -782,7 +787,7 @@ for (const k of Object.keys(DEF)) {
 
 // ---------- presets ----------
 // A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
-const PLACE = ['city', 'view', 'scroll', 'gap', 'pan'];
+const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan'];
 const lookOf = s => Object.fromEntries(Object.keys(DEF).filter(k => !PLACE.includes(k)).map(k => [k, s[k]]));
 const BUILTIN = {
   'Lounge': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
@@ -1347,16 +1352,17 @@ function frame(t) {
 
   const prevOff = off, prevTravel = travel, tour = S.view === 'tour';
   let bo;                                                // back skyline offset
+  const dir = S.scrollDir === 'ltr' ? -1 : 1;            // tour direction: cities travel right→left (default) or left→right
   if (spanMode) {                                        // one world across all screens, placed by the clock so separate windows agree without talking
-    const runU = Date.now() / 1000 * S.scroll * .08;
+    const runU = dir * Date.now() / 1000 * S.scroll * .08;
     travel = (runU + spanLeftU) * unit;                  // never wraps, so street lamps line up across screens
-    off = travel % worldW;
-    bo = (runU * unit / 2 + spanLeftU * unit) % backW;   // only the clock's share gets half-speed parallax, so the back row joins up at screen edges
+    off = mod(travel, worldW);
+    bo = mod(runU * unit / 2 + spanLeftU * unit, backW); // only the clock's share gets half-speed parallax, so the back row joins up at screen edges
   } else {
-    if (tour) off = (off + dt * S.scroll * unit * .08) % worldW;
+    if (tour) off = mod(off + dir * dt * S.scroll * unit * .08, worldW);
     else off = S.view === 'pan' ? S.pan * Math.max(0, worldW - W) : 0;
-    travel += tour ? dt * S.scroll * unit * .08 : off - prevOff;   // keeps going across the tour's wrap-around, so street lamps never jump
-    bo = tour ? (off / 2) % backW : off / 2;
+    travel += tour ? dir * dt * S.scroll * unit * .08 : off - prevOff;   // keeps going across the tour's wrap-around, so street lamps never jump
+    bo = tour ? mod(off / 2, backW) : off / 2;
   }
   const moved = travel - prevTravel, scrollV = dt && Math.abs(moved) < W ? moved / dt : 0;   // span mode's first frame jumps from 0
   // Tour: the active theme is the city nearest the screen centre's. The neighbour's sky blends in as the

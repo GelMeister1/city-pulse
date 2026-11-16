@@ -35,7 +35,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Views:**
   - **Fit:** shows whole buildings only.
   - **Pan:** drag or scroll to choose your part of the city.
-  - **Tour:** slowly scrolls through every city, real and themed, with name captions. Made for a TV.
+  - **Tour:** slowly scrolls through every city, real and themed, with name captions. Made for a TV. Choose the speed and direction (right to left or left to right).
 - **Presets:** four built in (Lounge, Chill Night, Party, Neon Tour). Your own presets are shared between the widget and full screen.
 - **TV-friendly:**
   - full screen opens on whichever display the widget is on
@@ -68,7 +68,7 @@ Use the tray's **Uninstall City Pulse…**, or go to Windows **Settings → Apps
 ## Use
 
 - The widget opens in the bottom-right corner. Hover over it to show the toolbar, drag the toolbar to move the widget, and drag the edges to resize it. **✕** tucks it into the tray.
-- **⛶ Full screen** opens the big view on the widget's display: drag the widget to your TV first. Press **Esc** to close it.
+- **⛶ Full screen** opens the big view on the widget's display: drag the widget to your TV first. **Esc** always closes full screen, on every screen at once, even when it covers the taskbar.
 - **⚙ Settings** opens a settings window with presets plus the Skyline, Lights, Scene, Weather and Ambient sections. Changes apply to the widget live. In full screen, ⚙ opens the panel on screen instead.
 - **Right-click the tray icon** for full screen, separate settings for the widget, full screen and wallpaper, Live wallpaper, Start with Windows, Check for updates, Uninstall and Quit.
 - Keyboard shortcuts:

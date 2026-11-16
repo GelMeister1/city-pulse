@@ -1,6 +1,6 @@
 // City Pulse app: a tray icon, the desktop widget, a full-screen view, a settings window and an
 // experimental live wallpaper. The visualizer itself is index.html; windows differ only by URL flags.
-const { app, BrowserWindow, screen, session, ipcMain, Tray, Menu, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, screen, session, ipcMain, Tray, Menu, nativeImage, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -68,28 +68,54 @@ function windowsFor(mode, oneDisplay) {
 function openFull(mode = prefs.fullMode || 'one') {
   if (alive(fulls).length) return closeFull();               // pressing it again closes it
   prefs.fullMode = mode; savePrefs();
-  fulls = windowsFor(mode, displayOf(widget)).map(({ d, query }) => {
+  const home = displayOf(widget);
+  fulls = windowsFor(mode, home).map(({ d, query }) => {
     const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, backgroundColor: '#05060c', skipTaskbar: true,
       title: 'City Pulse', icon: ICON, autoHideMenuBar: true, webPreferences: PREFS });
     load(w, { full: '1', ...query });
-    w.once('ready-to-show', () => { w.setBounds(d.bounds); w.setFullScreen(true); w.show(); });   // place first: Windows can move a window created already full screen
+    w.once('ready-to-show', () => {
+      w.setBounds(d.bounds); w.setFullScreen(true);       // place first: Windows can move a window created already full screen
+      d.id === home.id ? w.show() : w.showInactive();      // keyboard focus goes to the widget's screen
+    });
+    w.on('closed', () => { if (!alive(fulls).length) closeFull(); });
     return w;
   });
+  // Full screen can cover every screen, taskbar and tray included, so Esc must always get you out,
+  // whichever window has focus. It's claimed only while full screen is showing.
+  globalShortcut.register('Escape', closeFull);
   updateTray();
 }
-function closeFull() { alive(fulls).forEach(w => w.close()); fulls = []; updateTray(); }
+function closeFull() {
+  globalShortcut.unregister('Escape');
+  alive(fulls).forEach(w => w.close()); fulls = [];
+  Object.values(settings).forEach(w => { if (!w.isDestroyed()) w.setAlwaysOnTop(false); });   // back to a normal window
+  updateTray();
+}
 
 // Settings window for the widget, full screen or wallpaper (optionally one screen of a per-screen setup); changes apply live.
 // It opens on the screen it's about: that screen for per-screen settings, otherwise the widget's screen.
-function openSettings(target = 'widget', screenIdx = null) {
+async function openSettings(target = 'widget', screenIdx = null) {
+  // Per-screen settings only show while that view runs as "own city each". If it's running another way, offer to switch.
+  const running = target === 'full' ? (alive(fulls).length ? prefs.fullMode : null) : target === 'wall' ? (prefs.wall || {}).mode : null;
+  if (screenIdx !== null && running && running !== 'off' && running !== 'per') {
+    const what = target === 'full' ? 'Full screen' : 'The wallpaper';
+    const parent = alive(fulls)[0];                       // attach to full screen so the question can't hide behind it
+    const { response } = await dialog.showMessageBox(...(parent ? [parent] : []), { type: 'question', buttons: ['Switch to own city each', 'Just edit settings'], defaultId: 0, cancelId: 1,
+      message: `${what} is showing one ${running === 'span' ? 'tour across all screens' : 'screen'} right now.`,
+      detail: 'Per-screen settings apply when every screen shows its own city. Switch so your changes show?' });
+    if (response === 0) target === 'full' ? (closeFull(), openFull('per')) : await setWallpaper({ mode: 'per' });
+  }
   const id = screenIdx === null ? target : `${target}:${screenIdx}`, open = settings[id];
-  if (open && !open.isDestroyed()) return open.focus();
+  if (open && !open.isDestroyed()) return raise(open);
   const d = screenIdx === null ? displayOf(widget) : (screensLR()[screenIdx] || displayOf(widget));
   const wa = d.workArea, ww = 380, wh = Math.min(760, wa.height - 40);
   const w = settings[id] = new BrowserWindow({ width: ww, height: wh, minWidth: 320, x: Math.round(wa.x + (wa.width - ww) / 2), y: Math.round(wa.y + (wa.height - wh) / 2),
     title: 'City Pulse Settings', icon: ICON, autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
   load(w, { settings: '1', for: target, ...(screenIdx === null ? {} : { screen: String(screenIdx) }) });
+  raise(w);
 }
+// Settings must sit above full screen, which otherwise covers it and swallows the clicks.
+function raise(w) { if (alive(fulls).length) w.setAlwaysOnTop(true, 'screen-saver'); w.show(); w.focus(); }
 
 // Experimental live wallpaper: full-screen views parented behind the desktop icons.
 // prefs.wall = { mode: 'off' | 'one' | 'per' | 'span', display: id (for 'one') }
