@@ -21,6 +21,8 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - **Floors:** an equalizer that climbs each building, with a falling peak marker.
   - **Pulse:** each building's windows follow the volume.
   - **Beat flash:** a building lights up on a hit, then fades.
+  - **Fill by loudness:** buildings rise with how loud the song really is, so a quiet song gives a low city and a loud chorus a tall one.
+  - **City line:** one flat height for the whole city. Buildings light up to the same real height and the peaks line up level. Drag the dotted line on screen, or use the slider in Settings.
   - A **Reactivity** slider runs from calm (smooth swells, for background viewing) to wild (instant and punchy, for parties). Every building keeps reacting at any setting.
 - **Color effects:** Spectrum, Wave, Fade, Solid, Breathing and Random, plus a brightness slider.
 - **Scene:**

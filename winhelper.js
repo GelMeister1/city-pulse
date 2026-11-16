@@ -90,6 +90,8 @@ public static class CP {
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr p, IntPtr after, string c, string w);
   [DllImport("user32.dll")] static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr res);
   [DllImport("user32.dll")] static extern IntPtr SetParent(IntPtr child, IntPtr parent);
+  [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr h, int i);
+  [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr h, int i, IntPtr v);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
   [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint flags);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SystemParametersInfo(uint a, uint b, StringBuilder c, uint d);
@@ -105,7 +107,10 @@ public static class CP {
       return true;
     }, IntPtr.Zero);
     if (worker == IntPtr.Zero) return "{\"ok\":false}";
-    SetParent(new IntPtr(hwnd), worker);
+    var win = new IntPtr(hwnd);
+    long style = GetWindowLongPtr(win, -16).ToInt64();                                     // GWL_STYLE: make it a proper child window
+    SetWindowLongPtr(win, -16, new IntPtr((style & ~0x80000000L) | 0x40000000L));           // drop WS_POPUP, add WS_CHILD
+    SetParent(win, worker);
     SetWindowPos(new IntPtr(hwnd), IntPtr.Zero, x, y, w, h, 0x0040 | 0x0004);              // SHOWWINDOW | NOZORDER, coords relative to the layer
     return "{\"ok\":true}";
   }

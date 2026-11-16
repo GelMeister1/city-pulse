@@ -103,6 +103,9 @@
     <label>Pick color <input type="color" id="color"></label>
     <label>Color speed <input type="range" id="speed" min="1" max="100"></label>
     <label>Reactivity <input type="range" id="react" min="0" max="100"></label>
+    <label class="row"><input type="checkbox" id="loudFill"> Fill by loudness</label>
+    <label class="row"><input type="checkbox" id="cityLine"> City line (one height for the whole city)</label>
+    <label>City line height <input type="range" id="lineH" min="15" max="100"></label>
     <label>Brightness <input type="range" id="bright" min="5" max="100"></label>
     <label class="row"><input type="checkbox" id="meter"> Loudness meter</label>
   </div></details>
@@ -160,7 +163,7 @@ for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'set
 
 // ---------- settings (remembered between launches) ----------
 const DEF = { city: 'generic', view: 'fit', scroll: 30, gap: 40, pan: .5,
-  mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, bright: 100, meter: true,
+  mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, loudFill: false, cityLine: false, lineH: 70, bright: 100, meter: true,
   ground: widget ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
   weather: 'none', wxAmt: 50,
   roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
@@ -695,6 +698,8 @@ function refreshPanel() {
   hide('color', !['static', 'breathing'].includes(S.effect));
   hide('scroll', S.view !== 'tour');
   hide('peak', S.mode !== 'floors');
+  hide('cityLine', S.mode !== 'floors');                // heights only mean something in the Floors style
+  hide('lineH', S.mode !== 'floors' || !S.cityLine);
   $('city').disabled = S.view === 'tour';
   for (const id of ['blinkSpeed', 'blinkSync', 'blinkBeat', 'blinkColor']) hide(id, !S.roofLights);
   hide('blinkSpeed', !S.roofLights || S.blinkBeat); hide('blinkSync', !S.roofLights || S.blinkBeat);
@@ -809,10 +814,20 @@ addEventListener('keydown', e => {
 // Pan view: drag or scroll the skyline to choose which part is shown.
 function nudge(px) { S.pan = Math.min(1, Math.max(0, S.pan + px / Math.max(1, worldW - W))); }
 cv.addEventListener('wheel', e => { if (S.view !== 'pan') return; e.preventDefault(); nudge(e.deltaY + e.deltaX); save(); }, { passive: false });
-let dragX = null;
-cv.addEventListener('pointerdown', e => { if (S.view === 'pan') { dragX = e.clientX; cv.setPointerCapture(e.pointerId); } });
-cv.addEventListener('pointermove', e => { if (dragX !== null) { nudge(dragX - e.clientX); dragX = e.clientX; } });
-cv.addEventListener('pointerup', () => { dragX = null; save(); });
+// City line: drag the dotted line up or down (it's shown while the controls are visible).
+const lineShown = () => S.cityLine && S.mode === 'floors' && !wallMode && !document.body.classList.contains('idle');
+const nearLine = y => lineShown() && Math.abs(y - (GY - cityLineY())) < 10;
+let dragX = null, dragLine = false;
+cv.addEventListener('pointerdown', e => {
+  if (nearLine(e.clientY)) { dragLine = true; cv.setPointerCapture(e.pointerId); }
+  else if (S.view === 'pan') { dragX = e.clientX; cv.setPointerCapture(e.pointerId); }
+});
+cv.addEventListener('pointermove', e => {
+  if (dragLine) { S.lineH = Math.round(Math.min(100, Math.max(15, (GY - e.clientY) / GY * 100))); showSetting('lineH'); }
+  else if (dragX !== null) { nudge(dragX - e.clientX); dragX = e.clientX; }
+  cv.style.cursor = dragLine || nearLine(e.clientY) ? 'ns-resize' : '';
+});
+cv.addEventListener('pointerup', () => { dragX = null; dragLine = false; save(); });
 
 let idleTimer;
 function wake() {
@@ -847,9 +862,12 @@ function bandInput(k, t) {                               // 0..1 loudness of ban
   const b = bands[k];
   let sum = 0;
   for (let i = b.a; i < b.z; i++) sum += bins[i];
-  const v = sum / (b.z - b.a) / 255;
+  const v = sum / (b.z - b.a) / 255;                     // the analyser's 0..1 is a decibel scale (-100 dB .. -30 dB)
   b.max = Math.max(v, b.max - .01 * (1 / 60), .06);      // slow auto-gain (takes ~10 s to adapt), so quiet passages read as quiet
-  return Math.pow(Math.max(0, (v / b.max - .2) / .8), 1.3);
+  // Fill by loudness: how loud this band really is, so a quiet song is a low city and a loud chorus a tall one.
+  // Higher bands are naturally quieter in music, so they get a small lift to keep the treble side from always looking empty.
+  if (S.loudFill) return Math.pow(Math.min(1, Math.max(0, (v + k * .025 - .38) / .5)), 1.2);
+  return Math.pow(Math.max(0, (v / b.max - .2) / .8), 1.3);   // default: each band scaled to its own recent range
 }
 function updateBands(t, dt) {
   // Reactivity = how sharply lights follow the music. Calm: slow, smooth swells. Wild: instant, punchy.
@@ -866,10 +884,14 @@ function updateBands(t, dt) {
 // How lit floor gf of building b is (0..1), per the Lights setting. Calm adds a faint resting glow so the city never goes dark.
 let calm = .4;
 const alphaFor = (b, gf) => { const rest = .12 * calm; return rest + (1 - rest) * rawAlpha(b, gf); };
+// How many floors are lit. Normally a share of the building's own height; with the City line, the same real height
+// for every building (up to the line), so tall towers rarely fill and the peaks sit level across the whole city.
+const cityLineY = () => S.lineH / 100 * GY;               // the line's height above the ground, in px
+const litFloors = b => (S.cityLine ? Math.min(1, b.level * cityLineY() / (b.hU * unit)) : b.level) * b.floors;
 function rawAlpha(b, gf) {
   if (S.mode === 'pulse') return b.level;
   if (S.mode === 'flash') return b.flash;
-  const lit = b.level * b.floors;
+  const lit = litFloors(b);
   if (gf < Math.floor(lit)) return 1;
   if (gf < lit) return lit % 1;
   return S.peak && b.pk > 1 && gf === Math.ceil(b.pk) - 1 ? .8 : 0;
@@ -1367,7 +1389,7 @@ function frame(t) {
   for (const b of buildings) {                           // each building follows its band
     const band = bands[b.band];
     b.level = band.level; b.flash = band.flash;
-    const litF = b.level * b.floors;                     // peak: hold briefly, then drop one floor at a time, same speed everywhere
+    const litF = litFloors(b);                           // peak: hold briefly, then drop one floor at a time, same speed everywhere
     if (litF >= b.pk) { b.pk = litF; b.hold = t; } else if (t - b.hold > 300) b.pk = Math.max(litF, b.pk - dt * 8);
     const lv = S.mode === 'flash' ? b.flash : b.level;
     if (lv > .85 && b.prev < .4) b.rhue = Math.random() * 360;          // "random" effect: new colour on a hit
@@ -1428,6 +1450,15 @@ function frame(t) {
   // TV burn-in protection: the whole picture creeps at most 3 px, one pixel every minute or so (a full cycle takes ~20 min).
   const tf = S.drift && !widget ? `translate(${Math.round(Math.sin(t / 190000) * 3)}px,${Math.round(Math.sin(t / 140000) * 2)}px)` : '';
   if (tf !== cv.style.transform) cv.style.transform = tf;   // only touch the style when it actually moves
+
+  // The City line itself, with a label, while the controls are showing.
+  if (lineShown()) {
+    const y = Math.round(GY - cityLineY()) + .5;
+    g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1; g.setLineDash([6, 5]);
+    g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); g.setLineDash([]);
+    g.font = '12px system-ui, sans-serif'; g.textAlign = 'left'; g.fillStyle = 'rgba(255,255,255,.75)';
+    g.fillText('City line — drag to set', 10, y - 6);
+  }
 
   // Loudness meter: segmented bar on the right edge, topping out at the Windows volume (thin line marks it).
   if (S.meter) {

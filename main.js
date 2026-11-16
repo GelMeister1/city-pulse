@@ -9,6 +9,8 @@ const win32 = require('./winhelper');
 const { autoUpdater } = require('electron-updater');
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+// Chromium stops painting windows it thinks are covered; the live wallpaper sits behind the desktop, so it always looks covered.
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 if (!app.requestSingleInstanceLock()) app.quit();           // one City Pulse at a time; a second launch shows the widget
 
 // The only page this app ever shows. Anything else is refused. (file: URLs have origin "null",
@@ -70,14 +72,17 @@ async function setWallpaper(displayId) {
   if (d) {
     const all = screen.getAllDisplays(), vx = Math.min(...all.map(x => x.bounds.x)), vy = Math.min(...all.map(x => x.bounds.y));
     wall = new BrowserWindow({ ...d.bounds, show: false, frame: false, skipTaskbar: true, focusable: false,
-      backgroundColor: '#05060c', title: 'City Pulse Wallpaper', webPreferences: PREFS });
+      backgroundColor: '#05060c', title: 'City Pulse Wallpaper', webPreferences: { ...PREFS, backgroundThrottling: false } });
     load(wall, { full: '1', wall: '1' });
     wall.once('ready-to-show', async () => {
-      const hwnd = wall.getNativeWindowHandle().readBigUInt64LE(0);
-      const res = await win32.wallpaper(hwnd, { x: d.bounds.x - vx, y: d.bounds.y - vy, width: d.bounds.width, height: d.bounds.height });
+      const hwnd = wall.getNativeWindowHandle().readBigUInt64LE(0), rel = { x: d.bounds.x - vx, y: d.bounds.y - vy, width: d.bounds.width, height: d.bounds.height };
+      const res = await win32.wallpaper(hwnd, rel);
       if (!res || !res.ok) {                              // Windows didn't allow it: back out quietly
         wall.destroy(); wall = null; prefs.wallpaper = null; savePrefs();
         tray.displayBalloon?.({ title: 'City Pulse', content: 'Live wallpaper isn’t available on this version of Windows.' });
+      } else {
+        wall.showInactive();                              // tell Chromium it's visible so it actually draws (it was black before)
+        await win32.wallpaper(hwnd, rel);                 // and re-seat it in case showing moved it
       }
       updateTray();
     });
@@ -194,7 +199,8 @@ app.on('before-quit', e => {
   if (wall && !wall.isDestroyed()) {
     e.preventDefault();
     wall.destroy(); wall = null;
-    win32.refreshWallpaper().finally(() => { win32.stop(); app.quit(); });
+    // never let a slow wallpaper repaint hold up quitting
+    Promise.race([win32.refreshWallpaper(), new Promise(r => setTimeout(r, 3000))]).finally(() => { win32.stop(); app.quit(); });
   } else win32.stop();
 });
 app.on('window-all-closed', () => {});                     // keep running in the tray
