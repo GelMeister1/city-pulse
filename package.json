@@ -1,7 +1,7 @@
 {
   "name": "city-pulse",
   "productName": "City Pulse",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Music-reactive city skyline visualizer: desktop widget and full-screen TV mode",
   "author": "GelMeister1",
   "license": "MIT",
@@ -15,12 +15,39 @@
   "build": {
     "appId": "com.gelmeister1.citypulse",
     "productName": "City Pulse",
-    "files": ["index.html", "main.js", "preload.js", "winhelper.js", "assets/icon.png", "package.json"],
-    "directories": { "buildResources": "build", "output": "dist" },
-    "publish": [{ "provider": "github", "owner": "GelMeister1", "repo": "city-pulse", "releaseType": "release" }],
+    "files": [
+      "index.html",
+      "themes-a.js",
+      "themes-b.js",
+      "cities-world.js",
+      "main.js",
+      "preload.js",
+      "winhelper.js",
+      "assets/icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "buildResources": "build",
+      "output": "dist"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "GelMeister1",
+        "repo": "city-pulse",
+        "releaseType": "release"
+      }
+    ],
     "win": {
       "icon": "build/icon.png",
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

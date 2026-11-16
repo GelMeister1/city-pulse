@@ -99,6 +99,7 @@
       <option value="static">Solid</option>
       <option value="breathing">Breathing</option>
       <option value="random">Random</option>
+      <option value="drift">Smooth random</option>
     </select></label>
     <label>Pick color <input type="color" id="color"></label>
     <label>Color speed <input type="range" id="speed" min="1" max="100"></label>
@@ -163,6 +164,12 @@ for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'set
 // Whose settings this window uses. The settings window edits whichever one it was opened for (?settings=1&for=…).
 const TARGET = settingsMode ? (['widget', 'full', 'wall'].includes(qs.get('for')) ? qs.get('for') : 'widget')
   : wallMode ? 'wall' : full ? 'full' : 'widget';
+// Several screens: screen=<i> (0 = left-most) and screens=<w>x<h>,… (all of them, left to right, CSS px).
+// mode=per gives each screen its own city (its own settings key); mode=span runs one tour across all of them.
+const screenI = Math.max(0, parseInt(qs.get('screen'), 10) || 0);
+const screens = (qs.get('screens') || '').split(',').map(s => s.split('x').map(Number)).filter(a => a.length === 2 && a.every(n => n > 0));
+const spanMode = !settingsMode && qs.get('mode') === 'span';
+const perScreen = qs.has('screen') && (qs.get('mode') === 'per' || (settingsMode && qs.get('mode') !== 'span'));
 
 // ---------- settings (remembered between launches) ----------
 const DEF = { city: 'generic', view: 'fit', scroll: 30, gap: 40, pan: .5,
@@ -173,12 +180,19 @@ const DEF = { city: 'generic', view: 'fit', scroll: 30, gap: 40, pan: .5,
   search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true };
 let S;
 // Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
-const KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
-// The wallpaper starts as a copy of the full-screen look until it's given its own.
-const stored = localStorage.getItem(KEY) || (TARGET === 'wall' && localStorage.getItem('cityPulse:full')) || '{}';
-try { S = { ...DEF, ...JSON.parse(stored) }; } catch { S = { ...DEF }; }
-if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
+const SHARED_KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
+const KEY = perScreen ? `${SHARED_KEY}:${screenI}` : SHARED_KEY;
+// A screen's own settings start as a copy of the shared ones; the wallpaper starts as a copy of the full-screen look.
+const stored = localStorage.getItem(KEY) || localStorage.getItem(SHARED_KEY) || (TARGET === 'wall' && localStorage.getItem('cityPulse:full')) || '{}';
+let savedView;                                           // span mode forces the tour without overwriting the saved view
+function loadSettings(json) {
+  S = { ...DEF, ...JSON.parse(json) };
+  if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
+  if (S.preset === 'Background') S.preset = 'Lounge';    // the built-in preset's old name
+  savedView = S.view; if (spanMode) S.view = 'tour';
+}
+try { loadSettings(stored); } catch { loadSettings('{}'); }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(spanMode ? { ...S, view: savedView } : S)); } catch {} };
 
 // ---------- buildings ----------
 // Window styles, in units: cw = column pitch, ch = floor pitch, ww/wh = window size as a share of the cell.
@@ -449,7 +463,7 @@ const CITIES = {
   ]},
 };
 
-// Made-up buildings: used for the generic city, the cyberpunk city and to fill the sides of real skylines.
+// Made-up buildings: used for Neon City, the themed cities and to fill the sides of real skylines.
 const GEN_STYLES = ['grid', 'tall', 'wide', 'ribbon', 'pairs', 'slim', 'cols'];
 const GEN_ROOFS = [null, null, null, ['antenna', 5], ['antenna2', 6], ['spire', 8], ['pyramid', 5], ['dome', 4]];
 // Building kits for the made-up cities: window styles, roofs, how often towers are tall, setback shrink, gaps.
@@ -461,8 +475,8 @@ const KITS = {
              tall: .45, shrink: .78, w0: 7, gaps: [0, .5], setbacks: true },   // Art Deco: stepped setbacks and ornate crowns
   synth:   { styles: ['grid', 'ribbon', 'wide', 'cols'], roofs: [null, null, ['antenna', 5], ['pyramid', 4]], tall: .3, shrink: .8, w0: 7 },
 };
-function gen(r, widthU, maxHU, minFrac, kitName = 'generic') {
-  const kit = KITS[kitName], out = [];
+function gen(r, widthU, maxHU, minFrac, kit = KITS.generic) {
+  const out = [];
   let lastShort = false;
   for (let acc = 0; acc < widthU;) {
     // Height rhythm: a mix of tall, mid and short, but never two short buildings side by side.
@@ -495,8 +509,19 @@ function fitRow(list, maxU) {                            // keep only whole buil
 }
 const NEON = [320, 190, 50, 280, 150];                    // cyberpunk sign hues: magenta, cyan, amber, violet, green
 
-let W, H, GY, GH, WY, unit, buildings = [], bridges = [], worldW = 0, stars = [], clouds = [], tourMarks = [];
-let cyber = false, noir = false, synth = false;          // the made-up themed cities (never part of the tour)
+// Themes: the look of a made-up city (see registerTheme below for every field). 'none' is the plain night look
+// shared by Neon City, the real cities and the tour's filler blocks; other themes start from it.
+const THEMES = { none: { name: 'Neon City', kit: KITS.generic, minF: .25, maxF: .82,
+  sky: [[0, '#03040a'], [1, '#1b1640']], stars: true, moon: true, cloud: 'rgba(70,70,120,.22)', rain: 'rgba(170,190,255,.28)', fogRGB: '150,150,190',
+  body: '#000', side: '#0c0d12', top: '#17181f', searchlights: true, roofLights: true, planes: true,
+  back: { h: 1, density: 1, body: '#0b0c19', win: () => 'rgba(150,160,220,.28)' } } };
+const themeKey = city => city !== 'none' && THEMES[city] ? city : 'none';   // Neon City ('generic') and real cities use the plain look
+
+let dpr = 1, W, H, GY, GH, WY, unit, buildings = [], worldW = 0, stars = [], clouds = [], tourMarks = [];
+let theme = THEMES.none, fade = { theme: THEMES.none, w: 0 };   // active theme, and the neighbour's share while the tour crossfades
+let spanLeftU = 0;                                       // span mode: this screen's left edge in world units, past screen 0's
+let tourRuns = [];                                       // the tour's theme stretches: { T, x0, x1 } in world px, end to end
+const runAt = x => tourRuns.find(r => x < r.x1) || tourRuns[tourRuns.length - 1];
 const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
 
 // Back skyline: a hazier second row behind the city that fills the sky above short buildings.
@@ -504,21 +529,21 @@ const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
 const bc = document.createElement('canvas'), bg = bc.getContext('2d');
 let backW = 0;
 function renderBack() {
-  const r = rng(13);
-  const [hf, density] = S.view === 'tour' ? [.7, .8] : cyber || noir ? [1.1, 1] : synth ? [.6, .6] : (CITIES[S.city] || { back: [1, 1] }).back;
-  const bodyC = cyber ? '#120a20' : noir ? '#0d0d0f' : synth ? '#170a2c' : '#0b0c19';
-  const winC = c => cyber ? (c < .5 ? 'rgba(255,90,210,.25)' : 'rgba(80,220,255,.25)') : noir ? 'rgba(210,170,100,.16)'
-    : synth ? (c < .5 ? 'rgba(255,80,200,.28)' : 'rgba(80,230,255,.28)') : 'rgba(150,160,220,.28)';
+  const r = rng(13), city = CITIES[S.city], fixed = city ? city.back : [theme.back.h, theme.back.density];
+  // The tour bakes each stretch's own look into its part of the row: the part that's behind the stretch when it's
+  // centred on screen (the row slides at half speed, so back x ↔ world x = 2x - W/2, less span mode's screen offset).
+  const backAt = x => tourRuns.length ? runAt(((2 * x - W / 2 - spanLeftU * unit) % worldW + worldW) % worldW).T.back : theme.back;
   const tallest = Math.max(...buildings.map(b => b.lm ? b.lm.h : b.tiers.reduce((a, t) => a + t.h, 0))) * unit;
-  const refH = Math.min(tallest * .8, GY * .75) * hf;
+  const baseH = Math.min(tallest * .8, GY * .75);
   backW = Math.ceil(S.view === 'tour' ? worldW / 2 : W + Math.max(0, worldW - W) / 2);
   bc.width = backW; bc.height = Math.ceil(GY);
   if (!S.back) return;
   const u = unit, cw = 2 * u, fh = 2.2 * u;
   for (let x = -u * 4; x < backW;) {
-    const w = (8 + Math.floor(r() * 10)) * u, h = refH * (.45 + .55 * r()), top = GY - h, show = r() < density, ant = r() < .3;
+    const w = (8 + Math.floor(r() * 10)) * u, tb = backAt(x + w / 2), [hf, density] = tourRuns.length ? [.7 * tb.h, .8 * tb.density] : fixed;
+    const h = baseH * hf * (.45 + .55 * r()), top = GY - h, show = r() < density, ant = r() < .3;
     if (show) {
-      bg.fillStyle = bodyC;
+      bg.fillStyle = tb.body;
       bg.fillRect(x, top, w, h);
       if (ant) bg.fillRect(x + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);   // the odd antenna
     }
@@ -526,97 +551,119 @@ function renderBack() {
     for (let y = GY - fh; y > top + u; y -= fh) for (let k = 0; k < cols; k++) {
       const on = r() < .16, c = r();
       if (!show || !on) continue;
-      bg.fillStyle = winC(c);
+      bg.fillStyle = (tb.win && tb.win(c)) || 'rgba(150,160,220,.28)';
       bg.fillRect(left + k * cw + cw * .27, y + fh * .25, cw * .46, fh * .5);
     }
     x += w + (r() < .5 ? 0 : u * 1.5);
   }
 }
 
+// Ground strip for a window h px tall: street or park, then optionally a retaining wall and a thin band of water.
+// A theme can replace it with its own (Synthwave's glowing grid), with no water under it.
+function geom(h, T, s) {
+  const gh = T.ground ? Math.round(h * T.ground.h * (widget ? 5 / 7 : 1))   // a little lower in the widget
+    : s.ground === 'none' ? 0 : Math.max(widget ? 6 : 9, Math.round(h * (widget ? .045 : .032)));
+  const waterH = !T.ground && s.ground.endsWith('Water') ? Math.max(4, Math.round(h * .022)) : 0;
+  const wallH = waterH && gh ? Math.max(3, Math.round(h * .012)) : 0;   // retaining wall between street/park and river
+  return { GH: gh, WY: h - waterH, GY: h - waterH - wallH - gh };
+}
+const tourMaxH = () => Math.max(...Object.values(CITIES).map(c => specH(c.b)));
+// Pixels per unit for a w x h window. A pure function, so span mode can work out every screen's scale, not just its own.
+function unitFor(w, h, s) {
+  const tour = s.view === 'tour', city = !tour && CITIES[s.city], { GY } = geom(h, THEMES[tour ? 'none' : themeKey(s.city)], s);
+  if (tour) return Math.max(1.8, GY * .85 / tourMaxH());
+  if (city) return Math.max(1.8, Math.min(w * .95 / specW(city.b), GY * .85 / specH(city.b)));
+  return Math.max(2.5, Math.min(w, GY) / 110);
+}
+// The tour's stops: every real city, with the themed ones spread evenly between them.
+function tourStops() {
+  const real = Object.values(CITIES), themed = Object.keys(THEMES), out = [];
+  let placed = 0;
+  real.forEach((c, j) => {
+    out.push({ name: c.name, theme: 'none', b: c.b });
+    while (placed < themed.length && (placed + 1) * real.length <= (j + 1) * themed.length) { const k = themed[placed++]; out.push({ name: THEMES[k].name, theme: k }); }
+  });
+  return out;
+}
+
 function layout() {
-  const dpr = devicePixelRatio || 1;
+  dpr = devicePixelRatio || 1;
   W = innerWidth; H = innerHeight;
   cv.width = W * dpr; cv.height = H * dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const r = rng(7), city = CITIES[S.city], themed = S.view === 'tour' ? '' : S.city;
-  cyber = themed === 'cyber'; noir = themed === 'noir'; synth = themed === 'synth';
-
-  // Ground: a street or park strip under the buildings, and optionally a thin band of water at the very bottom.
-  // Synthwave always gets its glowing perspective grid instead.
-  const groundH = synth ? Math.round(H * (widget ? .1 : .14)) : S.ground === 'none' ? 0 : Math.max(widget ? 6 : 9, Math.round(H * (widget ? .045 : .032)));
-  const waterH = !synth && S.ground.endsWith('Water') ? Math.max(4, Math.round(H * .022)) : 0;
-  const wallH = waterH && groundH ? Math.max(3, Math.round(H * .012)) : 0;   // retaining wall between street/park and river
-  GH = groundH; WY = H - waterH; GY = WY - wallH - groundH;
-  let spec, startU = 0, marks = [];
-  if (S.view === 'tour') {                               // every city in a row, with made-up blocks between them
-    const all = Object.values(CITIES), mh = Math.max(...all.map(c => specH(c.b)));
-    unit = Math.max(1.8, GY * .85 / mh);
-    spec = [];
-    for (const c of all) {
-      spec.push(...gen(r, 25, mh * .5, .3));
-      marks.push([c.name, spec.length, spec.length + c.b.length]);   // which buildings belong to this city, for the caption
-      spec.push(...c.b);
+  const r = rng(7), tour = S.view === 'tour', city = !tour && CITIES[S.city], key = tour ? 'none' : themeKey(S.city);
+  theme = THEMES[key]; fade.w = 0; skies.clear();
+  ({ GH, WY, GY } = geom(H, theme, S));                  // the tour keeps the street everywhere, so every city stands on one line
+  unit = unitFor(W, H, S);
+  env(last, 0, 0);
+  let startU = 0;
+  const segs = [];                                       // runs of buildings sharing a theme; named runs get a tour caption
+  if (tour) {                                            // every city in a row: real ones with made-up blocks between, themed ones in their own style
+    const mh = tourMaxH();
+    for (const c of tourStops()) {
+      if (c.b) { segs.push({ theme: 'none', spec: gen(r, 25, mh * .5, .3) }, { theme: 'none', spec: c.b, name: c.name }); continue; }
+      const T = THEMES[c.theme], spec = gen(r, 110 + 30 * r(), T.maxF * mh / .85 - 8, T.minF, T.kit);   // same heights in units as the city on its own
+      spec[0] = [2, ...spec[0].slice(1)];                // a clear gap, so the new style doesn't overlap the last city
+      segs.push({ theme: c.theme, spec, name: c.name });
     }
   } else if (city) {
     const cw = specW(city.b), ch = specH(city.b);
-    unit = Math.max(1.8, Math.min(W * .95 / cw, GY * .85 / ch));
     const span = W / unit - 2, fh = ch * .7;             // -2 leaves room for the 3D side faces; fillers up to 70% of the landmarks
+    let spec;
     if (S.view === 'fit') {
       const side = Math.max(0, (span - cw) / 2);
       const L = fitRow(gen(r, side + 30, fh, .3), side), R = fitRow(gen(r, side + 30, fh, .3), side);
       spec = [...L.reverse(), ...city.b, ...R];
       startU = (W / unit - specW(spec) - 1.6) / 2;   // centre the row including the last building's 3D side face
     } else spec = [...gen(r, span * 1.5, fh, .3).reverse(), ...city.b, ...gen(r, span * 1.5, fh, .3)];
-  } else {                                               // made-up cities: Neon City, Cyberpunk, Noir City, Synthwave
-    const kit = KITS[themed] ? themed : 'generic', minF = cyber || noir ? .4 : .25;
-    unit = Math.max(2.5, Math.min(W, GY) / 110);
-    const span = W / unit - 2, mh = GY * (cyber || noir ? .9 : synth ? .55 : .82) / unit - 8;
-    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, minF, kit), span); startU = (W / unit - specW(spec) - 1.6) / 2; }   // centre including the 3D side face
-    else spec = gen(r, span * 4, mh, minF, kit);
+    segs.push({ theme: 'none', spec });
+  } else {                                               // made-up cities: Neon City and the themed ones
+    const span = W / unit - 2, mh = GY * theme.maxF / unit - 8;
+    let spec;
+    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, theme.minF, theme.kit), span); startU = (W / unit - specW(spec) - 1.6) / 2; }   // centre including the 3D side face
+    else spec = gen(r, span * 4, mh, theme.minF, theme.kit);
+    segs.push({ theme: key, spec });
   }
 
   buildings = [];
   let xU = startU;
-  for (const s of spec) {
-    const [gap, style, roof, tiers] = s, wU = wOf(s);
-    xU += gapOf(gap);
-    const b = { id: buildings.length, cx: (xU + wU / 2) * unit, wpx: wU * unit, half: (wU / 2 + 1.6) * unit,
-      hue: r() * 360, rhue: r() * 360,
-      level: 0, pk: 0, hold: 0, max: .05, prev: 0, avg: 0, flash: 0, hit: 0 };
-    if (style[0] === '@') {
-      b.lm = LM[style.slice(1)]; b.floors = Math.round(b.lm.h / 2); b.blink = true; b.hU = b.lm.h;
-    } else {
-      const st = STY[style]; let floors = 0;
-      b.tiers = tiers.map(([w, h, noWin]) => {
-        const f = noWin ? 0 : Math.max(1, Math.floor(h / st.ch + 1e-6));   // windows stretch to fill the tier evenly
-        const t = { w, h, f, base: floors }; floors += f; return t;
-      });
-      Object.assign(b, { st, roof, floors, hU: tiers.reduce((a, t) => a + t[1], 0),
-        blink: (roof && ['antenna', 'antenna2', 'spire', 'crown'].includes(roof[0])) || floors > 34,
-        search: floors > 25 && r() < .2 });             // about 1 in 5 tall buildings carries a searchlight
-      if (cyber) {                                       // neon signs and the odd hologram billboard
-        b.signs = [];
-        const n = r() < .65 ? 1 + (r() < .4 ? 1 : 0) : 0;
-        for (let i = 0; i < n; i++) b.signs.push({ vert: r() < .65, fy: .2 + .6 * r(), fx: r(), len: 5 + 7 * r(), hue: NEON[Math.floor(r() * NEON.length)], seed: Math.floor(r() * 1e6) });
-        if (tiers[0][0] >= 9 && b.hU > 40 && r() < .3) b.holo = { fy: .45 + .3 * r(), h: 7 + 5 * r() };
+  for (const seg of segs) {
+    const T = THEMES[seg.theme], from = buildings.length;
+    seg.x0 = (xU + gapOf(seg.spec[0][0]) / 2) * unit;    // stretches meet halfway across the gap between them
+    for (const s of seg.spec) {
+      const [gap, style, roof, tiers] = s, wU = wOf(s);
+      xU += gapOf(gap);
+      const b = { id: buildings.length, theme: seg.theme, cx: (xU + wU / 2) * unit, wpx: wU * unit, half: (wU / 2 + 1.6) * unit,
+        hue: r() * 360, rhue: r() * 360,
+        level: 0, pk: 0, hold: 0, max: .05, prev: 0, avg: 0, flash: 0, hit: 0 };
+      if (style[0] === '@') {
+        b.lm = LM[style.slice(1)]; b.floors = Math.round(b.lm.h / 2); b.blink = true; b.hU = b.lm.h;
+      } else {
+        const st = STY[style]; let floors = 0;
+        b.tiers = tiers.map(([w, h, noWin]) => {
+          const f = noWin ? 0 : Math.max(1, Math.floor(h / st.ch + 1e-6));   // windows stretch to fill the tier evenly
+          const t = { w, h, f, base: floors }; floors += f; return t;
+        });
+        Object.assign(b, { st, roof, floors, hU: tiers.reduce((a, t) => a + t[1], 0),
+          blink: (roof && ['antenna', 'antenna2', 'spire', 'crown'].includes(roof[0])) || floors > 34,
+          search: floors > 25 && r() < .2 });             // about 1 in 5 tall buildings carries a searchlight
+        if (T.decorate) T.decorate(b, r, E);             // theme extras: neon signs, holograms…
       }
+      buildings.push(b);
+      xU += wU;
     }
-    buildings.push(b);
-    xU += wU;
+    seg.list = buildings.slice(from);
   }
   worldW = (xU - startU) * unit;
-  tourMarks = marks.map(([name, a, z]) => ({ name, mid: (buildings[a].cx + buildings[z - 1].cx) / 2 }));
-  if (noir) {                                          // one rooftop near the left third carries the bat spotlight
-    const cands = buildings.filter(b => !b.lm && b.floors > 12 && b.floors < 40);
-    const pickB = (cands.length ? cands : buildings).reduce((a, b) => Math.abs(b.cx - W * .3) < Math.abs(a.cx - W * .3) ? b : a);
-    pickB.bat = true;
-  }
-  bridges = [];
-  if (cyber) for (let i = 0; i + 1 < buildings.length; i++) {   // skybridges between neighbouring towers
-    const a = buildings[i], c = buildings[i + 1];
-    if (!a.lm && !c.lm && r() < .35) bridges.push({ a, c, y: Math.min(a.hU, c.hU) * (.35 + .4 * r()) });
-  }
+  env(last, 0, 0);
+  tourMarks = segs.filter(s => s.name).map(s => ({ name: s.name, theme: s.theme, mid: (s.list[0].cx + s.list[s.list.length - 1].cx) / 2 }));
+  for (const seg of segs) if (THEMES[seg.theme].afterLayout) THEMES[seg.theme].afterLayout(seg.list, r, E);   // e.g. the bat-light rooftop, skybridges
+  tourRuns = [];
+  if (tour) for (const seg of segs) if (!tourRuns.length || tourRuns[tourRuns.length - 1].T !== THEMES[seg.theme]) tourRuns.push({ T: THEMES[seg.theme], x0: seg.x0 });
+  tourRuns.forEach((run, i) => { run.x0 = i ? run.x0 : 0; run.x1 = i + 1 < tourRuns.length ? tourRuns[i + 1].x0 : worldW; });
+  // Span mode: where this screen starts in the shared world, from the sizes of the screens to its left.
+  spanLeftU = spanMode ? screens.slice(0, screenI).reduce((a, [w, h]) => a + w / unitFor(w, h, S), 0) : 0;
   renderBack();
 
   // Fixed band per building. Landmarks are spread evenly from bass (left-most) to treble (right-most), so each
@@ -629,7 +676,7 @@ function layout() {
   console.assert(buildings.every(b => b.band >= 0 && b.band < NB && isFinite(b.cx) && b.floors > 0), 'bad layout');
 
   stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: r() * W, y: r() * H * .6, s: r() < .85 ? 1 : 2, sp: .5 + r(), ph: r() * 7 }));
-  cars = []; flyers = []; fogs = []; wxKey = ''; cloudKey = '';
+  cars = []; fogs = []; wxKey = ''; cloudKey = '';
   document.body.classList.toggle('pan', S.view === 'pan');
 }
 
@@ -688,9 +735,6 @@ if (inApp && !settingsMode) {
 }
 
 // ---------- controls ----------
-$('city').innerHTML = '<option value="generic">Neon City</option><option value="cyber">Cyberpunk</option>' +
-  '<option value="noir">Noir City</option><option value="synth">Synthwave</option>' +
-  Object.entries(CITIES).map(([k, c]) => `<option value="${k}">${c.name}</option>`).join('');
 let pick;                                              // hue/saturation of the chosen solid colour
 function hexToHS(hex) {
   const n = parseInt(hex.slice(1), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
@@ -707,13 +751,14 @@ function refreshPanel() {
   hide('cityLine', S.mode !== 'floors');                // heights only mean something in the Floors style
   hide('lineH', S.mode !== 'floors' || !S.cityLine);
   $('city').disabled = S.view === 'tour';
+  $('view').disabled = spanMode;                         // one tour across all screens
   for (const id of ['blinkSpeed', 'blinkSync', 'blinkBeat', 'blinkColor']) hide(id, !S.roofLights);
   hide('blinkSpeed', !S.roofLights || S.blinkBeat); hide('blinkSync', !S.roofLights || S.blinkBeat);
   hide('flickAmt', !S.flicker);
   hide('captions', S.view !== 'tour');
   hide('traffic', !S.ground.startsWith('street'));
   hide('wxAmt', S.weather === 'none');
-  hide('flyers', S.city !== 'cyber');
+  hide('flyers', S.city !== 'cyber' && S.view !== 'tour');
   const forWidget = TARGET === 'widget';
   hide('drift', forWidget);
   for (const id of ['stars', 'shooting', 'skyBody', 'clouds', 'planes']) hide(id, forWidget);   // the widget has no sky
@@ -726,7 +771,8 @@ for (const k of Object.keys(DEF)) {
   el.oninput = () => {
     S[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value;
     S.preset = ''; $('preset').value = '';             // a hand-made change means you're no longer on a preset
-    if (k === 'city' && ['cyber', 'noir'].includes(S.city) && S.weather === 'none') { S.weather = 'rain'; showSetting('weather'); }   // cyberpunk and Noir City rain by default
+    const T = k === 'city' && THEMES[themeKey(S.city)];
+    if (T && T.weather && S.weather === 'none') { S.weather = T.weather; showSetting('weather'); }   // e.g. Cyberpunk and Noir City rain by default
     save();
     if (RELAYOUT.includes(k) && W) layout();
     if (k === 'color') pick = hexToHS(S.color);
@@ -739,13 +785,13 @@ for (const k of Object.keys(DEF)) {
 const PLACE = ['city', 'view', 'scroll', 'gap', 'pan'];
 const lookOf = s => Object.fromEntries(Object.keys(DEF).filter(k => !PLACE.includes(k)).map(k => [k, s[k]]));
 const BUILTIN = {
-  'Background': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
+  'Lounge': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
     blinkSpeed: 10, flickAmt: 12, search: false, shooting: false, traffic: 20 },
   'Chill Night': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 15, react: 35, bright: 60, meter: false,
     blinkSpeed: 15, flickAmt: 15, search: false },
   'Party': { ...lookOf(DEF), mode: 'flash', effect: 'random', speed: 70, react: 85, bright: 100,
     blinkBeat: true, blinkColor: '#ff2aa0', flickAmt: 40, search: true, clouds: false, traffic: 60 },
-  'Neon Tour': { ...lookOf(DEF), view: 'tour', scroll: 25, effect: 'wave', bright: 90, meter: false,   // the one preset that also moves you: it's made for the scrolling TV view
+  'Neon Tour': { ...lookOf(DEF), view: 'tour', scroll: 25, effect: 'drift', bright: 90, meter: false,   // the one preset that also moves you: it's made for the scrolling TV view
     flickAmt: 25, search: true },
 };
 let mine;
@@ -800,7 +846,7 @@ addEventListener('storage', e => {
     try { mine = JSON.parse(e.newValue || '{}'); } catch { mine = {}; }
     fillPresets();
   } else if (e.key === KEY && !settingsMode) {          // the settings window changed this window's settings: apply them live
-    try { S = { ...DEF, ...JSON.parse(e.newValue || '{}') }; } catch { return; }
+    try { loadSettings(e.newValue || '{}'); } catch { return; }
     Object.keys(DEF).forEach(showSetting); pick = hexToHS(S.color); refreshPanel(); layout();
   }
 });
@@ -810,7 +856,7 @@ $('gear').onclick = () => {
 };
 if (settingsMode) {
   $('panel').hidden = false;
-  document.title = `City Pulse Settings — ${{ widget: 'Widget', full: 'Full screen', wall: 'Wallpaper' }[TARGET]}`;
+  document.title = `City Pulse Settings — ${{ widget: 'Widget', full: 'Full screen', wall: 'Wallpaper' }[TARGET]}${perScreen ? `, screen ${screenI + 1}` : ''}`;
 }
 $('fs').onclick = toggleFs;
 addEventListener('keydown', e => {
@@ -851,7 +897,6 @@ function wake() {
   }, 3000);
 }
 addEventListener('mousemove', wake); addEventListener('keydown', wake); addEventListener('input', wake); wake();
-addEventListener('resize', layout);
 
 // ---------- levels ----------
 // The song is split into 8 fixed frequency bands, bass to treble. Every building is assigned one band for good,
@@ -907,11 +952,16 @@ function rawAlpha(b, gf) {
 }
 
 // Colour of a building right now, per the chosen effect: { h, s, m } where m scales brightness.
-function colorOf(b, phase) {
+function colorOf(b, phase, t) {
   switch (S.effect) {
     case 'static':    return { h: pick.h, s: pick.s, m: 1 };
     case 'breathing': return { h: pick.h, s: pick.s, m: .3 + .7 * (.5 + .5 * Math.sin(phase * 1.5)) };
     case 'random':    return { h: b.rhue, s: 100, m: 1 };
+    case 'drift': {                                      // glide to a new random hue every 6–14 s, on each building's own clock
+      const x = t / (6000 + 8000 * hash(b.id, 1, 9)) + hash(b.id, 2, 9), n = Math.floor(x), p = x - n;
+      const h0 = hash(b.id, n, 5) * 360, dh = (hash(b.id, n + 1, 5) * 360 - h0 + 540) % 360 - 180;   // the short way round
+      return { h: (h0 + dh * p * p * (3 - 2 * p) + 360) % 360, s: 100, m: 1 };
+    }
     case 'fade':      return { h: phase * 15 % 360, s: 100, m: 1 };
     case 'wave':      return { h: ((b.cx / W * 300 - phase * 60) % 360 + 360) % 360, s: 100, m: 1 };
     default:          return { h: (b.hue + phase * 15) % 360, s: 100, m: 1 };
@@ -951,43 +1001,10 @@ function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for th
   return [cx, y - h];
 }
 
-// Cyberpunk: a neon sign with made-up glyphs, brightening with the building's music.
-function drawSign(g, b, s, cx) {
-  const u = unit * (widget ? 2 : 1), glow = .45 + .55 * Math.max(b.level, b.flash);   // signs are drawn twice as big in the small widget
-  const bx = cx - b.wpx / 2, top = GY - b.hU * unit;
-  const sw = s.vert ? 1.6 * u : s.len * u, sh = s.vert ? s.len * u : 1.6 * u;
-  const x = Math.min(bx + s.fx * Math.max(0, b.wpx - sw), bx + b.wpx - sw * .6), y = Math.max(top + unit, GY - b.hU * unit * s.fy - sh);
-  const col = `hsl(${s.hue},100%,${45 + 25 * glow}%)`;
-  g.fillStyle = `hsla(${s.hue},100%,60%,${.16 * glow})`; g.fillRect(x - u * .6, y - u * .6, sw + u * 1.2, sh + u * 1.2);   // halo
-  g.fillStyle = '#07020b'; g.fillRect(x, y, sw, sh);
-  g.strokeStyle = col; g.lineWidth = Math.max(1, u * .15); g.strokeRect(x + .5, y + .5, sw - 1, sh - 1);
-  g.fillStyle = col;
-  const n = Math.floor((s.vert ? sh : sw) / (u * 1.2));
-  for (let i = 0; i < n; i++) {                        // each glyph = a few strokes picked from a 2x3 grid
-    const gx = s.vert ? x + u * .35 : x + u * .4 + i * u * 1.2, gy = s.vert ? y + u * .4 + i * u * 1.2 : y + u * .35;
-    for (let k = 0; k < 6; k++) if (hash(s.seed, i, k) < .45) g.fillRect(gx + (k % 2) * u * .45, gy + Math.floor(k / 2) * u * .3, u * .45, u * .18);
-  }
-}
-// Cyberpunk: a big hologram billboard that shows a live equalizer.
-function drawHolo(g, b, cx) {
-  const u = unit, w = b.wpx * .8, h = b.holo.h * u, x = cx - w / 2, y = GY - b.hU * u * b.holo.fy;
-  if (Math.random() < .02) return;                     // the occasional dropout flicker
-  const gr = g.createLinearGradient(x, y, x + w, y + h);
-  gr.addColorStop(0, 'rgba(60,230,255,.22)'); gr.addColorStop(1, 'rgba(255,60,200,.22)');
-  g.fillStyle = gr; g.fillRect(x, y, w, h);
-  const n = spectrum.length, bw = w / n;
-  for (let i = 0; i < n; i++) {
-    const bh = h * .85 * Math.min(1, spectrum[i] * 1.1);
-    g.fillStyle = `hsla(${190 + i * 11},100%,65%,.75)`; g.fillRect(x + i * bw + bw * .15, y + h - bh, bw * .7, bh);
-  }
-  g.fillStyle = 'rgba(255,255,255,.06)'; for (let sy = y; sy < y + h; sy += 3) g.fillRect(x, sy, w, 1);   // scanlines
-  g.strokeStyle = 'rgba(120,240,255,.6)'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
-}
-
 function drawBuilding(g, b, cx, t) {
-  const u = unit, body = '#000';
-  let c = colorOf(b, phase);
-  if (noir) c = { h: c.h, s: c.s * .3, m: c.m * .7 };   // Noir City: washed-out, dimmer window colours
+  const T = THEMES[b.theme], u = unit, body = T.body;
+  let c = colorOf(b, phase, t);
+  if (T.win) c = T.win(c, b) || c;                          // e.g. Noir City: washed-out, dimmer window colours
   const edge = S.detail ? '#2c2e3a' : null;
   let tip;
   if (b.lm) {
@@ -996,7 +1013,7 @@ function drawBuilding(g, b, cx, t) {
     g.restore();
     tip = [cx, GY - b.lm.h * u];
   } else {
-    const st = b.st, side = cyber ? '#100a18' : synth ? '#12062a' : noir ? '#0b0b0c' : '#0c0d12', topc = cyber ? '#1c1228' : synth ? '#1e0a3c' : noir ? '#151515' : '#17181f';
+    const st = b.st, side = T.side, topc = T.top, outline = T.outline && T.outline(b);
     let y = GY;
     for (const tr of b.tiers) {
       const tw = tr.w * u, th = tr.h * u, x0 = cx - tw / 2;
@@ -1030,18 +1047,16 @@ function drawBuilding(g, b, cx, t) {
           for (let f = 5; f < tr.f - 1; f += 6) g.fillRect(x0, y - (f + 1) * fh - .5, tw, Math.max(1, u * .15));
         }
       }
-      if (synth) { g.strokeStyle = b.id % 2 ? 'rgba(255,79,216,.8)' : 'rgba(62,240,255,.8)'; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }   // neon outlines
+      if (outline) { g.strokeStyle = outline; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }   // e.g. Synthwave's neon outlines
       else if (edge && !widget) { g.strokeStyle = edge; g.lineWidth = 1; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }
-      if (S.weather === 'snow') { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }   // snow on ledges
+      if (weatherNow() === 'snow') { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }   // snow on ledges
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
     tip = b.roof ? (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u)) : [cx, y];
-    if (b.holo) drawHolo(g, b, cx);
-    if (b.signs) for (const s of b.signs) drawSign(g, b, s, cx);
   }
-  if (b.bat) drawBatSignal(g, tip, t);
-  if (S.search && b.search && !noir) {                // searchlight: a soft beam sweeping slowly from the roof (Noir City has just the one)
+  if (T.drawExtras) T.drawExtras(g, b, cx, tip, E);     // theme extras: signs, holograms, the bat light…
+  if (S.search && b.search && T.searchlights) {         // searchlight: a soft beam sweeping slowly from the roof
     const ang = -Math.PI / 2 + Math.sin(t / 2600 + b.hue) * .55, len = H * 1.3, spread = .045;
     const grad = g.createLinearGradient(tip[0], tip[1], tip[0] + Math.cos(ang) * len, tip[1] + Math.sin(ang) * len);
     grad.addColorStop(0, `rgba(255,255,235,${.22 * S.bright / 100})`); grad.addColorStop(1, 'rgba(255,255,235,0)');
@@ -1049,7 +1064,7 @@ function drawBuilding(g, b, cx, t) {
     g.lineTo(tip[0] + Math.cos(ang - spread) * len, tip[1] + Math.sin(ang - spread) * len);
     g.lineTo(tip[0] + Math.cos(ang + spread) * len, tip[1] + Math.sin(ang + spread) * len); g.fill();
   }
-  if (S.roofLights && b.blink) {                        // aircraft warning light
+  if (S.roofLights && b.blink && T.roofLights) {                        // aircraft warning light
     let on;
     if (S.blinkBeat) on = bassFlash;                    // flash on bass hits, then fade
     else {
@@ -1065,95 +1080,23 @@ function drawBuilding(g, b, cx, t) {
   }
 }
 
-// Noir City: one rooftop spotlight with the shadow of a real-looking bat caught in its soft, round pool of light.
-// An original, naturalistic silhouette (raised wings, finger-tip points along the membrane), not any brand's emblem.
-// Right half (x 0..1 = body to wingtip, y down), mirrored for the left. Starts at the top of the head.
-const BAT = [
-  ['L', .04, -.33], ['L', .07, -.44], ['L', .1, -.3], ['L', .12, -.18],   // ear and head
-  ['L', .16, -.1],                                                          // shoulder
-  ['Q', .3, -.25, .48, -.5], ['L', .52, -.52],                              // leading edge up to the raised wrist
-  ['Q', .75, -.4, .98, -.28],                                               // long outer finger to the wingtip
-  ['Q', .84, -.18, .86, .02],                                               // membrane sagging between finger tips
-  ['Q', .7, -.06, .62, .16],
-  ['Q', .42, -.02, .2, .2],
-  ['L', .14, .32], ['L', .05, .3], ['L', -.03, .34],                        // foot and tail membrane
-];
-let batSprite;
-function getBatSprite() {                                  // drawn once, opaque, so the two halves never show a seam
-  if (batSprite) return batSprite;
-  const c = document.createElement('canvas'); c.width = 400; c.height = 220;
-  const x = c.getContext('2d'); x.fillStyle = '#0a0a0c';
-  for (const sx of [1, -1]) {
-    x.save(); x.translate(200, 110); x.scale(sx * 190, 190);
-    x.beginPath(); x.moveTo(-.03, -.3);
-    for (const [k, ...p] of BAT) k === 'L' ? x.lineTo(...p) : x.quadraticCurveTo(...p);
-    x.closePath(); x.fill(); x.restore();
-  }
-  return batSprite = c;
-}
-function drawBatSignal(g, tip, t) {
-  const r = Math.min(W, H) * .09;
-  const tx = Math.min(W * .85, Math.max(W * .2, tip[0] + W * .18)) + Math.sin(t / 5200) * W * .015, ty = H * .17 + Math.sin(t / 4100) * H * .008;
-  const beam = g.createLinearGradient(tip[0], tip[1], tx, ty);
-  beam.addColorStop(0, 'rgba(255,245,215,.26)'); beam.addColorStop(1, 'rgba(255,245,215,.06)');
-  g.fillStyle = beam; g.beginPath();
-  g.moveTo(tip[0] - unit * .4, tip[1]); g.lineTo(tx - r * .8, ty + r * .5); g.lineTo(tx + r * .8, ty - r * .5); g.lineTo(tip[0] + unit * .4, tip[1]); g.fill();
-  const pool = g.createRadialGradient(tx, ty, 0, tx, ty, r * 1.15);   // soft round pool of light on the clouds, no hard rim
-  pool.addColorStop(0, 'rgba(255,244,210,.55)'); pool.addColorStop(.6, 'rgba(255,244,210,.3)'); pool.addColorStop(1, 'rgba(255,244,210,0)');
-  g.fillStyle = pool; g.fillRect(tx - r * 1.15, ty - r * 1.15, r * 2.3, r * 2.3);
-  const bw = r * 1.35, bh = bw * 220 / 400;
-  g.save(); g.translate(tx, ty); g.rotate(-.12 + Math.sin(t / 3700) * .04);   // tilted and drifting, like a real bat crossing the beam
-  g.globalAlpha = .8; g.drawImage(getBatSprite(), -bw / 2, -bh / 2, bw, bh); g.restore();
-}
-
-// Cyberpunk skybridges, drawn once both towers are in place.
-function drawBridges(g, wrapK) {
-  const u = unit;
-  for (const { a, c, y } of bridges) for (const k of wrapK) {
-    const x0 = a.cx + a.wpx / 2 - off + k * worldW, x1 = c.cx - c.wpx / 2 - off + k * worldW;
-    if (x1 < 0 || x0 > W || x1 - x0 < u) continue;
-    const by = GY - y * u;
-    g.fillStyle = '#050309'; g.fillRect(x0, by - u, x1 - x0, u * 1.2);
-    g.fillStyle = 'rgba(80,220,255,.55)';
-    for (let x = x0 + u * .6; x < x1 - u * .6; x += u * 1.4) g.fillRect(x, by - u * .55, u * .7, u * .3);
-  }
-}
-
 let plane = null, nextPlane = 6000, shoot = null, nextShoot = 4000, bassFlash = 0, cloudKey = '';
-// Synthwave: a big striped sun sinking behind neon-edged mountains.
-function drawSynthSun(g, sky) {
-  const r = Math.min(W, H) * .19, cx = W / 2, cy = GY * .42;   // high enough to clear the towers
-  const sun = g.createLinearGradient(0, cy - r, 0, cy + r);
-  sun.addColorStop(0, '#ffe66d'); sun.addColorStop(.55, '#ff8a5c'); sun.addColorStop(1, '#ff3d8b');
-  g.fillStyle = 'rgba(255,90,150,.18)'; g.beginPath(); g.arc(cx, cy, r * 1.25, 0, 7); g.fill();   // haze
-  g.fillStyle = sun; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
-  g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();   // stripes cut through the lower half, growing thicker
-  g.fillStyle = sky;
-  for (let i = 0; i < 8; i++) g.fillRect(cx - r, cy - r * .05 + i * r * .15, r * 2, 1 + i * r * .02);
-  g.restore();
-  g.fillStyle = '#1a0634'; g.beginPath(); g.moveTo(0, GY);  // mountains along the horizon
-  const pts = [];
-  for (let x = 0; x <= W + 40; x += 40) pts.push([x, GY - (hash(x, 9, 9) * .5 + .2 * Math.abs(Math.sin(x / 210))) * GY * .2]);
-  pts.forEach(([x, y]) => g.lineTo(x, y)); g.lineTo(W, GY); g.fill();
-  g.strokeStyle = 'rgba(255,61,240,.6)'; g.lineWidth = 1.5; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
-}
 let flashA = 0, bolt = null, lastBolt = 0, nextBolt = 9000;
-function drawSky(g, t, dt) {
-  const sky = g.createLinearGradient(0, 0, 0, synth ? GY : H);
-  if (cyber) { sky.addColorStop(0, '#05010d'); sky.addColorStop(.7, '#1d0630'); sky.addColorStop(1, '#3a0a48'); }
-  else if (noir) { sky.addColorStop(0, '#040405'); sky.addColorStop(1, '#1c1a16'); }
-  else if (synth) { sky.addColorStop(0, '#0b0020'); sky.addColorStop(.45, '#2b0a4a'); sky.addColorStop(.8, '#7a1a6a'); sky.addColorStop(1, '#ff5f7e'); }
-  else { sky.addColorStop(0, '#03040a'); sky.addColorStop(1, '#1b1640'); }
+const skies = new Map();                                 // each theme's sky gradient, rebuilt on layout
+function paintSky(g, T) {                                // a theme's gradient, then its own sky art (a sun, an aurora…)
+  let sky = skies.get(T);
+  if (!sky) { sky = g.createLinearGradient(0, 0, 0, T.skyToGround ? GY : H); for (const [p, c] of T.sky) sky.addColorStop(p, c); skies.set(T, sky); }
   g.fillStyle = sky; g.fillRect(0, 0, W, H);
-  if (synth) drawSynthSun(g, sky);
-  if (cyber) {                                         // neon haze over the horizon
-    const hz = g.createLinearGradient(0, GY * .55, 0, GY);
-    hz.addColorStop(0, 'rgba(255,40,170,0)'); hz.addColorStop(1, 'rgba(255,40,170,.16)');
-    g.fillStyle = hz; g.fillRect(0, GY * .55, W, GY * .45);
-  }
+  if (T.drawSky) { E.sky = sky; T.drawSky(g, E); }
+}
+const weatherNow = () => theme.noWeather ? 'none' : S.weather;
+function drawSky(g, t, dt) {
+  paintSky(g, theme);
+  if (fade.w > .004) { g.globalAlpha = fade.w; paintSky(g, fade.theme); g.globalAlpha = 1; }   // tour: blending into the next city's sky
+  const wxNow = weatherNow();
   const m = Math.min(W, H);
   // Thunderstorm: lightning on big bass hits (or now and then on its own) lights up the whole sky.
-  if (S.weather === 'storm') {
+  if (wxNow === 'storm') {
     if ((bassFlash > .9 && t - lastBolt > 3500 && Math.random() < .3) || t > nextBolt) {
       flashA = 1; lastBolt = t; nextBolt = t + 12000 + Math.random() * 14000;
       let x = W * (.15 + .7 * Math.random()), y = 0; bolt = [[x, y]];
@@ -1165,7 +1108,7 @@ function drawSky(g, t, dt) {
       flashA *= Math.pow(.02, dt);
     }
   }
-  const clearSky = !cyber && !noir && !['rain', 'storm', 'fog'].includes(S.weather);   // smog and rain clouds hide the stars
+  const clearSky = theme.stars && !theme.overcast && !['rain', 'storm', 'fog'].includes(wxNow);   // smog and rain clouds hide the stars
   if (clearSky && S.stars) for (const s of stars) { g.fillStyle = `rgba(255,255,255,${.25 + .55 * (.5 + .5 * Math.sin(t / 700 * s.sp + s.ph))})`; g.fillRect(s.x, s.y, s.s, s.s); }
   if (clearSky && S.shooting) {
     if (!shoot && t > nextShoot) shoot = { x: W * (.1 + .7 * Math.random()), y: H * (.03 + .2 * Math.random()), life: 0 };
@@ -1178,19 +1121,18 @@ function drawSky(g, t, dt) {
       if (p >= 1) { shoot = null; nextShoot = t + 6000 + Math.random() * 14000; }
     }
   }
-  if (S.skyBody && clearSky && !synth) {
+  if (S.skyBody && clearSky && theme.moon) {
     g.fillStyle = '#ece8d6'; g.beginPath(); g.arc(W * .82, H * .16, m * .045, 0, 7); g.fill();
     g.fillStyle = '#060716'; g.beginPath(); g.arc(W * .82 + m * .018, H * .16 - m * .008, m * .04, 0, 7); g.fill();   // crescent
   }
-  // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and Noir City.
-  const over = noir || ['rain', 'storm'].includes(S.weather), key = `${over},${W},${H}`;
+  // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Noir City.
+  const over = theme.overcast || ['rain', 'storm'].includes(wxNow), key = `${over},${W},${H}`;
   if (key !== cloudKey) {
     cloudKey = key;
     clouds = Array.from({ length: over ? 28 : 11 }, () => ({ x: Math.random() * W * 1.2 - W * .1, y: H * (over ? -.03 + Math.random() * .33 : .04 + Math.random() * .3),
       w: W * (over ? .14 + Math.random() * .2 : .07 + Math.random() * .12), v: 3 + Math.random() * 7 }));
   }
-  g.fillStyle = noir ? 'rgba(30,30,33,.72)' : S.weather === 'storm' ? 'rgba(34,34,54,.7)' : over ? 'rgba(44,44,68,.55)'
-    : cyber ? 'rgba(120,40,140,.25)' : synth ? 'rgba(255,90,170,.16)' : 'rgba(70,70,120,.22)';
+  g.fillStyle = theme.overcast ? theme.cloud : wxNow === 'storm' ? 'rgba(34,34,54,.7)' : over ? 'rgba(44,44,68,.55)' : theme.cloud;
   if (S.clouds || over) for (const c of clouds) {
     c.x += c.v * dt; if (c.x - c.w > W) c.x = -c.w;
     g.beginPath();
@@ -1199,7 +1141,7 @@ function drawSky(g, t, dt) {
     g.ellipse(c.x + c.w * .12, c.y - c.w * .1, c.w * .26, c.w * .15, 0, 0, 7);
     g.fill();
   }
-  if (!S.planes) return;
+  if (!S.planes || !theme.planes) return;
   if (!plane && t > nextPlane) { const d = Math.random() < .5 ? 1 : -1; plane = { x: d > 0 ? -20 : W + 20, y: H * (.06 + .22 * Math.random()), v: d * W / 28 }; }
   if (plane) {
     plane.x += plane.v * dt;
@@ -1209,44 +1151,9 @@ function drawSky(g, t, dt) {
   }
 }
 
-// Cyberpunk flying cars: little light pairs gliding between the towers, some behind, some in front.
-let flyers = [];
-function drawFlyers(g, dt, layer, scrollV) {
-  if (!cyber || !S.flyers) return;
-  if (!flyers.length) flyers = Array.from({ length: 10 }, (_, i) => ({ layer: i % 2, dir: Math.random() < .5 ? 1 : -1, x: Math.random() * W,
-    y: GY * (.18 + .55 * Math.random()), v: unit * (8 + Math.random() * 10), hue: NEON[i % 3] }));
-  const u = unit;
-  for (const f of flyers) {
-    if (f.layer !== layer) continue;
-    f.x += (f.dir * f.v - scrollV * (layer ? 1 : .5)) * dt;
-    if (f.x > W + 60) f.x = -60; else if (f.x < -60) f.x = W + 60;
-    const front = f.x + f.dir * u * 1.1, back = f.x - f.dir * u * 1.1;
-    const tr = g.createLinearGradient(back, 0, back - f.dir * u * 8, 0);
-    tr.addColorStop(0, `hsla(${f.hue},100%,60%,.35)`); tr.addColorStop(1, `hsla(${f.hue},100%,60%,0)`);
-    g.fillStyle = tr; g.fillRect(Math.min(back, back - f.dir * u * 8), f.y - u * .12, u * 8, u * .24);   // light trail
-    g.fillStyle = '#0a0a12'; g.fillRect(f.x - u * 1.1, f.y - u * .3, u * 2.2, u * .6);
-    g.fillStyle = `hsl(${f.hue},100%,75%)`; g.fillRect(front - u * .2, f.y - u * .15, u * .4, u * .3);
-    g.fillStyle = '#ff3355'; g.fillRect(back - u * .15, f.y - u * .12, u * .3, u * .24);
-  }
-}
-
 // Ground: street (or park) under the buildings, with streetlights and slow traffic; thin water at the very bottom.
-let cars = [], travel = 0;
-let gridT = 0;
+let cars = [], carsT = -1, travel = 0;
 function drawGround(g, dt, scrollV) {
-  if (synth) {                                           // Synthwave: neon perspective grid rolling toward you
-    const gh = H - GY, vx = W / 2, step = W * .08;
-    gridT = (gridT + dt * .35) % 1;
-    const fl = g.createLinearGradient(0, GY, 0, H);
-    fl.addColorStop(0, '#1a0033'); fl.addColorStop(1, '#05000c');
-    g.fillStyle = fl; g.fillRect(0, GY, W, gh);
-    g.strokeStyle = 'rgba(255,60,220,.65)'; g.lineWidth = 1; g.beginPath();
-    for (let i = 0; i < 12; i++) { const y = GY + gh * ((i + gridT) / 12) ** 2; g.moveTo(0, y); g.lineTo(W, y); }
-    for (let k = -24; k <= 24; k++) { const xb = vx + k * step - (travel % step); g.moveTo(vx + (xb - vx) * .08, GY); g.lineTo(xb, H); }
-    g.stroke();
-    g.fillStyle = 'rgba(255,79,216,.9)'; g.fillRect(0, GY, W, 1.5);   // glowing horizon line
-    return;
-  }
   if (S.ground === 'none') return;
   const u = unit, gh = GH, park = S.ground === 'parkWater';
   if (park) {
@@ -1270,8 +1177,9 @@ function drawGround(g, dt, scrollV) {
     while (cars.length < target) { const dir = Math.random() < .5 ? 1 : -1; cars.push({ dir, x: Math.random() * W, v: u * (5 + Math.random() * 4) }); }
     if (cars.length > target) cars.length = target;
     const L = Math.max(7, u * 3), ch = Math.max(3, gh * .22);
+    const step = carsT !== E.t; carsT = E.t;            // the tour can draw the street for two stretches in one frame
     for (const c of cars) {
-      c.x += (c.dir * c.v - scrollV) * dt;
+      if (step) c.x += (c.dir * c.v - scrollV) * dt;
       if (c.x > W + 60) c.x = -60; else if (c.x < -60) c.x = W + 60;
       const cy = c.dir > 0 ? GY + gh * .82 : GY + gh * .42, fx = c.x + c.dir * L / 2, bx = c.x - c.dir * L / 2;
       const beam = g.createLinearGradient(fx, 0, fx + c.dir * L * 2.2, 0);
@@ -1332,17 +1240,17 @@ function drawWater(g, t) {
 // Weather particles, in screen space.
 let wx = [], wxKey = '', fogs = [];
 function drawWeather(g, t, dt) {
-  const type = S.weather === 'storm' ? 'rain' : S.weather, amt = S.wxAmt / 100;
+  const wxNow = weatherNow(), type = wxNow === 'storm' ? 'rain' : wxNow, amt = S.wxAmt / 100;
   if (type === 'none') return;
-  const key = S.weather + S.wxAmt + W + H;
+  const key = wxNow + S.wxAmt + W + H;
   if (key !== wxKey) {
     wxKey = key;
     const per = { rain: 1100, snow: 3200, petals: 13000, leaves: 13000 }[type];   // pixels of screen per particle
-    const n = per ? Math.round(W * H / per * amt * (S.weather === 'storm' ? 1.6 : 1)) : 0;
+    const n = per ? Math.round(W * H / per * amt * (wxNow === 'storm' ? 1.6 : 1)) : 0;
     wx = Array.from({ length: n }, () => ({ x: Math.random() * W * 1.2, y: Math.random() * H, s: Math.random(), rot: Math.random() * 6, spin: (Math.random() - .5) * 3 }));
   }
   if (type === 'rain') {
-    g.strokeStyle = cyber ? 'rgba(200,170,255,.3)' : 'rgba(170,190,255,.28)'; g.lineWidth = 1; g.beginPath();
+    g.strokeStyle = theme.rain; g.lineWidth = 1; g.beginPath();
     for (const p of wx) {
       const sp = H * (1.1 + p.s * .6), len = 10 + p.s * 14;
       p.y += sp * dt; p.x -= sp * .15 * dt;
@@ -1370,7 +1278,7 @@ function drawWeather(g, t, dt) {
     }
     g.globalAlpha = 1;
   } else if (type === 'fog') {                           // mist drifting between the buildings; the slider adds more banks and a thicker haze
-    const nWant = 6 + Math.round(18 * amt), rgb = cyber ? '200,90,210' : synth ? '255,110,200' : '150,150,190';
+    const nWant = 6 + Math.round(18 * amt), rgb = theme.fogRGB;
     if (fogs.length !== nWant) fogs = Array.from({ length: nWant }, () => ({ x: Math.random() * W, y: GY * (.35 + .62 * Math.random()), w: W * (.35 + .4 * Math.random()), v: 5 + Math.random() * 10 }));
     const haze = g.createLinearGradient(0, GY * .3, 0, GY);
     haze.addColorStop(0, `rgba(${rgb},0)`); haze.addColorStop(1, `rgba(${rgb},${.32 * amt})`);
@@ -1386,6 +1294,30 @@ function drawWeather(g, t, dt) {
 }
 
 let phase = 0, last = 0, meterLvl = 0, off = 0, spectrum = new Array(NB).fill(0);
+// The tour city nearest the screen centre, its signed distance from it, and the neighbour on the far side of the centre.
+function tourNear() {
+  const mid = (off + W / 2) % worldW, wrapD = x => x - Math.round(x / worldW) * worldW, n = tourMarks.length;
+  let i = 0;
+  tourMarks.forEach((m, k) => { if (Math.abs(wrapD(m.mid - mid)) < Math.abs(wrapD(tourMarks[i].mid - mid))) i = k; });
+  const cur = tourMarks[i], d = wrapD(cur.mid - mid), nb = tourMarks[(i + (d < 0 ? 1 : n - 1)) % n];
+  return { cur, nb, d, half: Math.abs(wrapD(nb.mid - cur.mid)) / 2 || W };
+}
+// Draws a per-theme layer across the screen; in the tour, once for each stretch on screen, clipped to it (E.left..E.right).
+function perStretch(g, layer) {
+  if (!tourRuns.length) return layer(theme);
+  for (const run of tourRuns) for (const k of E.wrapK) {
+    const a = Math.max(0, run.x0 - off + k * worldW), z = Math.min(W, run.x1 - off + k * worldW);
+    if (z <= a) continue;
+    E.left = a; E.right = z;
+    g.save(); g.beginPath(); g.rect(a, 0, z - a, H); g.clip(); layer(run.T); g.restore();
+  }
+  E.left = 0; E.right = W;
+}
+function groundLayer(g, T, t, dt, scrollV) {            // a theme's own ground, or the street/park with its river
+  if (T.ground) { if (T.ground.draw) T.ground.draw(g, E); return; }
+  drawGround(g, dt, scrollV);
+  if (WY < H) drawWater(g, t);
+}
 function frame(t) {
   const dt = Math.min(.1, (t - last) / 1000); last = t;
   if (settingsMode) return;                              // the settings window draws no city
@@ -1413,47 +1345,58 @@ function frame(t) {
   else peak = .5 + .4 * bands[0].level;                  // demo beat
   meterLvl = Math.max(Math.min(1, peak) * (sysMuted ? 0 : sysVol), meterLvl * Math.pow(.15, dt));
 
-  const prevOff = off;
-  if (S.view === 'tour') off = (off + dt * S.scroll * unit * .08) % worldW;
-  else off = S.view === 'pan' ? S.pan * Math.max(0, worldW - W) : 0;
-  const moved = S.view === 'tour' ? dt * S.scroll * unit * .08 : off - prevOff;
-  travel += moved;                                       // keeps going across the tour's wrap-around, so street lamps never jump
-  const scrollV = dt ? moved / dt : 0;
+  const prevOff = off, prevTravel = travel, tour = S.view === 'tour';
+  let bo;                                                // back skyline offset
+  if (spanMode) {                                        // one world across all screens, placed by the clock so separate windows agree without talking
+    const runU = Date.now() / 1000 * S.scroll * .08;
+    travel = (runU + spanLeftU) * unit;                  // never wraps, so street lamps line up across screens
+    off = travel % worldW;
+    bo = (runU * unit / 2 + spanLeftU * unit) % backW;   // only the clock's share gets half-speed parallax, so the back row joins up at screen edges
+  } else {
+    if (tour) off = (off + dt * S.scroll * unit * .08) % worldW;
+    else off = S.view === 'pan' ? S.pan * Math.max(0, worldW - W) : 0;
+    travel += tour ? dt * S.scroll * unit * .08 : off - prevOff;   // keeps going across the tour's wrap-around, so street lamps never jump
+    bo = tour ? (off / 2) % backW : off / 2;
+  }
+  const moved = travel - prevTravel, scrollV = dt && Math.abs(moved) < W ? moved / dt : 0;   // span mode's first frame jumps from 0
+  // Tour: the active theme is the city nearest the screen centre's. The neighbour's sky blends in as the
+  // midpoint between them nears: 50/50 exactly there, fully the current city's by 60% of the way to the centre.
+  const near = tour && tourNear();
+  if (near) {
+    theme = THEMES[near.cur.theme]; fade.theme = THEMES[near.nb.theme];
+    fade.w = .5 * Math.min(1, Math.max(0, (Math.abs(near.d) / near.half - .4) / .6));
+  }
+  env(t, dt, scrollV);
 
-  const g = ctx, wrapK = S.view === 'tour' ? [0, 1] : [0];
+  const g = ctx;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.globalAlpha = 1;   // so a plugin hook that threw mid-draw can't leave the canvas skewed
   g.clearRect(0, 0, W, H);
   if (!widget) drawSky(g, t, dt);                      // the widget never draws a sky: the desktop shows behind
+  else if (theme.widgetSky) paintSky(g, theme);         // unless the theme asks for its sky there
   if (S.back && backW) {                                // back skyline, sliding at half speed for depth
-    const bo = S.view === 'tour' ? (off / 2) % backW : off / 2;
     g.drawImage(bc, -bo, 0);
-    if (S.view === 'tour') g.drawImage(bc, backW - bo, 0);
+    if (tour) g.drawImage(bc, backW - bo, 0);
   }
-  drawFlyers(g, dt, 0, scrollV);
+  perStretch(g, T => T.drawBehind && T.drawBehind(g, E));
 
-  for (const b of buildings) for (const k of wrapK) {
+  for (const b of buildings) for (const k of E.wrapK) {
     const cx = b.cx - off + k * worldW;
     if (cx + b.half < 0 || cx - b.half > W) continue;
     drawBuilding(g, b, cx, t);
   }
-  if (cyber) drawBridges(g, wrapK);
-  drawFlyers(g, dt, 1, scrollV);
-  drawGround(g, dt, scrollV);
-  if (WY < H) drawWater(g, t);
+  perStretch(g, T => T.drawFront && T.drawFront(g, E));
+  perStretch(g, T => groundLayer(g, T, t, dt, scrollV));
+  perStretch(g, T => T.drawTop && T.drawTop(g, E));
   drawWeather(g, t, dt);
 
   // City name fades in near the top as each skyline scrolls into the middle of the tour.
-  if (S.view === 'tour' && S.captions) {
-    const mid = (off + W / 2) % worldW, size = Math.max(14, Math.min(W, H) * .032);
+  // One name at a time: the nearest city's, fully bright when its centre is at screen centre, fading to
+  // nothing exactly halfway to the next city, where the next name starts fading in.
+  if (near && S.captions) {
+    const size = Math.max(14, Math.min(W, H) * .032);
     g.font = `300 ${size}px system-ui, sans-serif`; g.textAlign = 'center'; g.letterSpacing = `${size * .35}px`;
-    // One name at a time: the nearest city's, fully bright when its centre is at screen centre, fading to
-    // nothing exactly halfway to the next city, where the next name starts fading in.
-    const wrapD = x => x - Math.round(x / worldW) * worldW, n = tourMarks.length;
-    let i = 0;
-    tourMarks.forEach((m, k) => { if (Math.abs(wrapD(m.mid - mid)) < Math.abs(wrapD(tourMarks[i].mid - mid))) i = k; });
-    const d = wrapD(tourMarks[i].mid - mid), nb = tourMarks[(i + (d < 0 ? 1 : n - 1)) % n];
-    const half = Math.abs(wrapD(nb.mid - tourMarks[i].mid)) / 2 || W;
-    let a = Math.max(0, 1 - Math.abs(d) / half); a = a * a * (3 - 2 * a);   // smoothstep: gentle in, gentle out
-    if (a > .01) { g.fillStyle = `rgba(255,255,255,${a * .6})`; g.fillText(tourMarks[i].name.toUpperCase(), W / 2, H * .13); }
+    let a = Math.max(0, 1 - Math.abs(near.d) / near.half); a = a * a * (3 - 2 * a);   // smoothstep: gentle in, gentle out
+    if (a > .01) { g.fillStyle = `rgba(255,255,255,${a * .6})`; g.fillText(near.cur.name.toUpperCase(), W / 2, H * .13); }
     g.letterSpacing = '0px';
   }
   // TV burn-in protection: the whole picture creeps at most 3 px, one pixel every minute or so (a full cycle takes ~20 min).
@@ -1480,9 +1423,294 @@ function frame(t) {
   }
 }
 
-layout();
-// The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.
-(function loop(t) { frame(t); requestAnimationFrame(loop); })(performance.now());
+// ---------- themes and plugins ----------
+// Everything a theme hook may need, refreshed every frame (and during layout) and passed to every hook as E.
+// t is the frame time in ms, dt the frame step in s, off the scroll offset in px, scrollV the scroll speed in px/s,
+// travel the total scroll so far in px (never wraps), wrapK the world copies to draw ([0] or [0, 1] in the tour),
+// left..right the screen span the current per-theme layer is clipped to (its stretch in the tour, else 0..W).
+// E.sky is the theme's own sky gradient while its drawSky runs (Synthwave cuts its sun stripes with it).
+const WRAP1 = [0], WRAP2 = [0, 1];
+const E = { hash, sprite, pixelArt, bands, widget, wallMode, sky: null,
+  toScreen(x) {                                          // a building's world cx → screen x this frame (the visible copy in the tour)
+    if (S.view !== 'tour') return x - off;
+    x = ((x - off) % worldW + worldW) % worldW;
+    return x - W / 2 > worldW / 2 ? x - worldW : x;
+  } };
+function env(t, dt, scrollV) {
+  Object.assign(E, { W, H, GY, WY, GH, unit, t, dt, off, worldW, travel, scrollV, spectrum, bassFlash, S, wrapK: S.view === 'tour' ? WRAP2 : WRAP1, left: 0, right: W });
+}
+// Crisp pixel sprite: rows of palette keys ('.' or ' ' = clear), top-left at (x, y), each pixel px CSS px, snapped to whole pixels.
+function pixelArt(g, rows, palette, x, y, px) {
+  x = Math.round(x); y = Math.round(y); px = Math.max(1, Math.round(px));
+  for (let j = 0; j < rows.length; j++) {
+    const row = rows[j];
+    for (let i = 0; i < row.length;) {                   // one rectangle per run of same-coloured pixels
+      const ch = row[i]; let n = 1;
+      while (row[i + n] === ch) n++;
+      if (ch !== '.' && ch !== ' ' && palette[ch]) { g.fillStyle = palette[ch]; g.fillRect(x + i * px, y + j * px, n * px, px); }
+      i += n;
+    }
+  }
+}
+
+// Plugin code runs inside every frame, so each hook is guarded: one that throws is logged and switched off, not fatal.
+function guard(who, obj, k) {
+  const f = obj[k];
+  if (typeof f === 'function') obj[k] = function (...a) {
+    try { return f.apply(this, a); } catch (e) { console.error(`City Pulse: ${who} ${k}() failed and was turned off.`, e); obj[k] = null; }
+  };
+}
+const okKit = k => !!k && Array.isArray(k.styles) && k.styles.length > 0 && k.styles.every(s => STY[s]) && Array.isArray(k.roofs) && k.roofs.length > 0 && k.w0 > 0;
+const okSpec = s => Array.isArray(s) && typeof s[1] === 'string' && (s[1][0] === '@' ? !!LM[s[1].slice(1)] : !!STY[s[1]] && Array.isArray(s[3]) && s[3].length > 0);
+const newKey = k => typeof k === 'string' && !!k && k !== 'none' && k !== 'generic';
+// A made-up themed city; it appears in the City menu under Themed and as a stop on the tour. Only name and kit are required;
+// every other field defaults to the plain night look (THEMES.none). Colours are CSS colours.
+//   kit {styles, roofs, tall, shrink, w0, gaps?, setbacks?} (like KITS), minF/maxF: building heights as shares of the sky
+//   weather: picked when the city is chosen and the weather is Clear · noWeather: ignore the weather setting entirely
+//   sky: [[0..1, colour]…] over 0..H (0..GY with skyToGround) · drawSky(g, E): art after the gradient, before stars and clouds
+//   widgetSky: also paint the sky (gradient + drawSky) in the otherwise see-through widget
+//   stars, moon: allow stars and shooting stars / the moon · planes: false = no passing plane · overcast: always a low cloud deck
+//   cloud, rain, fogRGB ('r,g,b') · body, side, top: building faces · outline(b) → colour or null
+//   win({h, s, m}, b) → {h, s, m}: window colour transform · roofLights: false = no red warning lights on its buildings
+//   back {h, density, body, win(r 0..1) → colour}: the hazy back row · ground {h: share of H, draw(g, E)}: replaces street and water
+//   searchlights: false = none · decorate(b, r, E): per generated building at layout · afterLayout(list, r, E): once, this theme's buildings
+//   drawBehind(g, E): after the back row · drawExtras(g, b, cx, tip, E): after each of its buildings · drawFront(g, E): after all buildings
+//   drawTop(g, E): after the ground and water, before the weather (things standing in front of the ground)
+// In the tour, ground.draw, drawBehind, drawFront and drawTop are clipped to the theme's own stretch, which is E.left..E.right on
+// screen (0..W elsewhere). drawSky may be drawn at partial opacity (the tour's crossfade): multiply g.globalAlpha, don't overwrite it.
+function registerTheme(key, def) {
+  if (!newKey(key) || key in CITIES || !def || typeof def.name !== 'string' || !okKit(def.kit) || (def.ground && !(def.ground.h > 0)))
+    return console.error(`City Pulse: theme "${key}" ignored: it needs a new key, a name, a kit shaped like the KITS entries and, for a ground, a height.`);
+  const T = { ...THEMES.none, ...def, back: { ...THEMES.none.back, ...def.back }, ground: def.ground && { ...def.ground } };
+  try { const gr = ctx.createLinearGradient(0, 0, 0, 1); for (const [p, c] of T.sky) gr.addColorStop(p, c); }
+  catch { return console.error(`City Pulse: theme "${key}" ignored: its sky isn't a list of [0..1, colour] stops.`); }
+  for (const k of ['drawSky', 'outline', 'win', 'decorate', 'afterLayout', 'drawBehind', 'drawExtras', 'drawFront', 'drawTop']) guard(`theme "${key}"`, T, k);
+  guard(`theme "${key}"`, T.back, 'win');
+  if (T.ground) guard(`theme "${key}"`, T.ground, 'draw');
+  THEMES[key] = T;
+}
+// A real city, shaped like the CITIES entries. Its spec is checked at start, once every plugin's landmarks are in.
+function registerCity(key, def) {
+  if (!newKey(key) || key in THEMES || !def || typeof def.name !== 'string' || !Array.isArray(def.b) || !def.b.length || !Array.isArray(def.back))
+    return console.error(`City Pulse: city "${key}" ignored: it needs a new key, a name, back: [height, density] and b: [buildings…].`);
+  CITIES[key] = def;
+}
+// A hand-drawn landmark, shaped like the LM entries; a spec refers to it as '@key'.
+function registerLandmark(key, def) {
+  if (typeof key !== 'string' || !key || !def || !(def.w > 0) || !(def.h > 0) || typeof def.draw !== 'function')
+    return console.error(`City Pulse: landmark "${key}" ignored: it needs w, h and draw(g, L).`);
+  LM[key] = { ...def };
+  guard(`landmark "${key}"`, LM[key], 'draw');
+}
+window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt });
+
+// Cyberpunk: neon signs, hologram billboards, skybridges and flying cars in a rainy magenta haze.
+{
+  // A neon sign with made-up glyphs, brightening with the building's music.
+  const drawSign = (g, b, s, cx, E) => {
+    const { unit, GY } = E, u = unit * (E.widget ? 2 : 1), glow = .45 + .55 * Math.max(b.level, b.flash);   // signs are drawn twice as big in the small widget
+    const bx = cx - b.wpx / 2, top = GY - b.hU * unit;
+    const sw = s.vert ? 1.6 * u : s.len * u, sh = s.vert ? s.len * u : 1.6 * u;
+    const x = Math.min(bx + s.fx * Math.max(0, b.wpx - sw), bx + b.wpx - sw * .6), y = Math.max(top + unit, GY - b.hU * unit * s.fy - sh);
+    const col = `hsl(${s.hue},100%,${45 + 25 * glow}%)`;
+    g.fillStyle = `hsla(${s.hue},100%,60%,${.16 * glow})`; g.fillRect(x - u * .6, y - u * .6, sw + u * 1.2, sh + u * 1.2);   // halo
+    g.fillStyle = '#07020b'; g.fillRect(x, y, sw, sh);
+    g.strokeStyle = col; g.lineWidth = Math.max(1, u * .15); g.strokeRect(x + .5, y + .5, sw - 1, sh - 1);
+    g.fillStyle = col;
+    const n = Math.floor((s.vert ? sh : sw) / (u * 1.2));
+    for (let i = 0; i < n; i++) {                        // each glyph = a few strokes picked from a 2x3 grid
+      const gx = s.vert ? x + u * .35 : x + u * .4 + i * u * 1.2, gy = s.vert ? y + u * .4 + i * u * 1.2 : y + u * .35;
+      for (let k = 0; k < 6; k++) if (E.hash(s.seed, i, k) < .45) g.fillRect(gx + (k % 2) * u * .45, gy + Math.floor(k / 2) * u * .3, u * .45, u * .18);
+    }
+  };
+  // A big hologram billboard that shows a live equalizer.
+  const drawHolo = (g, b, cx, E) => {
+    const u = E.unit, w = b.wpx * .8, h = b.holo.h * u, x = cx - w / 2, y = E.GY - b.hU * u * b.holo.fy;
+    if (Math.random() < .02) return;                     // the occasional dropout flicker
+    const gr = g.createLinearGradient(x, y, x + w, y + h);
+    gr.addColorStop(0, 'rgba(60,230,255,.22)'); gr.addColorStop(1, 'rgba(255,60,200,.22)');
+    g.fillStyle = gr; g.fillRect(x, y, w, h);
+    const sp = E.spectrum, n = sp.length, bw = w / n;
+    for (let i = 0; i < n; i++) {
+      const bh = h * .85 * Math.min(1, sp[i] * 1.1);
+      g.fillStyle = `hsla(${190 + i * 11},100%,65%,.75)`; g.fillRect(x + i * bw + bw * .15, y + h - bh, bw * .7, bh);
+    }
+    g.fillStyle = 'rgba(255,255,255,.06)'; for (let sy = y; sy < y + h; sy += 3) g.fillRect(x, sy, w, 1);   // scanlines
+    g.strokeStyle = 'rgba(120,240,255,.6)'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  };
+  // Flying cars: little light pairs gliding between the towers, some behind (layer 0), some in front (layer 1).
+  let flyers = [];
+  const drawFlyers = (g, E, layer) => {
+    if (!E.S.flyers) return;
+    const { W, GY, unit: u, dt, scrollV } = E;
+    if (!flyers.length) flyers = Array.from({ length: 10 }, (_, i) => ({ layer: i % 2, dir: Math.random() < .5 ? 1 : -1, x: Math.random() * W,
+      y: GY * (.18 + .55 * Math.random()), v: u * (8 + Math.random() * 10), hue: NEON[i % 3] }));
+    for (const f of flyers) {
+      if (f.layer !== layer) continue;
+      f.x += (f.dir * f.v - scrollV * (layer ? 1 : .5)) * dt;
+      if (f.x > W + 60) f.x = -60; else if (f.x < -60) f.x = W + 60;
+      const front = f.x + f.dir * u * 1.1, back = f.x - f.dir * u * 1.1;
+      const tr = g.createLinearGradient(back, 0, back - f.dir * u * 8, 0);
+      tr.addColorStop(0, `hsla(${f.hue},100%,60%,.35)`); tr.addColorStop(1, `hsla(${f.hue},100%,60%,0)`);
+      g.fillStyle = tr; g.fillRect(Math.min(back, back - f.dir * u * 8), f.y - u * .12, u * 8, u * .24);   // light trail
+      g.fillStyle = '#0a0a12'; g.fillRect(f.x - u * 1.1, f.y - u * .3, u * 2.2, u * .6);
+      g.fillStyle = `hsl(${f.hue},100%,75%)`; g.fillRect(front - u * .2, f.y - u * .15, u * .4, u * .3);
+      g.fillStyle = '#ff3355'; g.fillRect(back - u * .15, f.y - u * .12, u * .3, u * .24);
+    }
+  };
+  registerTheme('cyber', { name: 'Cyberpunk', kit: KITS.cyber, minF: .4, maxF: .9, weather: 'rain',
+    sky: [[0, '#05010d'], [.7, '#1d0630'], [1, '#3a0a48']],
+    drawSky(g, { W, GY }) {                              // neon haze over the horizon
+      const hz = g.createLinearGradient(0, GY * .55, 0, GY);
+      hz.addColorStop(0, 'rgba(255,40,170,0)'); hz.addColorStop(1, 'rgba(255,40,170,.16)');
+      g.fillStyle = hz; g.fillRect(0, GY * .55, W, GY * .45);
+    },
+    stars: false, moon: false, cloud: 'rgba(120,40,140,.25)', rain: 'rgba(200,170,255,.3)', fogRGB: '200,90,210',
+    side: '#100a18', top: '#1c1228',
+    back: { h: 1.1, density: 1, body: '#120a20', win: c => c < .5 ? 'rgba(255,90,210,.25)' : 'rgba(80,220,255,.25)' },
+    decorate(b, r) {                                     // neon signs and the odd hologram billboard
+      b.signs = [];
+      const n = r() < .65 ? 1 + (r() < .4 ? 1 : 0) : 0;
+      for (let i = 0; i < n; i++) b.signs.push({ vert: r() < .65, fy: .2 + .6 * r(), fx: r(), len: 5 + 7 * r(), hue: NEON[Math.floor(r() * NEON.length)], seed: Math.floor(r() * 1e6) });
+      if (b.tiers[0].w >= 9 && b.hU > 40 && r() < .3) b.holo = { fy: .45 + .3 * r(), h: 7 + 5 * r() };
+    },
+    afterLayout(list, r) {                               // skybridges between neighbouring towers
+      flyers = [];
+      for (let i = 0; i + 1 < list.length; i++) {
+        const a = list[i], c = list[i + 1];
+        if (!a.lm && !c.lm && r() < .35) a.bridge = { c, y: Math.min(a.hU, c.hU) * (.35 + .4 * r()) };
+      }
+    },
+    drawBehind: (g, E) => drawFlyers(g, E, 0),
+    drawExtras(g, b, cx, tip, E) {
+      if (b.holo) drawHolo(g, b, cx, E);
+      if (b.signs) for (const s of b.signs) drawSign(g, b, s, cx, E);
+      if (b.bridge) {                                    // drawn with the left tower; nothing of the right one covers the gap
+        const { c, y } = b.bridge, u = E.unit, x0 = cx + b.wpx / 2, x1 = cx + c.cx - b.cx - c.wpx / 2;
+        if (x1 < 0 || x0 > E.W || x1 - x0 < u) return;
+        const by = E.GY - y * u;
+        g.fillStyle = '#050309'; g.fillRect(x0, by - u, x1 - x0, u * 1.2);
+        g.fillStyle = 'rgba(80,220,255,.55)';
+        for (let x = x0 + u * .6; x < x1 - u * .6; x += u * 1.4) g.fillRect(x, by - u * .55, u * .7, u * .3);
+      }
+    },
+    drawFront: (g, E) => drawFlyers(g, E, 1),
+  });
+}
+
+// Noir City: Art Deco towers under a low overcast, washed-out windows, and one rooftop spotlight with the shadow
+// of a real-looking bat caught in its soft, round pool of light. An original, naturalistic silhouette (raised wings,
+// finger-tip points along the membrane), not any brand's emblem.
+{
+  // Right half (x 0..1 = body to wingtip, y down), mirrored for the left. Starts at the top of the head.
+  const BAT = [
+    ['L', .04, -.33], ['L', .07, -.44], ['L', .1, -.3], ['L', .12, -.18],   // ear and head
+    ['L', .16, -.1],                                                          // shoulder
+    ['Q', .3, -.25, .48, -.5], ['L', .52, -.52],                              // leading edge up to the raised wrist
+    ['Q', .75, -.4, .98, -.28],                                               // long outer finger to the wingtip
+    ['Q', .84, -.18, .86, .02],                                               // membrane sagging between finger tips
+    ['Q', .7, -.06, .62, .16],
+    ['Q', .42, -.02, .2, .2],
+    ['L', .14, .32], ['L', .05, .3], ['L', -.03, .34],                        // foot and tail membrane
+  ];
+  let batSprite;
+  const getBatSprite = () => {                           // drawn once, opaque, so the two halves never show a seam
+    if (batSprite) return batSprite;
+    const c = document.createElement('canvas'); c.width = 400; c.height = 220;
+    const x = c.getContext('2d'); x.fillStyle = '#0a0a0c';
+    for (const sx of [1, -1]) {
+      x.save(); x.translate(200, 110); x.scale(sx * 190, 190);
+      x.beginPath(); x.moveTo(-.03, -.3);
+      for (const [k, ...p] of BAT) k === 'L' ? x.lineTo(...p) : x.quadraticCurveTo(...p);
+      x.closePath(); x.fill(); x.restore();
+    }
+    return batSprite = c;
+  };
+  const drawBatSignal = (g, tip, { W, H, unit, t }) => {
+    const r = Math.min(W, H) * .09;
+    const tx = Math.min(W * .85, Math.max(W * .2, tip[0] + W * .18)) + Math.sin(t / 5200) * W * .015, ty = H * .17 + Math.sin(t / 4100) * H * .008;
+    const beam = g.createLinearGradient(tip[0], tip[1], tx, ty);
+    beam.addColorStop(0, 'rgba(255,245,215,.26)'); beam.addColorStop(1, 'rgba(255,245,215,.06)');
+    g.fillStyle = beam; g.beginPath();
+    g.moveTo(tip[0] - unit * .4, tip[1]); g.lineTo(tx - r * .8, ty + r * .5); g.lineTo(tx + r * .8, ty - r * .5); g.lineTo(tip[0] + unit * .4, tip[1]); g.fill();
+    const pool = g.createRadialGradient(tx, ty, 0, tx, ty, r * 1.15);   // soft round pool of light on the clouds, no hard rim
+    pool.addColorStop(0, 'rgba(255,244,210,.55)'); pool.addColorStop(.6, 'rgba(255,244,210,.3)'); pool.addColorStop(1, 'rgba(255,244,210,0)');
+    g.fillStyle = pool; g.fillRect(tx - r * 1.15, ty - r * 1.15, r * 2.3, r * 2.3);
+    const bw = r * 1.35, bh = bw * 220 / 400;
+    g.save(); g.translate(tx, ty); g.rotate(-.12 + Math.sin(t / 3700) * .04);   // tilted and drifting, like a real bat crossing the beam
+    g.globalAlpha *= .8; g.drawImage(getBatSprite(), -bw / 2, -bh / 2, bw, bh); g.restore();
+  };
+  registerTheme('noir', { name: 'Noir City', kit: KITS.noir, minF: .4, maxF: .9, weather: 'rain',
+    sky: [[0, '#040405'], [1, '#1c1a16']], stars: false, moon: false, overcast: true, cloud: 'rgba(30,30,33,.72)',
+    side: '#0b0b0c', top: '#151515', win: c => ({ h: c.h, s: c.s * .3, m: c.m * .7 }),
+    back: { h: 1.1, density: 1, body: '#0d0d0f', win: () => 'rgba(210,170,100,.16)' },
+    searchlights: false,                                 // just the one light
+    afterLayout(list, r, E) {                            // one rooftop near the left third carries the bat spotlight
+      const at = (E.S.view === 'tour' ? list[0].cx : 0) + E.W * .3;
+      const cands = list.filter(b => !b.lm && b.floors > 12 && b.floors < 40);
+      (cands.length ? cands : list).reduce((a, b) => Math.abs(b.cx - at) < Math.abs(a.cx - at) ? b : a).bat = true;
+    },
+    drawExtras(g, b, cx, tip, E) { if (b.bat) drawBatSignal(g, tip, E); },
+  });
+}
+
+// Synthwave: neon-edged blocks, a big striped sun sinking behind neon mountains, and a glowing grid for a floor.
+{
+  let gridT = 0;
+  registerTheme('synth', { name: 'Synthwave', kit: KITS.synth, minF: .25, maxF: .55,
+    sky: [[0, '#0b0020'], [.45, '#2b0a4a'], [.8, '#7a1a6a'], [1, '#ff5f7e']], skyToGround: true,
+    drawSky(g, { W, H, GY, sky, hash }) {
+      const r = Math.min(W, H) * .19, cx = W / 2, cy = GY * .42;   // high enough to clear the towers
+      const sun = g.createLinearGradient(0, cy - r, 0, cy + r);
+      sun.addColorStop(0, '#ffe66d'); sun.addColorStop(.55, '#ff8a5c'); sun.addColorStop(1, '#ff3d8b');
+      g.fillStyle = 'rgba(255,90,150,.18)'; g.beginPath(); g.arc(cx, cy, r * 1.25, 0, 7); g.fill();   // haze
+      g.fillStyle = sun; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
+      g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();   // stripes cut through the lower half, growing thicker
+      g.fillStyle = sky;
+      for (let i = 0; i < 8; i++) g.fillRect(cx - r, cy - r * .05 + i * r * .15, r * 2, 1 + i * r * .02);
+      g.restore();
+      g.fillStyle = '#1a0634'; g.beginPath(); g.moveTo(0, GY);  // mountains along the horizon
+      const pts = [];
+      for (let x = 0; x <= W + 40; x += 40) pts.push([x, GY - (hash(x, 9, 9) * .5 + .2 * Math.abs(Math.sin(x / 210))) * GY * .2]);
+      pts.forEach(([x, y]) => g.lineTo(x, y)); g.lineTo(W, GY); g.fill();
+      g.strokeStyle = 'rgba(255,61,240,.6)'; g.lineWidth = 1.5; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+    },
+    moon: false, cloud: 'rgba(255,90,170,.16)', fogRGB: '255,110,200',
+    side: '#12062a', top: '#1e0a3c', outline: b => b.id % 2 ? 'rgba(255,79,216,.8)' : 'rgba(62,240,255,.8)',
+    back: { h: .6, density: .6, body: '#170a2c', win: c => c < .5 ? 'rgba(255,80,200,.28)' : 'rgba(80,230,255,.28)' },
+    ground: { h: .14, draw(g, { W, H, GY, dt, travel }) {   // neon perspective grid rolling toward you
+      const gh = H - GY, vx = W / 2, step = W * .08;
+      gridT = (gridT + dt * .35) % 1;
+      const fl = g.createLinearGradient(0, GY, 0, H);
+      fl.addColorStop(0, '#1a0033'); fl.addColorStop(1, '#05000c');
+      g.fillStyle = fl; g.fillRect(0, GY, W, gh);
+      g.strokeStyle = 'rgba(255,60,220,.65)'; g.lineWidth = 1; g.beginPath();
+      for (let i = 0; i < 12; i++) { const y = GY + gh * ((i + gridT) / 12) ** 2; g.moveTo(0, y); g.lineTo(W, y); }
+      for (let k = -24; k <= 24; k++) { const xb = vx + k * step - (travel % step); g.moveTo(vx + (xb - vx) * .08, GY); g.lineTo(xb, H); }
+      g.stroke();
+      g.fillStyle = 'rgba(255,79,216,.9)'; g.fillRect(0, GY, W, 1.5);   // glowing horizon line
+    } },
+  });
+}
+
+// Start-up that needs every plugin's themes, cities and landmarks: run by the last script on the page, after the plugins.
+function start() {
+  for (const [k, c] of Object.entries(CITIES)) if (!c.b.every(okSpec)) { console.error(`City Pulse: city "${k}" ignored: it uses an unknown window style or landmark.`); delete CITIES[k]; }
+  const opt = (k, name) => `<option value="${esc(k)}">${esc(name)}</option>`;
+  $('city').innerHTML = `<optgroup label="Themed">${opt('generic', 'Neon City')}${Object.keys(THEMES).filter(k => k !== 'none').map(k => opt(k, THEMES[k].name)).join('')}</optgroup>` +
+    `<optgroup label="Real cities">${Object.entries(CITIES).map(([k, c]) => opt(k, c.name)).join('')}</optgroup>`;
+  if (![...$('city').options].some(o => o.value === S.city)) S.city = 'generic';   // its plugin is gone
+  showSetting('city'); refreshPanel();
+  layout();
+  addEventListener('resize', layout);
+  // The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.
+  (function loop(t) { frame(t); requestAnimationFrame(loop); })(performance.now());
+}
 </script>
+<!-- Plugin files: extra themed cities, real cities and landmarks, written against window.CityPulse. A missing file is just skipped. -->
+<script src="themes-a.js"></script>
+<script src="themes-b.js"></script>
+<script src="cities-world.js"></script>
+<script>start();</script>
 </body>
 </html>

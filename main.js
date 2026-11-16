@@ -26,8 +26,9 @@ const prefsFile = () => path.join(app.getPath('userData'), 'app-prefs.json');
 let prefs = {};
 const savePrefs = () => { try { fs.writeFileSync(prefsFile(), JSON.stringify(prefs)); } catch {} };
 
-let tray, widget, full, wall;
-const settings = {};                                         // one settings window per target: widget, full, wall
+let tray, widget;
+let fulls = [], walls = [];                                  // full-screen and wallpaper windows (one per screen in multi-screen modes)
+const settings = {};                                         // one settings window per target (and screen)
 
 // No navigating away and no pop-ups, in every window. All new windows are opened by this file.
 app.on('web-contents-created', (_, wc) => {
@@ -48,48 +49,76 @@ function createWidget() {
   widget.on('close', e => { if (!app.quitting) { e.preventDefault(); widget.hide(); } });   // ✕ tucks it into the tray
 }
 
-// Full screen opens on whichever display the widget is on: drag the widget to the TV, press full screen.
-function openFull() {
-  if (full && !full.isDestroyed()) return full.focus();
-  const d = displayOf(widget);
-  full = new BrowserWindow({ ...d.bounds, show: false, frame: false, backgroundColor: '#05060c', skipTaskbar: true,
-    title: 'City Pulse', icon: ICON, autoHideMenuBar: true, webPreferences: PREFS });
-  load(full, { full: '1' });
-  full.once('ready-to-show', () => { full.setBounds(d.bounds); full.setFullScreen(true); full.show(); });   // place first: Windows can move a window created already full screen
+// Screens left to right, as arranged in Windows. "Screen 1" is the left-most.
+const screensLR = () => screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
+const screensParam = list => list.map(d => `${d.bounds.width}x${d.bounds.height}`).join(',');
+const alive = list => list.filter(w => !w.isDestroyed());
+
+// Multi-screen modes, shared by full screen and the wallpaper:
+//   one  - a single screen (full screen: the widget's screen; wallpaper: the chosen screen)
+//   per  - every screen, each with its own city and settings
+//   span - every screen showing one continuous tour that scrolls from screen to screen
+function windowsFor(mode, oneDisplay) {
+  const list = screensLR();
+  if (mode === 'one') return [{ d: oneDisplay, query: {} }];
+  return list.map((d, i) => ({ d, query: { mode, screen: String(i), screens: screensParam(list) } }));
 }
 
-// Settings window for the widget, the full-screen view or the live wallpaper; changes apply to that one live.
-function openSettings(target = 'widget') {
-  const open = settings[target];
+// Full screen. In 'one' mode it opens on whichever screen the widget is on: drag the widget to the TV, press full screen.
+function openFull(mode = prefs.fullMode || 'one') {
+  if (alive(fulls).length) return closeFull();               // pressing it again closes it
+  prefs.fullMode = mode; savePrefs();
+  fulls = windowsFor(mode, displayOf(widget)).map(({ d, query }) => {
+    const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, backgroundColor: '#05060c', skipTaskbar: true,
+      title: 'City Pulse', icon: ICON, autoHideMenuBar: true, webPreferences: PREFS });
+    load(w, { full: '1', ...query });
+    w.once('ready-to-show', () => { w.setBounds(d.bounds); w.setFullScreen(true); w.show(); });   // place first: Windows can move a window created already full screen
+    return w;
+  });
+  updateTray();
+}
+function closeFull() { alive(fulls).forEach(w => w.close()); fulls = []; updateTray(); }
+
+// Settings window for the widget, full screen or wallpaper (optionally one screen of a per-screen setup); changes apply live.
+// It opens on the screen it's about: that screen for per-screen settings, otherwise the widget's screen.
+function openSettings(target = 'widget', screenIdx = null) {
+  const id = screenIdx === null ? target : `${target}:${screenIdx}`, open = settings[id];
   if (open && !open.isDestroyed()) return open.focus();
-  const w = settings[target] = new BrowserWindow({ width: 380, height: 760, minWidth: 320, title: 'City Pulse Settings', icon: ICON,
-    autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
-  load(w, { settings: '1', for: target });
+  const d = screenIdx === null ? displayOf(widget) : (screensLR()[screenIdx] || displayOf(widget));
+  const wa = d.workArea, ww = 380, wh = Math.min(760, wa.height - 40);
+  const w = settings[id] = new BrowserWindow({ width: ww, height: wh, minWidth: 320, x: Math.round(wa.x + (wa.width - ww) / 2), y: Math.round(wa.y + (wa.height - wh) / 2),
+    title: 'City Pulse Settings', icon: ICON, autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
+  load(w, { settings: '1', for: target, ...(screenIdx === null ? {} : { screen: String(screenIdx) }) });
 }
 
-// Experimental live wallpaper: a full-screen view parented behind the desktop icons on one display.
-async function setWallpaper(displayId) {
-  if (wall && !wall.isDestroyed()) { wall.destroy(); wall = null; await win32.refreshWallpaper(); }
-  prefs.wallpaper = displayId || null; savePrefs();
-  const d = displayId && screen.getAllDisplays().find(x => x.id === displayId);
-  if (d) {
-    const all = screen.getAllDisplays(), vx = Math.min(...all.map(x => x.bounds.x)), vy = Math.min(...all.map(x => x.bounds.y));
-    wall = new BrowserWindow({ ...d.bounds, show: false, frame: false, skipTaskbar: true, focusable: false,
+// Experimental live wallpaper: full-screen views parented behind the desktop icons.
+// prefs.wall = { mode: 'off' | 'one' | 'per' | 'span', display: id (for 'one') }
+async function setWallpaper(cfg) {
+  if (alive(walls).length) {
+    alive(walls).forEach(w => w.destroy()); walls = [];
+    await Promise.race([win32.refreshWallpaper(), new Promise(r => setTimeout(r, 3000))]);
+  }
+  prefs.wall = cfg; savePrefs();
+  const one = cfg.mode === 'one' && screen.getAllDisplays().find(x => x.id === cfg.display);
+  if (cfg.mode === 'off' || (cfg.mode === 'one' && !one)) return updateTray();
+  const all = screen.getAllDisplays(), vx = Math.min(...all.map(x => x.bounds.x)), vy = Math.min(...all.map(x => x.bounds.y));
+  walls = windowsFor(cfg.mode, one).map(({ d, query }) => {
+    const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, skipTaskbar: true, focusable: false,
       backgroundColor: '#05060c', title: 'City Pulse Wallpaper', webPreferences: { ...PREFS, backgroundThrottling: false } });
-    load(wall, { full: '1', wall: '1' });
-    wall.once('ready-to-show', async () => {
-      const hwnd = wall.getNativeWindowHandle().readBigUInt64LE(0), rel = { x: d.bounds.x - vx, y: d.bounds.y - vy, width: d.bounds.width, height: d.bounds.height };
+    load(w, { full: '1', wall: '1', ...query });
+    w.once('ready-to-show', async () => {
+      const hwnd = w.getNativeWindowHandle().readBigUInt64LE(0), rel = { x: d.bounds.x - vx, y: d.bounds.y - vy, width: d.bounds.width, height: d.bounds.height };
       const res = await win32.wallpaper(hwnd, rel);
       if (!res || !res.ok) {                              // Windows didn't allow it: back out quietly
-        wall.destroy(); wall = null; prefs.wallpaper = null; savePrefs();
+        await setWallpaper({ mode: 'off' });
         tray.displayBalloon?.({ title: 'City Pulse', content: 'Live wallpaper isn’t available on this version of Windows.' });
       } else {
-        wall.showInactive();                              // tell Chromium it's visible so it actually draws (it was black before)
+        w.showInactive();                                 // tell Chromium it's visible so it actually draws (it was black before)
         await win32.wallpaper(hwnd, rel);                 // and re-seat it in case showing moved it
       }
-      updateTray();
     });
-  }
+    return w;
+  });
   updateTray();
 }
 
@@ -143,20 +172,34 @@ async function uninstall() {
 
 const LOGIN = { name: 'CityPulse' };                        // fixed name, so the uninstaller can remove it
 function updateTray() {
-  const displays = screen.getAllDisplays();
-  const shown = widget && !widget.isDestroyed() && widget.isVisible();
+  const list = screensLR(), shown = widget && !widget.isDestroyed() && widget.isVisible();
+  const wall = prefs.wall || { mode: 'off' }, fullOpen = alive(fulls).length > 0, fm = prefs.fullMode || 'one';
+  const screenName = (d, i) => `Screen ${i + 1}: ${d.label || 'display'} (${d.bounds.width}×${d.bounds.height})`;
+  const perScreen = target => list.map((d, i) => ({ label: `${screenName(d, i)}…`, click: () => openSettings(target, i) }));
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: shown ? 'Hide widget' : 'Show widget', click: () => { shown ? widget.hide() : widget.show(); updateTray(); } },
-    { label: 'Full screen (on the widget’s display)', click: openFull },
-    { label: 'Widget settings…', click: () => openSettings('widget') },
-    { label: 'Full-screen settings…', click: () => openSettings('full') },
-    { label: 'Wallpaper settings…', click: () => openSettings('wall') },
-    { type: 'separator' },
-    { label: 'Live wallpaper (experimental)', submenu: [
-      { label: 'Off', type: 'radio', checked: !prefs.wallpaper, click: () => setWallpaper(null) },
-      ...displays.map((d, i) => ({ label: `Display ${i + 1}: ${d.label || ''} (${d.bounds.width}×${d.bounds.height})`,
-        type: 'radio', checked: prefs.wallpaper === d.id, click: () => setWallpaper(d.id) })),
+    { label: 'Full screen', submenu: [
+      ...(fullOpen ? [{ label: 'Close full screen', click: closeFull }, { type: 'separator' }] : []),
+      { label: 'On the widget’s screen', type: 'radio', checked: fm === 'one', click: () => { closeFull(); openFull('one'); } },
+      { label: 'All screens: own city each', type: 'radio', checked: fm === 'per', click: () => { closeFull(); openFull('per'); } },
+      { label: 'All screens: one tour across', type: 'radio', checked: fm === 'span', click: () => { closeFull(); openFull('span'); } },
     ] },
+    { label: 'Live wallpaper (experimental)', submenu: [
+      { label: 'Off', type: 'radio', checked: wall.mode === 'off', click: () => setWallpaper({ mode: 'off' }) },
+      ...list.map((d, i) => ({ label: screenName(d, i), type: 'radio', checked: wall.mode === 'one' && wall.display === d.id,
+        click: () => setWallpaper({ mode: 'one', display: d.id }) })),
+      { label: 'All screens: own city each', type: 'radio', checked: wall.mode === 'per', click: () => setWallpaper({ mode: 'per' }) },
+      { label: 'All screens: one tour across', type: 'radio', checked: wall.mode === 'span', click: () => setWallpaper({ mode: 'span' }) },
+    ] },
+    { label: 'Settings', submenu: [
+      { label: 'Widget…', click: () => openSettings('widget') },
+      { label: 'Full screen (one screen or tour across)…', click: () => openSettings('full') },
+      { label: 'Wallpaper (one screen or tour across)…', click: () => openSettings('wall') },
+      { type: 'separator' },
+      { label: 'Full screen, own city per screen', submenu: perScreen('full') },
+      { label: 'Wallpaper, own city per screen', submenu: perScreen('wall') },
+    ] },
+    { type: 'separator' },
     { label: 'Start with Windows', type: 'checkbox', enabled: app.isPackaged, checked: app.getLoginItemSettings(LOGIN).openAtLogin,
       click: m => app.setLoginItemSettings({ ...LOGIN, openAtLogin: m.checked }) },
     { type: 'separator' },
@@ -172,7 +215,12 @@ function updateTray() {
 const fromUs = e => isOurs(e.senderFrame && e.senderFrame.url);
 ipcMain.on('open-full', e => { if (fromUs(e)) openFull(); });
 ipcMain.on('open-settings', e => { if (fromUs(e)) openSettings('widget'); });   // only the widget's ⚙ asks; full screen has its own panel
-ipcMain.on('close-window', e => { if (fromUs(e)) BrowserWindow.fromWebContents(e.sender)?.close(); });
+ipcMain.on('close-window', e => {
+  if (!fromUs(e)) return;
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (fulls.includes(w)) closeFull();                     // Esc on any full-screen window closes all of them
+  else w?.close();
+});
 ipcMain.handle('volume', e => fromUs(e) ? win32.volume() : null);
 ipcMain.handle('outputs', e => fromUs(e) ? win32.outputs() : null);
 ipcMain.handle('set-output', (e, id) => fromUs(e) ? win32.setDefault(id) : null);
@@ -193,17 +241,20 @@ app.whenReady().then(() => {
   tray.on('click', () => { widget.isVisible() ? widget.hide() : widget.show(); updateTray(); });
   widget.on('show', updateTray); widget.on('hide', updateTray);
   updateTray();
-  if (prefs.wallpaper) setWallpaper(prefs.wallpaper);
+  if (prefs.wallpaper && !prefs.wall) prefs.wall = { mode: 'one', display: prefs.wallpaper };   // setting from 0.2.x
+  if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall);
   setupUpdates();
-  screen.on('display-added', updateTray); screen.on('display-removed', updateTray);
+  // Screens added or removed: rebuild the menu, and re-lay multi-screen wallpapers across the new arrangement.
+  const rearranged = () => { updateTray(); if (prefs.wall && ['per', 'span'].includes(prefs.wall.mode)) setWallpaper(prefs.wall); };
+  screen.on('display-added', rearranged); screen.on('display-removed', rearranged);
 });
 
 // Leaving: take the wallpaper down and repaint the normal one, then stop the helper.
 app.on('before-quit', e => {
   app.quitting = true;
-  if (wall && !wall.isDestroyed()) {
+  if (alive(walls).length) {
     e.preventDefault();
-    wall.destroy(); wall = null;
+    alive(walls).forEach(w => w.destroy()); walls = [];
     // never let a slow wallpaper repaint hold up quitting
     Promise.race([win32.refreshWallpaper(), new Promise(r => setTimeout(r, 3000))]).finally(() => { win32.stop(); app.quit(); });
   } else win32.stop();

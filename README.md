@@ -16,7 +16,9 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - Buildings on the same band move together.
 - **Pick your output:** the audio menu lists your speakers, headphones and monitors, like Windows sound settings. Picking one makes it the Windows default, and City Pulse follows it.
 - **Loudness meter:** tops out at your Windows volume, so at 50% volume it peaks halfway.
-- **Skylines:** New York, Chicago, Seattle, San Francisco, Dubai, Paris, Tokyo and London, each with hand-drawn landmarks. There are also four made-up cities: Neon City, Cyberpunk, Noir City and Synthwave.
+- **Skylines:**
+  - **12 real cities** with hand-drawn landmarks: New York, Chicago, Seattle, San Francisco, Toronto, Dubai, Paris, London, Tokyo, Sydney, Hong Kong and Shanghai.
+  - **13 themed cities**: Neon City, Cyberpunk, Noir City, Synthwave, Aero, Atlantis, Abyssal City, Aurora Harbor, Lantern District, Desert Mirage, Brasshaven, Lunar Colony and Neon Strip. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
 - **Light styles:**
   - **Floors:** an equalizer that climbs each building, with a falling peak marker.
   - **Pulse:** each building's windows follow the volume.
@@ -24,7 +26,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - **Fill by loudness:** buildings rise with how loud the song really is, so a quiet song gives a low city and a loud chorus a tall one.
   - **City line:** one flat height for the whole city. Buildings light up to the same real height and the peaks line up level. Drag the dotted line on screen, or use the slider in Settings.
   - A **Reactivity** slider runs from calm (smooth swells, for background viewing) to wild (instant and punchy, for parties). Every building keeps reacting at any setting.
-- **Color effects:** Spectrum, Wave, Fade, Solid, Breathing and Random, plus a brightness slider.
+- **Color effects:** Spectrum, Wave, Fade, Solid, Breathing, Random and Smooth random, plus a brightness slider.
 - **Scene:**
   - a street with traffic, a park, or a thin river with reflections
   - a hazy back skyline and 3D building detail
@@ -33,10 +35,11 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Views:**
   - **Fit:** shows whole buildings only.
   - **Pan:** drag or scroll to choose your part of the city.
-  - **Tour:** slowly scrolls through every city with name captions, made for a TV.
-- **Presets:** four built in (Background, Chill Night, Party, Neon Tour). Your own presets are shared between the widget and full screen.
+  - **Tour:** slowly scrolls through every city, real and themed, with name captions. Made for a TV.
+- **Presets:** four built in (Lounge, Chill Night, Party, Neon Tour). Your own presets are shared between the widget and full screen.
 - **TV-friendly:**
   - full screen opens on whichever display the widget is on
+  - **multiple screens:** full screen and the live wallpaper can each run on all screens, with either **its own city on each screen** or **one tour across all of them**. In the tour, cities scroll from screen to screen, and each screen shows its own city name.
   - the controls auto-hide
   - optional burn-in protection creeps the picture a few pixels over about 20 minutes
 - **Lives in the tray:** no taskbar button. The tray icon by the clock shows or hides the widget, and also has full screen, Settings, Start with Windows and Quit.
