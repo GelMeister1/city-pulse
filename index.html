@@ -523,10 +523,17 @@ const THEMES = { none: { name: 'Neon City', kit: KITS.generic, minF: .25, maxF: 
 const themeKey = city => city !== 'none' && THEMES[city] ? city : 'none';   // Neon City ('generic') and real cities use the plain look
 
 let dpr = 1, W, H, GY, GH, WY, unit, buildings = [], worldW = 0, stars = [], clouds = [], tourMarks = [];
-let theme = THEMES.none, fade = { theme: THEMES.none, w: 0 };   // active theme, and the neighbour's share while the tour crossfades
+let theme = THEMES.none;                                 // the active theme (in the tour: the city nearest the screen centre's)
 let spanLeftU = 0;                                       // span mode: this screen's left edge in world units, past screen 0's
 let tourRuns = [];                                       // the tour's theme stretches: { T, x0, x1 } in world px, end to end
-const runAt = x => tourRuns.find(r => x < r.x1) || tourRuns[tourRuns.length - 1];
+// Tour stretches meet in a soft band FEATHER world units wide, where each side's sky, ground and effects fade into the other's.
+const FEATHER = 40, ss = x => x * x * (3 - 2 * x);
+// The stretch at world x, the neighbour across its nearer edge, and that neighbour's share (1/2 on the edge, 0 from half a band in).
+function blendAt(x, half) {
+  const n = tourRuns.length, j = tourRuns.findIndex(r => x < r.x1), i = j < 0 ? n - 1 : j, r = tourRuns[i];
+  const dl = x - r.x0, dr = r.x1 - x, d = Math.min(dl, dr);
+  return d >= half ? [r.T, r.T, 0] : [r.T, tourRuns[(i + (dl < dr ? n - 1 : 1)) % n].T, ss(.5 - .5 * d / half)];
+}
 const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
 
 // Back skyline: a hazier second row behind the city that fills the sky above short buildings.
@@ -535,9 +542,12 @@ const bc = document.createElement('canvas'), bg = bc.getContext('2d');
 let backW = 0;
 function renderBack() {
   const r = rng(13), city = CITIES[S.city], fixed = city ? city.back : [theme.back.h, theme.back.density];
-  // The tour bakes each stretch's own look into its part of the row: the part that's behind the stretch when it's
-  // centred on screen (the row slides at half speed, so back x ↔ world x = 2x - W/2, less span mode's screen offset).
-  const backAt = x => tourRuns.length ? runAt(((2 * x - W / 2 - spanLeftU * unit) % worldW + worldW) % worldW).T.back : theme.back;
+  // The tour's row slides at half speed past stretches of every look, so it's baked without colour (black bodies, faint white
+  // windows) and each stretch tints its own part as it's drawn (see frame). Heights and density do follow the stretches: each
+  // part takes the look of the stretch it's in front of when centred on screen (back x ↔ world x = 2x - W/2, less span mode's
+  // screen offset), blended over a wide band where stretches meet.
+  const tour = tourRuns.length > 0, tb = theme.back;
+  const backAt = x => tour ? blendAt(mod(2 * x - W / 2 - spanLeftU * unit, worldW), FEATHER * unit) : [theme, theme, 0];
   const tallest = Math.max(...buildings.map(b => b.lm ? b.lm.h : b.tiers.reduce((a, t) => a + t.h, 0))) * unit;
   const baseH = Math.min(tallest * .8, GY * .75);
   backW = Math.ceil(S.view === 'tour' ? worldW / 2 : W + Math.max(0, worldW - W) / 2);
@@ -545,10 +555,11 @@ function renderBack() {
   if (!S.back) return;
   const u = unit, cw = 2 * u, fh = 2.2 * u;
   for (let x = -u * 4; x < backW;) {
-    const w = (8 + Math.floor(r() * 10)) * u, tb = backAt(x + w / 2), [hf, density] = tourRuns.length ? [.7 * tb.h, .8 * tb.density] : fixed;
+    const w = (8 + Math.floor(r() * 10)) * u, [A, B, bw] = backAt(x + w / 2), ba = A.back, bb = B.back;
+    const [hf, density] = tourRuns.length ? [.7 * (ba.h + (bb.h - ba.h) * bw), .8 * (ba.density + (bb.density - ba.density) * bw)] : fixed;
     const h = baseH * hf * (.45 + .55 * r()), top = GY - h, show = r() < density, ant = r() < .3;
     if (show) {
-      bg.fillStyle = tb.body;
+      bg.fillStyle = tour ? '#000' : tb.body;
       bg.fillRect(x, top, w, h);
       if (ant) bg.fillRect(x + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);   // the odd antenna
     }
@@ -556,7 +567,7 @@ function renderBack() {
     for (let y = GY - fh; y > top + u; y -= fh) for (let k = 0; k < cols; k++) {
       const on = r() < .16, c = r();
       if (!show || !on) continue;
-      bg.fillStyle = (tb.win && tb.win(c)) || 'rgba(150,160,220,.28)';
+      bg.fillStyle = tour ? 'rgba(255,255,255,.28)' : (tb.win && tb.win(c)) || 'rgba(150,160,220,.28)';
       bg.fillRect(left + k * cw + cw * .27, y + fh * .25, cw * .46, fh * .5);
     }
     x += w + (r() < .5 ? 0 : u * 1.5);
@@ -594,11 +605,10 @@ function tourStops() {
 function layout() {
   dpr = devicePixelRatio || 1;
   W = innerWidth; H = innerHeight;
-  cv.width = W * dpr; cv.height = H * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const c of [cv, lay, acc]) { c.width = W * dpr; c.height = H * dpr; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0); }
 
   const r = rng(7), tour = S.view === 'tour', city = !tour && CITIES[S.city], key = tour ? 'none' : themeKey(S.city);
-  theme = THEMES[key]; fade.w = 0; skies.clear();
+  theme = THEMES[key]; skies.clear();
   ({ GH, WY, GY } = geom(H, theme, S));                  // the tour keeps the street everywhere, so every city stands on one line
   unit = unitFor(W, H, S);
   env(last, 0, 0);
@@ -1095,9 +1105,15 @@ function paintSky(g, T) {                                // a theme's gradient, 
   if (T.drawSky) { E.sky = sky; T.drawSky(g, E); }
 }
 const weatherNow = () => theme.noWeather ? 'none' : S.weather;
+// How much of the sky at screen x belongs to themes that pass test (blended where tour stretches meet).
+function skyShare(x, test) {
+  if (!tourRuns.length) return test(theme) ? 1 : 0;
+  const [A, B, w] = blendAt(mod(x + off, worldW), FEATHER * unit / 2);
+  return (test(A) ? 1 - w : 0) + (test(B) ? w : 0);
+}
+const starry = T => T.stars && !T.overcast, moony = T => starry(T) && T.moon, planey = T => T.planes;
 function drawSky(g, t, dt) {
-  paintSky(g, theme);
-  if (fade.w > .004) { g.globalAlpha = fade.w; paintSky(g, fade.theme); g.globalAlpha = 1; }   // tour: blending into the next city's sky
+  perStretch(g, paintSky);
   const wxNow = weatherNow();
   const m = Math.min(W, H);
   // Thunderstorm: lightning on big bass hits (or now and then on its own) lights up the whole sky.
@@ -1113,22 +1129,27 @@ function drawSky(g, t, dt) {
       flashA *= Math.pow(.02, dt);
     }
   }
-  const clearSky = theme.stars && !theme.overcast && !['rain', 'storm', 'fog'].includes(wxNow);   // smog and rain clouds hide the stars
-  if (clearSky && S.stars) for (const s of stars) { g.fillStyle = `rgba(255,255,255,${.25 + .55 * (.5 + .5 * Math.sin(t / 700 * s.sp + s.ph))})`; g.fillRect(s.x, s.y, s.s, s.s); }
+  const clearSky = !['rain', 'storm', 'fog'].includes(wxNow);   // smog and rain clouds hide the stars, and so do some themes' skies
+  if (clearSky && S.stars) for (const s of stars) {
+    const a = skyShare(s.x, starry) * (.25 + .55 * (.5 + .5 * Math.sin(t / 700 * s.sp + s.ph)));
+    if (a > .01) { g.fillStyle = `rgba(255,255,255,${a})`; g.fillRect(s.x, s.y, s.s, s.s); }
+  }
   if (clearSky && S.shooting) {
     if (!shoot && t > nextShoot) shoot = { x: W * (.1 + .7 * Math.random()), y: H * (.03 + .2 * Math.random()), life: 0 };
     if (shoot) {
       shoot.life += dt;
       const p = shoot.life / .9, len = m * .12, hx = shoot.x + p * m * .35, hy = shoot.y + p * m * .14;
       const grad = g.createLinearGradient(hx, hy, hx - len, hy - len * .4);
-      grad.addColorStop(0, `rgba(255,255,255,${.9 * (1 - p)})`); grad.addColorStop(1, 'rgba(255,255,255,0)');
+      grad.addColorStop(0, `rgba(255,255,255,${.9 * (1 - p) * skyShare(hx, starry)})`); grad.addColorStop(1, 'rgba(255,255,255,0)');
       g.strokeStyle = grad; g.lineWidth = 1.5; g.beginPath(); g.moveTo(hx, hy); g.lineTo(hx - len, hy - len * .4); g.stroke();
       if (p >= 1) { shoot = null; nextShoot = t + 6000 + Math.random() * 14000; }
     }
   }
-  if (S.skyBody && clearSky && theme.moon) {
-    g.fillStyle = '#ece8d6'; g.beginPath(); g.arc(W * .82, H * .16, m * .045, 0, 7); g.fill();
+  const moonA = S.skyBody && clearSky ? skyShare(W * .82, moony) : 0;
+  if (moonA > .01) {
+    g.globalAlpha = moonA; g.fillStyle = '#ece8d6'; g.beginPath(); g.arc(W * .82, H * .16, m * .045, 0, 7); g.fill();
     g.fillStyle = '#060716'; g.beginPath(); g.arc(W * .82 + m * .018, H * .16 - m * .008, m * .04, 0, 7); g.fill();   // crescent
+    g.globalAlpha = 1;
   }
   // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Noir City.
   const over = theme.overcast || ['rain', 'storm'].includes(wxNow), key = `${over},${W},${H}`;
@@ -1137,21 +1158,26 @@ function drawSky(g, t, dt) {
     clouds = Array.from({ length: over ? 28 : 11 }, () => ({ x: Math.random() * W * 1.2 - W * .1, y: H * (over ? -.03 + Math.random() * .33 : .04 + Math.random() * .3),
       w: W * (over ? .14 + Math.random() * .2 : .07 + Math.random() * .12), v: 3 + Math.random() * 7 }));
   }
-  g.fillStyle = theme.overcast ? theme.cloud : wxNow === 'storm' ? 'rgba(34,34,54,.7)' : over ? 'rgba(44,44,68,.55)' : theme.cloud;
+  const cloudOf = T => T.overcast ? T.cloud : wxNow === 'storm' ? 'rgba(34,34,54,.7)' : over ? 'rgba(44,44,68,.55)' : T.cloud;
   if (S.clouds || over) for (const c of clouds) {
     c.x += c.v * dt; if (c.x - c.w > W) c.x = -c.w;
     g.beginPath();
     g.ellipse(c.x, c.y, c.w * .5, c.w * .12, 0, 0, 7);
     g.ellipse(c.x - c.w * .18, c.y - c.w * .07, c.w * .22, c.w * .12, 0, 0, 7);
     g.ellipse(c.x + c.w * .12, c.y - c.w * .1, c.w * .26, c.w * .15, 0, 0, 7);
-    g.fill();
+    const [A, B, w] = tourRuns.length ? blendAt(mod(c.x + off, worldW), FEATHER * unit / 2) : [theme, theme, 0];
+    g.fillStyle = cloudOf(A); g.globalAlpha = 1 - w; g.fill();   // the colour of the sky it's in, blended across tour stretches
+    if (w > .01) { g.fillStyle = cloudOf(B); g.globalAlpha = w; g.fill(); }
+    g.globalAlpha = 1;
   }
-  if (!S.planes || !theme.planes) return;
+  if (!S.planes) return;
   if (!plane && t > nextPlane) { const d = Math.random() < .5 ? 1 : -1; plane = { x: d > 0 ? -20 : W + 20, y: H * (.06 + .22 * Math.random()), v: d * W / 28 }; }
   if (plane) {
     plane.x += plane.v * dt;
+    g.globalAlpha = skyShare(plane.x, planey);           // not in skies without planes (under the sea, on the moon)
     g.fillStyle = '#ff4a4a'; g.fillRect(plane.x, plane.y, 2, 2);
     if (t % 1000 < 120) { g.fillStyle = '#fff'; g.fillRect(plane.x + 4, plane.y - 1, 3, 3); }
+    g.globalAlpha = 1;
     if (plane.x < -40 || plane.x > W + 40) { plane = null; nextPlane = t + 15000 + Math.random() * 25000; }
   }
 }
@@ -1227,7 +1253,7 @@ function sprite(rgb) {
 // The strip to mirror is copied out once per frame; slicing it straight off the screen canvas costs a full copy per slice.
 const rc = document.createElement('canvas'), rcx = rc.getContext('2d');
 function drawWater(g, t) {
-  const src = g.canvas, sc = src.width / W, wh = H - WY, band = Math.min(GY, wh * 2);
+  const src = cv, sc = src.width / W, wh = H - WY, band = Math.min(GY, wh * 2);   // the scene, even when drawn into a tour layer
   rc.width = src.width; rc.height = Math.max(1, Math.ceil(band * sc));
   rcx.drawImage(src, 0, (GY - band) * sc, src.width, band * sc, 0, 0, src.width, band * sc);
   for (let y = 0; y < wh; y += 2) {
@@ -1307,15 +1333,48 @@ function tourNear() {
   const cur = tourMarks[i], d = wrapD(cur.mid - mid), nb = tourMarks[(i + (d < 0 ? 1 : n - 1)) % n];
   return { cur, nb, d, half: Math.abs(wrapD(nb.mid - cur.mid)) / 2 || W };
 }
-// Draws a per-theme layer across the screen; in the tour, once for each stretch on screen, clipped to it (E.left..E.right).
-function perStretch(g, layer) {
-  if (!tourRuns.length) return layer(theme);
-  for (const run of tourRuns) for (const k of E.wrapK) {
-    const a = Math.max(0, run.x0 - off + k * worldW), z = Math.min(W, run.x1 - off + k * worldW);
-    if (z <= a) continue;
-    E.left = a; E.right = z;
-    g.save(); g.beginPath(); g.rect(a, 0, z - a, H); g.clip(); layer(run.T); g.restore();
+// Draws a per-theme layer (sky, ground, effects) with layer(g, T): across the screen, or in the tour once for each stretch on
+// screen. A stretch's own part goes straight onto the scene; where two meet, each side is faded across the band and the two are
+// added together in a band buffer, so they crossfade exactly (see-through layers too) and no seam shows. Each stretch's layer
+// is drawn once a frame, into a spare canvas, clipped to its range plus the bands (E.left..E.right).
+const lay = document.createElement('canvas'), layG = lay.getContext('2d');   // one stretch's layer
+const acc = document.createElement('canvas'), accG = acc.getContext('2d');   // the bands: both sides, faded and added
+const snap = x => Math.round(x * dpr) / dpr;               // band edges on whole device pixels, so the pieces meet without a hairline
+const blit = (to, from, x0, x1) => to.drawImage(from, x0 * dpr, 0, (x1 - x0) * dpr, from.height, x0, 0, x1 - x0, H);
+function fadeAdd(a, b, from, to) {                       // fade the layer over a..b (from → to), then add it into the band buffer
+  const x0 = Math.max(0, a), x1 = Math.min(W, b);
+  if (x1 <= x0) return;
+  const gr = layG.createLinearGradient(a, 0, b, 0);
+  for (const f of [0, .25, .5, .75, 1]) gr.addColorStop(f, `rgba(0,0,0,${from + (to - from) * ss(f)})`);
+  layG.save(); layG.beginPath(); layG.rect(x0, 0, x1 - x0, H); layG.clip();
+  layG.globalCompositeOperation = 'destination-in'; layG.fillStyle = gr; layG.fillRect(x0, 0, x1 - x0, H); layG.restore();
+  accG.globalCompositeOperation = 'lighter'; blit(accG, lay, x0, x1); accG.globalCompositeOperation = 'source-over';
+}
+function perStretch(g, layer, has = () => true, own = false) {   // own: the layer needs a canvas to itself (it composites)
+  if (!tourRuns.length) return has(theme) && layer(g, theme);
+  const h = FEATHER * unit / 2, ps = [];
+  for (const run of tourRuns) for (const k of E.wrapK) {   // fades in over a..b, its own part b..c, fades out over c..d
+    const x0 = run.x0 - off + k * worldW, x1 = run.x1 - off + k * worldW;
+    if (x1 > -h && x0 < W + h) ps.push({ T: run.T, a: snap(x0 - h), b: snap(x0 + h), c: snap(x1 - h), d: snap(x1 + h) });
   }
+  const bands = ps.filter(p => p.b > 0 && p.a < W);      // each stretch's fade-in band, shared with the one before it
+  if (!bands.length) {                                   // one stretch fills the screen
+    const p = ps.find(p => p.b <= 0 && p.c >= W);
+    if (!p || !has(p.T)) return;
+    if (!own) return layer(g, p.T);
+    layG.save(); layG.clearRect(0, 0, W, H); layer(layG, p.T); layG.restore(); blit(g, lay, 0, W);
+    return;
+  }
+  for (const p of bands) accG.clearRect(Math.max(0, p.a), 0, Math.min(W, p.b) - Math.max(0, p.a), H);
+  for (const p of ps) {
+    const ea = Math.max(0, p.a), ez = Math.min(W, p.d), ca = Math.max(0, p.b), cz = Math.min(W, p.c);
+    if (ez <= ea || !has(p.T)) continue;
+    E.left = ea; E.right = ez;
+    layG.save(); layG.clearRect(ea, 0, ez - ea, H); layG.beginPath(); layG.rect(ea, 0, ez - ea, H); layG.clip(); layer(layG, p.T); layG.restore();
+    if (cz > ca) blit(g, lay, ca, cz);
+    fadeAdd(p.a, p.b, 0, 1); fadeAdd(p.c, p.d, 1, 0);
+  }
+  for (const p of bands) blit(g, acc, Math.max(0, p.a), Math.min(W, p.b));
   E.left = 0; E.right = W;
 }
 function groundLayer(g, T, t, dt, scrollV) {            // a theme's own ground, or the street/park with its river
@@ -1365,34 +1424,39 @@ function frame(t) {
     bo = tour ? mod(off / 2, backW) : off / 2;
   }
   const moved = travel - prevTravel, scrollV = dt && Math.abs(moved) < W ? moved / dt : 0;   // span mode's first frame jumps from 0
-  // Tour: the active theme is the city nearest the screen centre's. The neighbour's sky blends in as the
-  // midpoint between them nears: 50/50 exactly there, fully the current city's by 60% of the way to the centre.
+  // Tour: the active theme (weather, cloud deck) is the city nearest the screen centre's; skies and grounds blend per stretch.
   const near = tour && tourNear();
-  if (near) {
-    theme = THEMES[near.cur.theme]; fade.theme = THEMES[near.nb.theme];
-    fade.w = .5 * Math.min(1, Math.max(0, (Math.abs(near.d) / near.half - .4) / .6));
-  }
+  if (near) theme = THEMES[near.cur.theme];
   env(t, dt, scrollV);
 
   const g = ctx;
   g.setTransform(dpr, 0, 0, dpr, 0, 0); g.globalAlpha = 1;   // so a plugin hook that threw mid-draw can't leave the canvas skewed
   g.clearRect(0, 0, W, H);
   if (!widget) drawSky(g, t, dt);                      // the widget never draws a sky: the desktop shows behind
-  else if (theme.widgetSky) paintSky(g, theme);         // unless the theme asks for its sky there
+  else perStretch(g, paintSky, T => T.widgetSky);       // unless the theme asks for its sky there
   if (S.back && backW) {                                // back skyline, sliding at half speed for depth
-    g.drawImage(bc, -bo, 0);
-    if (tour) g.drawImage(bc, backW - bo, 0);
+    // cut: trimming with destination-in, which clears everything outside what's drawn, so each wrap copy keeps to its own span
+    const row = (g, cut) => { for (const x of tour ? [-bo, backW - bo] : [-bo]) {
+      if (cut) { g.save(); g.beginPath(); g.rect(x, 0, backW, GY); g.clip(); }
+      g.drawImage(bc, x, 0);
+      if (cut) g.restore();
+    } };
+    if (!tour) row(g);
+    else perStretch(g, (g, T) => {                       // each stretch adds its body colour to the colourless row, then trims to the row's shape
+      row(g); g.globalCompositeOperation = 'lighter'; g.fillStyle = T.back.body; g.fillRect(0, 0, W, GY);
+      g.globalCompositeOperation = 'destination-in'; row(g, true); g.globalCompositeOperation = 'source-over';
+    }, undefined, true);
   }
-  perStretch(g, T => T.drawBehind && T.drawBehind(g, E));
+  perStretch(g, (g, T) => T.drawBehind(g, E), T => T.drawBehind);
 
   for (const b of buildings) for (const k of E.wrapK) {
     const cx = b.cx - off + k * worldW;
     if (cx + b.half < 0 || cx - b.half > W) continue;
     drawBuilding(g, b, cx, t);
   }
-  perStretch(g, T => T.drawFront && T.drawFront(g, E));
-  perStretch(g, T => groundLayer(g, T, t, dt, scrollV));
-  perStretch(g, T => T.drawTop && T.drawTop(g, E));
+  perStretch(g, (g, T) => T.drawFront(g, E), T => T.drawFront);
+  perStretch(g, (g, T) => groundLayer(g, T, t, dt, scrollV));
+  perStretch(g, (g, T) => T.drawTop(g, E), T => T.drawTop);
   drawWeather(g, t, dt);
 
   // City name fades in near the top as each skyline scrolls into the middle of the tour.
@@ -1433,10 +1497,11 @@ function frame(t) {
 // Everything a theme hook may need, refreshed every frame (and during layout) and passed to every hook as E.
 // t is the frame time in ms, dt the frame step in s, off the scroll offset in px, scrollV the scroll speed in px/s,
 // travel the total scroll so far in px (never wraps), wrapK the world copies to draw ([0] or [0, 1] in the tour),
-// left..right the screen span the current per-theme layer is clipped to (its stretch in the tour, else 0..W).
+// left..right the screen span the current per-theme layer is clipped to (its stretch in the tour, else 0..W),
+// scene the main canvas (a tour layer may be drawn into a spare canvas, so read the picture so far from E.scene, not g.canvas).
 // E.sky is the theme's own sky gradient while its drawSky runs (Synthwave cuts its sun stripes with it).
 const WRAP1 = [0], WRAP2 = [0, 1];
-const E = { hash, sprite, pixelArt, bands, widget, wallMode, sky: null,
+const E = { hash, sprite, pixelArt, bands, widget, wallMode, scene: cv, sky: null,
   toScreen(x) {                                          // a building's world cx → screen x this frame (the visible copy in the tour)
     if (S.view !== 'tour') return x - off;
     x = ((x - off) % worldW + worldW) % worldW;
@@ -1482,8 +1547,9 @@ const newKey = k => typeof k === 'string' && !!k && k !== 'none' && k !== 'gener
 //   searchlights: false = none · decorate(b, r, E): per generated building at layout · afterLayout(list, r, E): once, this theme's buildings
 //   drawBehind(g, E): after the back row · drawExtras(g, b, cx, tip, E): after each of its buildings · drawFront(g, E): after all buildings
 //   drawTop(g, E): after the ground and water, before the weather (things standing in front of the ground)
-// In the tour, ground.draw, drawBehind, drawFront and drawTop are clipped to the theme's own stretch, which is E.left..E.right on
-// screen (0..W elsewhere). drawSky may be drawn at partial opacity (the tour's crossfade): multiply g.globalAlpha, don't overwrite it.
+// In the tour, the sky (gradient + drawSky), ground.draw, drawBehind, drawFront and drawTop are drawn for the theme's own stretch,
+// E.left..E.right on screen (0..W elsewhere), and faded into the neighbour's where they meet, possibly via a spare canvas:
+// draw on the g you're given and read the scene from E.scene.
 function registerTheme(key, def) {
   if (!newKey(key) || key in CITIES || !def || typeof def.name !== 'string' || !okKit(def.kit) || (def.ground && !(def.ground.h > 0)))
     return console.error(`City Pulse: theme "${key}" ignored: it needs a new key, a name, a kit shaped like the KITS entries and, for a ground, a height.`);

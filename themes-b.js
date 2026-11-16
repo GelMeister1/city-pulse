@@ -217,7 +217,7 @@
       },
       drawFront(g, E) {                                    // heat shimmer: the bottom of the skyline wobbles like a mirage
         if (E.widget) return;
-        const { W, GY, unit: u, t } = E, cv = g.canvas, sc = cv.width / W, band = Math.round(Math.max(8, GY * .06));
+        const { W, GY, unit: u, t } = E, cv = E.scene, sc = cv.width / W, band = Math.round(Math.max(8, GY * .06));
         const bw = cv.width, bh = Math.ceil(band * sc);
         if (tc.width !== bw || tc.height !== bh) { tc.width = bw; tc.height = bh; } else tcx.clearRect(0, 0, bw, bh);
         tcx.drawImage(cv, 0, Math.round((GY - band) * sc), bw, bh, 0, 0, bw, bh);

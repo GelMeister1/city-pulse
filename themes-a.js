@@ -88,6 +88,13 @@ function causticFill(g, ox, oy, x, y, w, h, s) {        // pattern fill of a rec
   let p = pats.get(g); if (!p) pats.set(g, p = g.createPattern(caustic(), 'repeat'));
   g.save(); g.translate(ox, oy); g.scale(s, s); g.fillStyle = p; g.fillRect((x - ox) / s, (y - oy) / s, w / s, h / s); g.restore();
 }
+// Jellyfish, two frames: bell open and bell contracted. p = bell rim and tentacles, P = bell highlight.
+const jelly = (p, P) => [
+  PAL(['..ppppp..', '.pPPPPPp.', 'pPPpPpPPp', 'ppppppppp', '.t.t.t.t.', '.t..t..t.', 't..t..t..', '.t..t..t.', '..t..t...'], { p, P, t: p }),
+  PAL(['...ppp...', '..pPPPp..', '.pPPpPPp.', '.ppppppp.', '..t.t.t..', '..t.t.t..', '..t.t.t..', '.t.t.t...', '..t.t.t..', '..t...t..'], { p, P, t: p }),
+];
+// True on the frame a band's flash fires (the core sets flash to 1 on a hit, then lets it decay).
+const hitNow = (st, k, f) => { const was = st[k] || 0; st[k] = f; return f > .95 && was <= .95; };
 // Walk the stacked tiers of a generated building: fn(x0, yTop, w, h, tier).
 function eachTier(b, cx, E, fn) { let y = E.GY; for (const tr of b.tiers) { const tw = tr.w * E.unit, th = tr.h * E.unit; fn(cx - tw / 2, y - th, tw, th, tr); y -= th; } }
 const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += bands[k].level; return s / (z - a + 1); };
@@ -222,11 +229,36 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
   const WHALE = PAL(['...........WWWWWWWW........', '.ww.....WWWWWWWWWWWWWW.....', '.www..WWWWWWWWWWWWWWWWWW...', '..wwWWWWWWWWWWWWWWWWWWWWW..',
     '..wWWWWWWWWWWWWWWWWWWWWWKWW', '.ww..WWWWWWWWWWWWWWWWWWWWWW', '.......LLLLLLLLLLLLLLLLLLL.', '..........FF....LLLLLL.....', '...........FF..............'],
     { W: '#2d6f8c', w: '#2d6f8c', L: '#5a9ab2', K: '#0e2a38', F: '#2d6f8c' });
-  const st = { key: '', fish: [], back: [], turtle: null, whale: null, bub: { list: [] }, wk: '', wash: null, rays: null, ck: 0, coral: null };
+  const DOLPHIN = PAL(['.........d.........', '......ddddddd......', 'd...dddddddddddd...', 'dd.dddddddddddkddd.', 'ddddLLLLLLLLLLLLLLL', 'd...LLLLLLLLLL.....', '.......dd..........'],
+    { d: '#6d8ea8', L: '#cfdde6', k: '#0e1e2c' });
+  const MPAL = { m: '#1f4f66', w: '#3d7690' };
+  const MANTA = [
+    PAL(['......mm......', '.....mmm......', '....mmmmm.....', '...mmmwmmm..mm', 'mmmmmmwwmmmmm.', '...mmmwmmm..mm', '....mmmmm.....', '.....mmm......', '......mm......'], MPAL),
+    PAL(['..............', '......mm......', '.....mmmm.....', '...mmmwmmm..mm', 'mmmmmmwwmmmmm.', '...mmmwmmm..mm', '.....mmmm.....', '......mm......', '..............'], MPAL),
+  ];
+  const CPAL = { r: '#e0503a', R: '#ff7a5a', k: '#1a1a1a' };
+  const CRAB = [PAL(['.k.....k.', 'r.r...r.r', 'rRrrrrrRr', '.rrrrrrr.', 'r.r...r.r'], CPAL), PAL(['.k.....k.', 'r.r...r.r', 'rRrrrrrRr', '.rrrrrrr.', '.r.r.r.r.'], CPAL)];
+  const SEAHORSE = PAL(['.yy...', 'yyyk..', '.yyyyy', 'yyy...', '.yyy..', 'yyy...', '.yy...', '..y.y.', '...y..'], { y: '#ffb43a', k: '#3a2000' });
+  const octo = (o, O) => [
+    PAL(['..ooooo..', '.oOoooOo.', '.ookoook.', '.ooooooo.', '..ooooo..', '.o.o.o.o.', 'o.o.o.o.o', '.o..o..o.'], { o, O, k: '#1a0a08' }),
+    PAL(['..ooooo..', '.oOoooOo.', '.ookoook.', '.ooooooo.', '..ooooo..', 'o.o.o.o.o', '.o.o.o.o.', 'o..o..o..'], { o, O, k: '#1a0a08' }),
+  ];
+  const OCTO = [octo('#c0504a', '#e07a6a'), octo('#ff8a3a', '#ffc08a')];   // calm, and flushed on a hit
+  const CLOWN = PAL(['.ow..', 'owowk', '.ow..'], { o: '#ff7a1a', w: '#ffffff', k: '#111' });
+  const MOON = jelly('rgba(230,240,255,.8)', '#ffffff');
+  const st = { key: '', fish: [], back: [], turtle: null, whale: null, bub: { list: [] }, wk: '', wash: null, rays: null, ck: 0, coral: null,
+    big: null, pod: null, manta: null, jel: [], crabs: [], leapT: -1e9, turnT: 0 };
   function sync(E) {
     const k = keyOf(E); if (st.key === k) return; st.key = k;
     const { W, GY, unit: u } = E, px = pxOf(E), w = E.widget;
     st.fish = []; st.back = []; st.bub.list = [];
+    // a big school that bends as one wave and turns on the kick
+    st.big = { x: W * .6, y0: GY * (w ? .3 : .42), dir: -1, v: u * 3.5, par: 1, m: 30 * u, px,
+      mem: Array.from({ length: w ? 8 : 18 }, () => ({ ox: (Math.random() - .5) * 26 * u, oy: (Math.random() - .5) * 9 * u, ph: Math.random() * TAU })) };
+    st.pod = { x: W * .2, y0: GY * (w ? .12 : .17), dir: 1, v: u * 5, par: .6, m: 45 * u + spW(DOLPHIN, px), n: w ? 2 : 3, px };
+    st.manta = w ? null : { x: W * .45, y: GY * .26, dir: -1, v: u * 1.4, par: .45, m: spW(MANTA[0], px * 2) + 4 * u, px: px * 2 };
+    st.jel = Array.from({ length: w ? 1 : 2 }, (_, i) => ({ x: W * (.3 + .4 * i), y: GY * (.3 + .3 * i), ph: Math.random() * TAU, px }));
+    st.crabs = Array.from({ length: w ? 1 : 2 }, (_, i) => ({ x: W * (.25 + .5 * i), dir: i ? -1 : 1, v: u * 1.2, par: 1, m: 6 * u, px }));
     const school = (out, sp, n, y0, dir, v, p, par) => { const x0 = Math.random() * W, m = 16 * u + spW(sp, p);
       for (let i = 0; i < n; i++) out.push({ sp, px: p, dir, v, par, m, x: x0 + (Math.random() - .5) * 12 * u, y: y0 + (Math.random() - .5) * 6 * u, ph: Math.random() * TAU }); };
     for (let s = 0; s < (w ? 2 : 4); s++) school(st.fish, FISH[s], w ? 4 : 6 + (s * 3) % 5, GY * (.2 + .17 * s), s % 2 ? -1 : 1, u * (3 + 1.5 * s % 3), px, 1);
@@ -305,6 +337,16 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       const { t, GY } = E;
       if (st.whale) { swim(st.whale, E); withAlpha(g, .45, () => drawPix(g, st.whale.sp, st.whale.px, st.whale.x, st.whale.y + Math.sin(t / 3000) * E.unit, st.whale.dir < 0)); }
       withAlpha(g, .5, () => { for (const f of st.back) { swim(f, E); drawPix(g, f.sp, f.px, f.x, f.y + Math.sin(t / 800 + f.ph) * E.unit * .4, f.dir < 0); } });
+      const u = E.unit, m = st.manta;
+      if (m) { swim(m, E); withAlpha(g, .6, () => drawPix(g, MANTA[Math.floor(t / 700) % 2], m.px, m.x, m.y + Math.sin(t / 2600) * u * 2, m.dir < 0)); }
+      // dolphin pod: gentle arcs, and a staggered leap on a big bass hit
+      if (hitNow(st, 'bf', E.bassFlash) && t - st.leapT > 2500) st.leapT = t;
+      const p = st.pod; swim(p, E);
+      withAlpha(g, .9, () => { for (let i = 0; i < p.n; i++) {
+        const lp = (t - st.leapT - i * 160) / 1000, leap = lp > 0 && lp < 1 ? Math.sin(Math.PI * lp) : 0, span = E.W + 2 * p.m;
+        let x = p.x - p.dir * i * 12 * u; if (x < -p.m) x += span; else if (x > E.W + p.m) x -= span;
+        drawPix(g, DOLPHIN, p.px, x, p.y0 + (i % 2) * 4 * u + Math.sin(t / 1100 + i * .9) * u * 2.2 - leap * u * 11, p.dir < 0);
+      } });
     },
     drawFront(g, E) {
       sync(E);
@@ -322,6 +364,20 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       }
       const dart = 1 + 2.2 * E.bands[1].flash;           // fish dart on the kick
       for (const f of st.fish) { swim(f, E, dart); drawPix(g, f.sp, f.px, f.x, f.y + Math.sin(t / 700 + f.ph) * u * .5, f.dir < 0); }
+      const B = st.big, kick = E.bands[1].flash, tight = 1 - .45 * kick;   // the big school tightens and may turn on the kick
+      if (hitNow(st, 'kf', kick) && t - st.turnT > 6000 && Math.random() < .5) { st.turnT = t; B.dir *= -1; }
+      swim(B, E, 1 + kick);
+      for (const f of B.mem) {
+        const x = B.x + f.ox * tight, y = B.y0 + f.oy * tight + Math.sin(x / W * TAU * 1.2 + t / 1500) * GY * .06 + Math.sin(t / 500 + f.ph) * u * .3;
+        drawPix(g, FISH[2], B.px, x, y, B.dir < 0);
+      }
+      for (const j of st.jel) {                          // pale moon jellies drifting up, pulsing slowly
+        const pulse = Math.sin(t / 900 + j.ph) > .6, sp = MOON[pulse ? 1 : 0];
+        j.y -= u * (pulse ? 3 : .6) * dt; j.x += (Math.sin(t / 3000 + j.ph) * u * .5 - E.scrollV * .8) * dt;
+        if (j.y < -spH(sp, j.px) * 2) { j.y = GY * .9; j.x = Math.random() * W; }
+        if (j.x < -40) j.x += W + 80; else if (j.x > W + 40) j.x -= W + 80;
+        withAlpha(g, .55, () => drawPix(g, sp, j.px, j.x, j.y, false));
+      }
       const tu = st.turtle; swim(tu, E); drawPix(g, TURTLE[Math.floor(t / 450) % 2], tu.px, tu.x, tu.y + Math.sin(t / 1800) * u * 1.2, false);
       bubbleStep(st.bub, E, 2 + 30 * E.bassFlash, E.widget ? 25 : 90, () => (Math.floor(Math.random() * 7) + .5) / 7 * W + (Math.random() - .5) * 2 * u, () => GY + (H - GY) * .3, u * .25, u * .8, u * 9);
       bubbleDraw(g, st.bub.list);
@@ -348,6 +404,22 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         }
         g.stroke();
       }
+      sync(E);
+      const px = pxOf(E), beat = E.bands[1].level;
+      const each = (sp, off, fn) => { for (let i = Math.floor((travel - off - 10 * u) / sp); i * sp + off - travel < W + 10 * u; i++) fn(i * sp + off - travel, i); };
+      each(46 * u, 12 * u, (ax, i) => {                  // anemones, each with a pair of clownfish circling it
+        const ay = GY + gh * .55;
+        g.strokeStyle = '#ff8fc8'; g.lineWidth = Math.max(1, u * .4); g.lineCap = 'round'; g.beginPath();
+        for (let k = -3; k <= 3; k++) { const sw = Math.sin(t / 700 + k + i) * u * .6 * sway; g.moveTo(ax + k * u * .45, ay); g.quadraticCurveTo(ax + k * u * .7 + sw, ay - u * 1.5, ax + k * u * .9 + sw * 1.5, ay - u * 2.6); }
+        g.stroke();
+        for (let j = 0; j < 2; j++) { const a = t / 900 + j * Math.PI + i; drawPix(g, CLOWN, px, ax + Math.cos(a) * u * 2.6 - u, ay - u * 3.5 + Math.sin(a * 2) * u * .6, Math.sin(a) > 0); }
+      });
+      each(64 * u, 33 * u, (x, i) => drawPix(g, SEAHORSE, px, x, GY + gh * .3 - u * 5 + Math.sin(t / 900 + i) * u, (i & 1) === 1));   // seahorses bobbing by the coral
+      each(120 * u, 80 * u, x => drawPix(g, OCTO[E.bands[3].flash > .5 ? 1 : 0][Math.floor(t / 520) % 2], px, x, GY + gh * .62 - spH(OCTO[0][0], px), false));   // octopus flushes on mid hits
+      for (const c of st.crabs) {                        // crabs scuttle sideways, faster with the beat
+        swim(c, E, 1 + 2.5 * beat);
+        drawPix(g, CRAB[Math.floor(c.x / Math.max(1, u * .7)) & 1], c.px, c.x, GY + gh * .82 - spH(CRAB[0], c.px), false);
+      }
     } },
   });
 }
@@ -356,15 +428,19 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
 // Abyssal City: glass domes and towers glowing cyan in the deep dark, marine snow, jellyfish and an anglerfish.
 // Music: jellyfish pulse and jet upward on the bass, the angler's lure flares with the treble, vents throb with the kick.
 {
-  const jelly = (p, P) => [
-    PAL(['..ppppp..', '.pPPPPPp.', 'pPPpPpPPp', 'ppppppppp', '.t.t.t.t.', '.t..t..t.', 't..t..t..', '.t..t..t.', '..t..t...'], { p, P, t: p }),
-    PAL(['...ppp...', '..pPPPp..', '.pPPpPPp.', '.ppppppp.', '..t.t.t..', '..t.t.t..', '..t.t.t..', '.t.t.t...', '..t.t.t..', '..t...t..'], { p, P, t: p }),
-  ];
   const JELLY = [[jelly('#ff7ad9', '#ffc4f0'), '255,110,220'], [jelly('#6af2ff', '#c8fbff'), '90,240,255'], [jelly('#b48cff', '#e2d4ff'), '170,130,255']];
   const ANGLER = PAL(['..........l.....', '........ll.l....', '.......l....O...', '....BBBBBB......', '..BBBBBBBBBB....', 'B.BBBBBBBBBBBe..', 'BBBBBBBBBBBBBBB.',
     'B.BBBBBBBTTTTTB.', '..BBBBBBBTBTBTB.', '....BBBBBBBBB...'], { l: '#3a4a50', O: '#d8fff6', B: '#2b4048', e: '#9ff', T: '#cfd8d0' });
   const GFISH = [PAL(['.aa..', 'aaaaw', '.aa..'], { a: '#3fffd0', w: '#ffffff' }), PAL(['.aa..', 'aaaaw', '.aa..'], { a: '#7ab8ff', w: '#ffffff' })];
-  const st = { key: '', snow: [], jel: [], fish: [], ang: null, rk: '', ray: null, gk: '', gg: null };
+  const LANTERN = [PAL(['...dd..', 'dddddde', 'd.ododo'], { d: '#46616d', e: '#cff', o: '#9fffe8' }), PAL(['...dd..', 'dddddde', 'd.ododo'], { d: '#46616d', e: '#cff', o: '#ffffff' })];
+  const SHRIMP = PAL(['r.....', '.rrrr.', 'rrrrrr', 'r.r.r.'], { r: '#ff6a4a' });
+  const IPAL = { g: '#8a7f88', G: '#b6aab2', l: '#6a5f68' };
+  const ISOPOD = [PAL(['.gggggg.', 'gGgGgGgg', 'gggggggg', '.l.l.l..'], IPAL), PAL(['.gggggg.', 'gGgGgGgg', 'gggggggg', 'l.l.l.l.'], IPAL)];
+  const WSHARK = PAL(['..............SSSSSSSS........', 'ss.......SSSSSSwSSSSwSSSSS....', 'sss...SSSSwSSSSSSwSSSSSSwSSSS.', '.sssSSSSSSSSSwSSSSSSSwSSSSSSSS',
+    '..sSSSSwSSSSSSSSwSSSSSSSSSSSSS', '.ss..SSSSSSSSSSSSSSSSSSSSSSSSS', 'ss.......LLLLLLLLLLLLLLLLLLLL.', '...............FF.............'],
+    { S: '#1d3a48', s: '#1d3a48', w: '#5d8a9a', L: '#2b5262', F: '#1d3a48' });
+  const st = { key: '', snow: [], jel: [], fish: [], ang: null, rk: '', ray: null, gk: '', gg: null,
+    lan: [], shrimp: [], combs: [], sip: null, sipT: -1e9, shark: null, iso: null, spk: [] };
   function sync(E) {
     const k = keyOf(E); if (st.key === k) return; st.key = k;
     const { W, GY, H, unit: u } = E, px = pxOf(E), w = E.widget;
@@ -373,6 +449,15 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     st.fish = [];
     for (let s = 0; s < (w ? 1 : 3); s++) { const x0 = Math.random() * W, y0 = GY * (.25 + .2 * s), dir = s % 2 ? -1 : 1;
       for (let i = 0; i < 5; i++) st.fish.push({ sp: GFISH[s % 2], px, dir, v: u * 3, par: 1, m: 12 * u, x: x0 + (Math.random() - .5) * 8 * u, y: y0 + (Math.random() - .5) * 4 * u, ph: Math.random() * TAU }); }
+    st.lan = [];
+    for (let s = 0; s < (w ? 1 : 2); s++) { const x0 = Math.random() * W, y0 = GY * (.4 + .25 * s), dir = s ? 1 : -1;
+      for (let i = 0; i < (w ? 4 : 7); i++) st.lan.push({ px: px + 1, dir, v: u * 2.4, par: 1, m: 14 * u, x: x0 + (Math.random() - .5) * 12 * u, y: y0 + (Math.random() - .5) * 5 * u, ph: Math.random() * TAU }); }
+    st.shrimp = Array.from({ length: w ? 2 : 5 }, () => ({ px: Math.max(1, px - 1), dir: Math.random() < .5 ? 1 : -1, v: u * 1.5, par: 1, m: 4 * u, x: Math.random() * W, y: GY * (.3 + .6 * Math.random()), ph: Math.random() * TAU }));
+    st.combs = Array.from({ length: w ? 1 : 3 }, (_, i) => ({ x: W * (.2 + .3 * i) + Math.random() * W * .1, y: GY * (.2 + .25 * i), ph: Math.random() * TAU }));
+    st.sip = { dir: 1, v: u * 1.1, par: .7, m: 32 * u, x: W * .15, y: GY * (w ? .2 : .15) };
+    st.shark = w ? null : { dir: -1, v: u * .8, par: .25, m: spW(WSHARK, px * 2) + 4 * u, x: W * .6, y: GY * .08, px: px * 2 };
+    st.iso = { dir: 1, v: u * .6, par: 1, m: 6 * u, x: W * .4, px };
+    st.spk = [];
     st.ang = { sp: ANGLER, px: px + 2, dir: -1, v: u * 1.3, par: 1, m: spW(ANGLER, px + 2) + 6 * u, x: W * .7, y: GY * (w ? .45 : .62), ph: 0 };
   }
   registerTheme('abyss', { name: 'Abyssal City',
@@ -406,7 +491,11 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.strokeStyle = 'rgba(120,240,255,.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx, ty - ry); g.lineTo(cx, ty); g.ellipse(cx, ty, rx * .5, ry, 0, Math.PI, TAU); g.stroke();
       }
     },
-    drawBehind(g, E) { sync(E); },
+    drawBehind(g, E) {                                   // a whale shark passing far off in the dark
+      sync(E);
+      const s = st.shark; if (!s) return;
+      swim(s, E); withAlpha(g, .32, () => drawPix(g, WSHARK, s.px, s.x, s.y + Math.sin(E.t / 4000) * E.unit * 1.5, s.dir < 0));
+    },
     drawFront(g, E) {
       sync(E);
       const { W, H, GY, t, dt, unit: u, scrollV } = E;
@@ -418,6 +507,37 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         const s = p.s > .8 ? 2 : 1; g.fillRect(p.x, p.y, s, s);
       }
       for (const f of st.fish) { swim(f, E); const y = f.y + Math.sin(t / 600 + f.ph) * u * .4; glow(g, '80,255,220', f.x + spW(f.sp, f.px) / 2, y + f.px, u * 1.3, .5); drawPix(g, f.sp, f.px, f.x, y, f.dir < 0); }
+      const sp = st.sip;                                 // siphonophore: a long drifting chain; a light wave runs down it on hits
+      if (hitNow(st, 'pf', E.bands[5].flash)) st.sipT = t;
+      swim(sp, E);
+      for (let i = 0; i < 24; i++) {
+        const bx = sp.x - sp.dir * i * u * 1.15, by = sp.y + Math.sin(i * .45 - t / 800) * u * 1.8, wave = Math.max(0, 1 - Math.abs(i - (t - st.sipT) / 45) / 3), a = .55 + .45 * wave;
+        if (i % 3 === 0) glow(g, '120,200,255', bx, by, u * (1.2 + 1.5 * wave), .25 + .5 * wave);
+        g.fillStyle = `rgba(${150 + 105 * wave | 0},220,255,${a})`; g.fillRect(bx - u * .3, by - u * .3, Math.max(1, u * .6), Math.max(1, u * .6));
+      }
+      const rip = 1 + 2 * avg(E.bands, 5, 7);            // comb jellies: rainbow ripples racing down their comb rows
+      for (const c of st.combs) {
+        c.y += Math.sin(t / 2500 + c.ph) * u * .5 * dt; c.x += (Math.sin(t / 3700 + c.ph) * u * .4 - scrollV * .8) * dt;
+        if (c.x < -20) c.x += W + 40; else if (c.x > W + 20) c.x -= W + 40;
+        const rx = u * 2, ry = u * 3.2;
+        g.fillStyle = 'rgba(180,220,255,.08)'; g.strokeStyle = 'rgba(200,235,255,.35)'; g.lineWidth = 1;
+        g.beginPath(); g.ellipse(c.x, c.y, rx, ry, 0, 0, TAU); g.fill(); g.stroke();
+        for (let k = 0; k < 4; k++) for (let j = 0; j < 5; j++) {
+          g.fillStyle = `hsl(${(t * .25 * rip + j * 50 + k * 30) % 360},100%,65%)`;
+          g.fillRect(c.x + (k - 1.5) * rx * .45, c.y - ry * .8 + j * ry * .4, Math.max(1, u * .4), Math.max(1, u * .4));
+        }
+      }
+      const pf = E.bands[6].flash;                       // lanternfish: photophores flash white on the treble
+      for (const f of st.lan) { swim(f, E); drawPix(g, LANTERN[pf > .5 ? 1 : 0], f.px, f.x, f.y + Math.sin(t / 700 + f.ph) * u * .4, f.dir < 0); }
+      const kick = E.bands[1].flash;                     // glowing shrimp dart on the kick
+      for (const s of st.shrimp) { swim(s, E, 1 + 6 * kick); const y = s.y + Math.sin(t / 900 + s.ph) * u; glow(g, '255,110,70', s.x + 3 * s.px, y + 2 * s.px, u * 1.3, .45); drawPix(g, SHRIMP, s.px, s.x, y, s.dir < 0); }
+      if (hitNow(st, 'af', Math.max(E.bands[4].flash, E.bands[7].flash)))   // bioluminescent sparkles on hits
+        for (let i = 0; i < (E.widget ? 2 : 5); i++) st.spk.push({ x: Math.random() * W, y: Math.random() * GY, life: 1, rgb: Math.random() < .5 ? '120,255,230' : '160,170,255' });
+      for (let i = st.spk.length - 1; i >= 0; i--) {
+        const s = st.spk[i]; s.life -= dt * 1.8; s.x -= scrollV * dt; if (s.life <= 0) { st.spk.splice(i, 1); continue; }
+        glow(g, s.rgb, s.x, s.y, u * 2.2 * s.life, s.life * .8);
+        withAlpha(g, s.life, () => { g.fillStyle = '#fff'; g.fillRect(s.x - u * s.life, s.y - .5, 2 * u * s.life, 1); g.fillRect(s.x - .5, s.y - u * s.life, 1, 2 * u * s.life); });
+      }
       for (const j of st.jel) {                          // jellyfish: contract and jet upward on the bass
         const pulse = E.bassFlash > .45 || Math.sin(t / 650 + j.ph) > .82, [frames, rgb] = j.j, sp = frames[pulse ? 1 : 0];
         j.y -= u * (pulse ? 7 : .9) * dt; j.x += (Math.sin(t / 2600 + j.ph) * u * .6 - scrollV * j.par) * dt;
@@ -454,6 +574,12 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         glow(g, rgb, x, by - h, u * (2.5 + 3 * kick), .35 + .55 * kick);
         g.fillStyle = warm ? 'rgba(255,190,130,.5)' : 'rgba(150,250,255,.5)';
         for (let p = 0; p < 6; p++) { const q = (t / 1600 + p / 6 + hash(i, p, 3)) % 1; g.fillRect(x + Math.sin(q * 9 + p) * u * .8 * q, by - h - q * u * 14, Math.max(1, u * .3), Math.max(1, u * .3)); }
+        if (hash(i, 12, 21) < .55) {                     // an eel peeking out beside the vent: further out on the bass
+          const out = u * (1.5 + 3 * Math.max(0, Math.sin(t / 2600 + i * 2)) + 3 * kick), sw = Math.sin(t / 500 + i) * u * .6, ex = x + u * 1.4, ey = by - h * .45;
+          g.strokeStyle = '#5a8a5c'; g.lineWidth = Math.max(2, u * 1.1); g.lineCap = 'round';
+          g.beginPath(); g.moveTo(ex, ey); g.quadraticCurveTo(ex + u + sw, ey - out * .5, ex + u * 1.4 + sw * 1.5, ey - out); g.stroke();
+          g.fillStyle = '#d6ff6a'; g.fillRect(ex + u * 1.4 + sw * 1.5, ey - out - u * .2, Math.max(1, u * .3), Math.max(1, u * .3));
+        }
       }
       const ps = 2.6 * u, sp = E.spectrum;
       for (let i = Math.floor((travel - 2 * u) / ps); i * ps - travel < W + 2 * u; i++) {
@@ -463,6 +589,9 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.fillStyle = `hsla(${165 + 130 * hash(i, 11, 21)},100%,${55 + 25 * sp[kk]}%,${.4 + .6 * sp[kk]})`;
         g.fillRect(x - u * .2, by - h - u * .5, Math.max(1, u * .65), Math.max(1, u * .6));
       }
+      sync(E);
+      const iso = st.iso; swim(iso, E);                  // a giant isopod plodding along the seabed
+      drawPix(g, ISOPOD[Math.floor(iso.x / Math.max(1, u * .6)) & 1], iso.px, iso.x, GY + gh * .7 - spH(ISOPOD[0], iso.px), false);
     } },
   });
 }
