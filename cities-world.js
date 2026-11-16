@@ -8,7 +8,7 @@
   const path = (g, pts) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); };
   const mirror = pts => [...pts, ...pts.slice().reverse().map(([x, y]) => [-x, y])];   // right half → whole outline
   const glow = (L, y, min) => L.win(Math.max(L.lit(y), min));                        // lights that never go fully dark
-  const sphere = (g, L, cy, r) => {                       // a lit ball: soft halo, dark body, rows of windows, glowing rim
+  const sphere = (g, L, cy, r) => {
     const a = L.lit(cy);
     g.globalAlpha = .18 + .3 * a; g.fillStyle = L.win(Math.max(a, .3)); g.beginPath(); g.arc(0, -cy, r * 1.3, 0, 7); g.fill(); g.globalAlpha = 1;
     g.fillStyle = L.body; g.beginPath(); g.arc(0, -cy, r, 0, 7); g.fill();
@@ -19,7 +19,6 @@
     g.strokeStyle = L.win(Math.max(a, .35)); g.lineWidth = .3; g.beginPath(); g.arc(0, -cy, r, 0, 7); g.stroke();
   };
 
-  // ---------- Toronto ----------
   // CN Tower: three flaring fins round a hexagonal core, the main pod two-thirds up, the SkyPod, then the long mast.
   const cnHw = y => .95 + 5.2 * (1 - y / 64) ** 2.4;
   const CN_POD = mirror([[1, -62.5], [3.4, -64.6], [4.5, -65.8], [4.7, -66.6], [4.7, -69.4], [4.2, -70.2], [3.5, -71.2], [2, -72.6], [.95, -73.2]]);
@@ -31,32 +30,32 @@
     for (let y = 64; y >= 0; y--) g.lineTo(-cnHw(y), -y);
     g.fill();
     path(g, CN_POD); g.fill(); path(g, CN_TOP); g.fill();
-    if (L.edge) {                                          // the fins meeting the core
+    if (L.edge) {
       g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
       for (const s of [-1, 1]) { g.moveTo(s * .95, 0); g.lineTo(s * .95, -63); }
       g.moveTo(-4.7, -66.6); g.lineTo(4.7, -66.6); g.moveTo(-4.7, -69.4); g.lineTo(4.7, -69.4); g.stroke();
     }
-    for (let y = 2; y < 62; y += 2.2) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.2, -y - 1.2, .4, 1.2); }   // glass elevators up the shaft
+    for (let y = 2; y < 62; y += 2.2) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.2, -y - 1.2, .4, 1.2); }
     for (let y = 75; y < 85; y += 2.2) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.2, -y - 1.2, .4, 1.2); }
-    for (let y = 4; y < 56; y += 4) {                      // lights up the fin edges
+    for (let y = 4; y < 56; y += 4) {
       g.fillStyle = L.win(L.lit(y)); const x = cnHw(y) - .45;
       g.fillRect(x - .2, -y - .2, .4, .4); g.fillRect(-x - .2, -y - .2, .4, .4);
     }
-    g.fillStyle = L.win(L.lit(64.5));                      // the skirt under the pod
+    g.fillStyle = L.win(L.lit(64.5));
     for (let x = -3.3; x < 3.4; x += .8) g.fillRect(x - .18, -65.1, .36, .36);
-    g.fillStyle = glow(L, 68, .18);                        // the observation ring, always softly lit
+    g.fillStyle = glow(L, 68, .18);
     for (const y of [-67.6, -69]) for (let x = -4.3; x < 4.2; x += .66) g.fillRect(x, y - .4, .44, .85);
     g.fillStyle = L.win(L.lit(71)); for (let x = -3; x < 3; x += .8) g.fillRect(x, -71.3, .4, .4);
-    g.fillStyle = glow(L, 87, .15); for (let x = -1.4; x < 1.4; x += .6) g.fillRect(x, -87.7, .36, .7);   // SkyPod
+    g.fillStyle = glow(L, 87, .15); for (let x = -1.4; x < 1.4; x += .6) g.fillRect(x, -87.7, .36, .7);
   } });
   // Rogers Centre: the low segmented dome by the tower's foot.
   lm('rogers', { w: 34, h: 15, draw(g, L) {
     g.fillStyle = L.body; g.fillRect(-16, -6.5, 32, 6.5);
     g.beginPath(); g.ellipse(0, -6.4, 17, 8.4, 0, Math.PI, 2 * Math.PI); g.fill();
-    g.strokeStyle = glow(L, 11, .12); g.lineWidth = .22; g.beginPath();   // roof panel seams
+    g.strokeStyle = glow(L, 11, .12); g.lineWidth = .22; g.beginPath();
     for (const k of [.34, .67]) g.ellipse(0, -6.4, 17 * k, 8.4, 0, Math.PI, 2 * Math.PI);
     g.stroke();
-    g.fillStyle = glow(L, 6.4, .12); g.fillRect(-16.6, -6.9, 33.2, .45);   // lit rim
+    g.fillStyle = glow(L, 6.4, .12); g.fillRect(-16.6, -6.9, 33.2, .45);
     for (const y of [2.2, 4.4]) { g.fillStyle = L.win(L.lit(y)); for (let x = -15; x < 15; x += 1.25) g.fillRect(x, -y - .9, .6, .9); }
   } });
   city('toronto', { name: 'Toronto', back: [.7, .9], b: [
@@ -72,7 +71,6 @@
     [.5, 'ribbon', null, [[10, 30]]],
   ]});
 
-  // ---------- Sydney ----------
   // Opera House: drawn with the sails pointing left, then flipped so they face the harbour and the bridge (right).
   const OP_B = 2.4;
   const qpt = (p0, c, p1, t) => [(1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0], (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1]];
@@ -87,18 +85,18 @@
   ].map(s => shellOf(...s));
   lm('operahouse', { w: 30, h: 12, draw(g, L) {
     g.scale(-1, 1);
-    g.fillStyle = L.body;                                  // podium, with the grand stairs at the back
+    g.fillStyle = L.body;
     path(g, [[-14.5, 0], [15, 0], [15, -.6], [14, -.6], [14, -1.2], [13, -1.2], [13, -1.8], [12, -1.8], [12, -OP_B], [-14.5, -OP_B]]); g.fill();
     g.fillStyle = L.win(L.lit(1.2)); for (let x = -14; x < 11.5; x += 1.1) g.fillRect(x, -1.6, .55, .7);
     for (const s of SHELLS) {
       const { foot, tip, back, fc, bc, h } = s;
       g.fillStyle = L.body; g.beginPath(); g.moveTo(...foot); g.quadraticCurveTo(...fc, ...tip); g.quadraticCurveTo(...bc, ...back); g.closePath(); g.fill();
-      g.globalAlpha = .55; g.fillStyle = L.win(L.lit(OP_B + h * .3));   // glass wall under the sail's mouth
+      g.globalAlpha = .55; g.fillStyle = L.win(L.lit(OP_B + h * .3));
       g.beginPath(); g.moveTo(...foot); g.quadraticCurveTo(...fc, ...tip); g.lineTo(tip[0], -OP_B); g.closePath(); g.fill();
       g.globalAlpha = 1;
-      g.strokeStyle = glow(L, OP_B + h * .7, .3); g.lineWidth = .3;      // the white sails, edged in light
+      g.strokeStyle = glow(L, OP_B + h * .7, .3); g.lineWidth = .3;
       g.beginPath(); g.moveTo(...foot); g.quadraticCurveTo(...fc, ...tip); g.quadraticCurveTo(...bc, ...back); g.stroke();
-      g.strokeStyle = glow(L, OP_B + h * .5, .14); g.lineWidth = .14; g.beginPath();   // ribs fanning up from the foot
+      g.strokeStyle = glow(L, OP_B + h * .5, .14); g.lineWidth = .14; g.beginPath();
       const base = [foot[0] + (back[0] - foot[0]) * .6, -OP_B];
       for (const t of [.25, .5, .75]) { g.moveTo(...base); g.lineTo(...qpt(tip, bc, back, t)); }
       g.stroke();
@@ -112,23 +110,23 @@
     g.stroke();
     g.lineWidth = .28; g.beginPath();
     for (let i = 0, x = -HB_A + 1.8; x < HB_A - .1; i++, x += 1.8) {
-      g.moveTo(x, -hbTop(x)); g.lineTo(x, -hbBot(x));                        // truss verticals
-      const p = x - 1.8; g.moveTo(p, -(i % 2 ? hbTop(p) : hbBot(p))); g.lineTo(x, -(i % 2 ? hbBot(x) : hbTop(x)));   // diagonals
-      g.moveTo(x, -hbBot(x)); g.lineTo(x, -HB_D);                            // hangers (or posts where the arch dips under the deck)
+      g.moveTo(x, -hbTop(x)); g.lineTo(x, -hbBot(x));
+      const p = x - 1.8; g.moveTo(p, -(i % 2 ? hbTop(p) : hbBot(p))); g.lineTo(x, -(i % 2 ? hbBot(x) : hbTop(x)));
+      g.moveTo(x, -hbBot(x)); g.lineTo(x, -HB_D);
     }
     g.stroke();
-    g.fillRect(-36, -HB_D - .9, 72, .9);                   // deck
+    g.fillRect(-36, -HB_D - .9, 72, .9);
     for (const s of [-1, 1]) {
-      path(g, [[s * 27.3, 0], [s * 32.5, 0], [s * 32.2, -9.6], [s * 27.6, -9.6]]); g.fill();   // pylons
+      path(g, [[s * 27.3, 0], [s * 32.5, 0], [s * 32.2, -9.6], [s * 27.6, -9.6]]); g.fill();
       g.fillRect(s > 0 ? 27.9 : -31.9, -10.5, 4, .9); g.fillRect(s > 0 ? 28.6 : -31.2, -11.2, 2.6, .7);
-      g.fillRect(s * 34.5 - .5, -HB_D, 1, HB_D);           // approach pier
+      g.fillRect(s * 34.5 - .5, -HB_D, 1, HB_D);
       if (L.edge) { g.strokeStyle = L.edge; g.lineWidth = .15; g.strokeRect(s > 0 ? 28.3 : -31.5, -9.2, 3.2, 3); g.strokeStyle = L.body; }
       g.fillStyle = L.win(L.lit(9)); g.fillRect(s * 29.9 - .9, -8.8, .5, 1); g.fillRect(s * 29.9 + .4, -8.8, .5, 1); g.fillStyle = L.body;
     }
-    g.fillRect(-1.3, -hbTop(0) - 1.6, .14, 1.6); g.fillRect(1.16, -hbTop(0) - 1.6, .14, 1.6);   // the flags on the crown
+    g.fillRect(-1.3, -hbTop(0) - 1.6, .14, 1.6); g.fillRect(1.16, -hbTop(0) - 1.6, .14, 1.6);
     g.fillRect(-1.3, -hbTop(0) - 1.6, .7, .45); g.fillRect(1.3, -hbTop(0) - 1.6, -.7, .45);
-    for (let x = -HB_A + .7; x < HB_A; x += 1.4) { g.fillStyle = glow(L, hbTop(x), .1); g.fillRect(x - .2, -hbTop(x) - .55, .4, .4); }   // lights along the arch
-    g.fillStyle = L.win(L.lit(HB_D)); for (let x = -35.5; x < 36; x += 1.2) g.fillRect(x, -HB_D - .6, .5, .3);   // road lights
+    for (let x = -HB_A + .7; x < HB_A; x += 1.4) { g.fillStyle = glow(L, hbTop(x), .1); g.fillRect(x - .2, -hbTop(x) - .55, .4, .4); }
+    g.fillStyle = L.win(L.lit(HB_D)); for (let x = -35.5; x < 36; x += 1.2) g.fillRect(x, -HB_D - .6, .5, .3);
   } });
   city('sydney', { name: 'Sydney', back: [.55, .7], b: [
     [0, 'grid', null, [[10, 28]]],
@@ -142,14 +140,13 @@
     [1.5, '@harbourbridge'],                                                     // Sydney Harbour Bridge
   ]});
 
-  // ---------- Hong Kong ----------
   // Bank of China Tower: triangular shafts stepping up to a sloped top, two masts, the giant X-bracing outlined in light.
   const BOC = [[-5, 0], [-5, -26], [-1.7, -34], [-1.7, -44], [1.7, -52], [1.7, -60], [5, -66], [5, 0]];
   const bocRoof = x => x < -1.7 ? 26 + (x + 5) / 3.3 * 8 : x < 1.7 ? 44 + (x + 1.7) / 3.4 * 8 : 60 + (x - 1.7) / 3.3 * 6;
   lm('bochk', { w: 10, h: 74, draw(g, L) {
     g.fillStyle = L.body; path(g, BOC); g.fill();
-    g.fillRect(2.35, -74, .3, 13.5); g.fillRect(4.15, -72, .3, 8);   // the two masts
-    for (let y = 1.2; y < 64; y += 1.8) {                   // windows
+    g.fillRect(2.35, -74, .3, 13.5); g.fillRect(4.15, -72, .3, 8);
+    for (let y = 1.2; y < 64; y += 1.8) {
       g.fillStyle = L.win(L.lit(y) * .8);
       for (let x = -4.4; x < 4.5; x += 1.1) if (y + 1.2 < bocRoof(x + .2) - .5) g.fillRect(x, -y - .8, .4, .7);
     }
@@ -180,11 +177,11 @@
       for (const s of [-1, 1]) { g.moveTo(s * 4.8, 0); g.lineTo(s * 4.3, -62); g.moveTo(s * 3.8, -62); g.lineTo(s * 3.8, -66.5); }
       g.stroke();
     }
-    for (let y = 1; y < 69.5; y += 1.6) {                  // tall glass strips between mullions
+    for (let y = 1; y < 69.5; y += 1.6) {
       g.fillStyle = L.win(L.lit(y)); const hw = y < 61 ? ifcHw(y + 1) : y < 65.5 ? 4.5 : 4;
       for (let x = -hw + .55; x < hw - .5; x += .95) g.fillRect(x, -y - 1.1, .38, 1.1);
     }
-    g.fillStyle = glow(L, 76, .3);                          // the lit crown
+    g.fillStyle = glow(L, 76, .3);
     for (const [x, h] of IFC_F) g.fillRect(x - .12, -h + 1.2, .24, h - 71.9);
     g.fillRect(-4, -70.9, 8, .3);
   } });
@@ -208,7 +205,6 @@
     [0, 'tall', null, [[8, 38]]],
   ]});
 
-  // ---------- Shanghai ----------
   // Oriental Pearl Tower: big and small spheres strung on three columns, a splayed tripod, then the spire.
   lm('pearl', { w: 18, h: 79, draw(g, L) {
     g.fillStyle = g.strokeStyle = L.body;
@@ -234,12 +230,12 @@
     g.quadraticCurveTo(stR(ST_T) + .2, -104, 2.3, -107); g.lineTo(-stL(ST_T) + .1, -101.6);
     for (let y = ST_T; y >= 0; y -= 2) g.lineTo(-stL(y), -y);
     g.fill();
-    for (let y = 1; y < 99; y += 1.4) {                     // windows, dark at the plant floors between the nine zones
+    for (let y = 1; y < 99; y += 1.4) {                     // dark at the plant floors between the nine zones
       if (y % 11 < 1.4) continue;
       g.fillStyle = L.win(L.lit(y)); const xn = stN(y), r = stR(y) - .6;
       for (let x = -stL(y) + .5; x < r; x += .9) if (Math.abs(x + .2 - xn) > .55) g.fillRect(x, -y - .8, .45, .7);
     }
-    g.lineWidth = .35;                                      // the spiral notch, lit as it climbs
+    g.lineWidth = .35;
     for (let y = 0; y < ST_T; y += 4) {
       g.strokeStyle = glow(L, y + 2, .22); g.beginPath(); g.moveTo(stN(y), -y);
       for (let k = 1; k <= 4; k++) g.lineTo(stN(y + k), -y - k);
@@ -254,7 +250,7 @@
     g.moveTo(-5.5, 0); g.lineTo(-4.5, -83); g.lineTo(4.5, -83); g.lineTo(5.5, 0); g.closePath();
     SW_HOLE.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath();
     g.fill('evenodd');
-    if (L.edge) {                                           // the curved faces meeting near the top
+    if (L.edge) {
       g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
       for (const s of [-1, 1]) { g.moveTo(s * 5.5, 0); g.quadraticCurveTo(s * 3.8, -45, s * 1.5, -71); }
       g.stroke();
@@ -283,7 +279,7 @@
         g.fillStyle = L.win(L.lit(yy));
         for (let x = -hw + .45; x < hw - .4; x += .9) g.fillRect(x, -yy - .75, .4, .7);
       }
-      g.fillStyle = glow(L, y1, .18); g.fillRect(-hw - .4, -y1 - .1, 2 * hw + .8, .18);   // lit ledges
+      g.fillStyle = glow(L, y1, .18); g.fillRect(-hw - .4, -y1 - .1, 2 * hw + .8, .18);
     }
     y = JM_TOP;
     for (const [hw, h] of JM_CROWN) { g.fillStyle = glow(L, y, .3); g.fillRect(-hw + .2, -y - h * .7, 2 * hw - .4, h * .35); y += h; }

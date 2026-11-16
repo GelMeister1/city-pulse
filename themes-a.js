@@ -8,7 +8,6 @@ if (!CP) return;
 const { registerTheme, hash, sprite, pixelArt } = CP;
 const TAU = Math.PI * 2, CLEAR = 'rgba(0,0,0,0)';
 
-// ---------- shared helpers ----------
 const mk = (w, h, draw) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); draw(c.getContext('2d'), c.width, c.height); return c; };
 const dpr = () => window.devicePixelRatio || 1;
 // Hooks may run at partial opacity (the tour's crossfade), so alpha is always multiplied, then restored.
@@ -99,7 +98,6 @@ const hitNow = (st, k, f) => { const was = st[k] || 0; st[k] = f; return f > .95
 function eachTier(b, cx, E, fn) { let y = E.GY; for (const tr of b.tiers) { const tw = tr.w * E.unit, th = tr.h * E.unit; fn(cx - tw / 2, y - th, tw, th, tr); y -= th; } }
 const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += bands[k].level; return s / (z - a + 1); };
 
-// =====================================================================================================
 // Aero: glossy glass towers in a bright aqua sky, a green park, wind turbines on the hills and soap bubbles.
 // Music: turbines spin up on the bass, the sun swells with the kick, glass glints on each building's hits.
 {
@@ -156,7 +154,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     kit: { styles: ['ribbon', 'grid', 'slim', 'ribbon', 'tall'], roofs: [null, null, ['dome', 4], ['antenna', 5], ['spire', 6], null], tall: .35, shrink: .82, w0: 7, gaps: [.6, 1.6] },
     minF: .25, maxF: .75,
     sky: [[0, '#0a6fd6'], [.4, '#2fb0f0'], [.78, '#a6e6ff'], [1, '#effcff']], skyToGround: true,
-    drawSky(g, E) {                                      // the sun's glow with a soft lens flare across the sky
+    drawSky(g, E) {
       const { W, GY } = E, m = Math.min(W, E.H), sx = W * .15, sy = GY * .17, p = .8 + .2 * E.bassFlash;
       glow(g, '255,255,225', sx, sy, m * .42 * p, .85);
       glow(g, '255,255,255', sx, sy, m * .09, 1); glow(g, '255,255,255', sx, sy, m * .05, 1);
@@ -169,7 +167,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     win: c => ({ h: 165 + c.h / 360 * 55, s: Math.min(100, c.s), m: c.m }),
     back: { h: .75, density: .6, body: '#9cd6ea', win: () => 'rgba(255,255,255,.4)' },
     searchlights: false,
-    drawBehind(g, E) {                                   // rolling hills with slow wind turbines, sliding at a quarter speed
+    drawBehind(g, E) {
       sync(E);
       const H = hills(E), { W, GY } = E, ox = ((E.travel * .25) % W + W) % W, top = GY - H.hh;
       st.rot += E.dt * (.45 + 3 * E.bassFlash);
@@ -180,12 +178,12 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       });
       g.drawImage(H.front, -ox, top, W, H.hh); g.drawImage(H.front, W - ox, top, W, H.hh);
     },
-    drawExtras(g, b, cx, tip, E) {                       // glossy glass: a vertical sheen and a bright upper half per tier
+    drawExtras(g, b, cx, tip, E) {
       if (b.lm) return;
       eachTier(b, cx, E, (x0, y, w, h) => { g.drawImage(sheen, x0, y, w, h); g.drawImage(gloss, x0, y, w, Math.min(h, w * 1.6)); });
       if (b.flash > .25) glint(g, cx - b.wpx * (.1 + .25 * hash(b.id, 4, 4)), E.GY - b.hU * E.unit * (.35 + .55 * hash(b.id, 5, 5)), (1 + 1.8 * b.flash) * E.unit, b.flash);
     },
-    drawFront(g, E) {                                    // a few soap bubbles drifting up
+    drawFront(g, E) {
       sync(E);
       const { dt, t, unit: u, W, GY } = E, lift = 1 + .8 * avg(E.bands, 3, 5);
       for (const b of st.bub.list) {
@@ -195,7 +193,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       }
       bubbleDraw(g, st.bub.list);
     },
-    ground: { h: .1, draw(g, E) {                        // bright park: glossy grass, a path and round trees
+    ground: { h: .1, draw(g, E) {
       const { W, H, GY, unit: u, travel } = E, gh = H - GY, k = `${GY},${H}`;
       if (st.gk !== k) { st.gk = k; st.gg = lin(g, 0, GY, 0, H, [[0, '#7ee04f'], [.5, '#4fc23a'], [1, '#2f9a2a']]); }
       g.fillStyle = st.gg; g.fillRect(0, GY, W, gh);
@@ -211,7 +209,6 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
   });
 }
 
-// =====================================================================================================
 // Atlantis: a sunlit, shallow-water city of marble temples on a sandy seabed with coral, seaweed and fish.
 // Music: fish schools dart on the kick, more bubbles on bass, caustics and light rays shimmer with the treble.
 {
@@ -280,7 +277,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       x.strokeStyle = 'rgba(120,40,30,.4)'; x.lineWidth = 1; for (let i = 1; i < 4; i++) { x.beginPath(); x.ellipse(sz / 2, sz, sz * .3 * i / 4, sz * .22 * i / 4, 0, Math.PI, TAU); x.stroke(); } });
     return st.coral = [one('#ff7aa8'), one('#ff9a4a'), brain, one('#c77dff')];
   }
-  function drawTemple(g, b, cx, tip, E) {               // plinth steps, colonnade or arcade, cornice and pediment or a gilded finial
+  function drawTemple(g, b, cx, tip, E) {
     const u = E.unit, GY = E.GY, bw = b.tiers[0].w * u, bh = b.tiers[0].h * u;
     if (b.temple) {
       const n = Math.max(3, Math.round(bw / (2.6 * u))), cw = Math.max(1, u * .8), colH = Math.min(bh, 22 * u);
@@ -317,10 +314,10 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     kit: { styles: ['cols', 'pairs', 'tall', 'cols', 'wide'], roofs: [['dome', 6], ['dome', 8], ['pyramid', 3], null, null, ['spire', 7]], tall: .3, shrink: .78, w0: 8, gaps: [.8, 1.8], setbacks: true },
     minF: .25, maxF: .62, noWeather: true, planes: false, roofLights: false, stars: false, moon: false, cloud: CLEAR, rain: CLEAR, fogRGB: '120,210,220',
     sky: [[0, '#8ff0ff'], [.22, '#36c2dc'], [.65, '#127fa8'], [1, '#0a5e86']], skyToGround: true,
-    drawSky(g, E) {                                      // the bright, rippling surface far above
+    drawSky(g, E) {
       const { W, GY, t } = E, hi = .45 + .5 * avg(E.bands, 5, 7), bh = Math.ceil(GY * .22);
       if (!st.surf || st.surf.width !== Math.ceil(W) || st.surf.height !== bh) { st.surf = mk(W, bh, () => {}); st.sx = st.surf.getContext('2d'); st.sm = lin(st.sx, 0, 0, 0, bh, [[0, '#fff'], [1, 'rgba(255,255,255,0)']]); }
-      const x = st.sx;                                   // two drifting nets, faded out downward
+      const x = st.sx;
       x.globalCompositeOperation = 'source-over'; x.clearRect(0, 0, W, bh);
       x.globalAlpha = .8; causticFill(x, t * .012, t * .006, 0, 0, W, bh, 1.3); x.globalAlpha = .5; causticFill(x, -t * .009, t * .004, 0, 0, W, bh, 1.9);
       x.globalAlpha = 1; x.globalCompositeOperation = 'destination-in'; x.fillStyle = st.sm; x.fillRect(0, 0, W, bh);
@@ -332,7 +329,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     searchlights: false,
     decorate(b, r) { b.temple = r() < .45; b.arcade = !b.temple && r() < .6; b.pediment = r() < .75; },
     drawExtras(g, b, cx, tip, E) { if (!b.lm) drawTemple(g, b, cx, tip, E); },
-    drawBehind(g, E) {                                   // a whale far off and faint fish schools in the blue
+    drawBehind(g, E) {
       sync(E);
       const { t, GY } = E;
       if (st.whale) { swim(st.whale, E); withAlpha(g, .45, () => drawPix(g, st.whale.sp, st.whale.px, st.whale.x, st.whale.y + Math.sin(t / 3000) * E.unit, st.whale.dir < 0)); }
@@ -351,7 +348,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     drawFront(g, E) {
       sync(E);
       const { W, H, GY, t, unit: u, dt } = E, tre = avg(E.bands, 5, 7);
-      if (!E.widget) {                                   // blue-green water wash over the city, slanting light rays, dancing caustics
+      if (!E.widget) {
         const k = `${W},${GY}`;
         if (st.wk !== k) { st.wk = k; st.wash = lin(g, 0, 0, 0, GY, [[0, 'rgba(60,200,220,.06)'], [1, 'rgba(10,110,140,.26)']]); st.rays = lin(g, 0, 0, 0, GY, [[0, 'rgba(255,255,240,.32)'], [1, 'rgba(255,255,240,0)']]); }
         g.fillStyle = st.wash; g.fillRect(0, 0, W, GY);
@@ -371,7 +368,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         const x = B.x + f.ox * tight, y = B.y0 + f.oy * tight + Math.sin(x / W * TAU * 1.2 + t / 1500) * GY * .06 + Math.sin(t / 500 + f.ph) * u * .3;
         drawPix(g, FISH[2], B.px, x, y, B.dir < 0);
       }
-      for (const j of st.jel) {                          // pale moon jellies drifting up, pulsing slowly
+      for (const j of st.jel) {
         const pulse = Math.sin(t / 900 + j.ph) > .6, sp = MOON[pulse ? 1 : 0];
         j.y -= u * (pulse ? 3 : .6) * dt; j.x += (Math.sin(t / 3000 + j.ph) * u * .5 - E.scrollV * .8) * dt;
         if (j.y < -spH(sp, j.px) * 2) { j.y = GY * .9; j.x = Math.random() * W; }
@@ -382,7 +379,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       bubbleStep(st.bub, E, 2 + 30 * E.bassFlash, E.widget ? 25 : 90, () => (Math.floor(Math.random() * 7) + .5) / 7 * W + (Math.random() - .5) * 2 * u, () => GY + (H - GY) * .3, u * .25, u * .8, u * 9);
       bubbleDraw(g, st.bub.list);
     },
-    ground: { h: .11, draw(g, E) {                       // sandy seabed with ripples, caustics, coral and swaying seaweed
+    ground: { h: .11, draw(g, E) {
       const { W, H, GY, unit: u, travel, t } = E, gh = H - GY;
       g.fillStyle = lin(g, 0, GY, 0, H, [[0, '#f2e4b4'], [1, '#c4ab74']]); g.fillRect(0, GY, W, gh);
       g.fillStyle = 'rgba(150,120,70,.18)'; for (let i = 1; i < 4; i++) g.fillRect(0, GY + gh * i / 4, W, Math.max(1, gh * .03));
@@ -407,14 +404,14 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       sync(E);
       const px = pxOf(E), beat = E.bands[1].level;
       const each = (sp, off, fn) => { for (let i = Math.floor((travel - off - 10 * u) / sp); i * sp + off - travel < W + 10 * u; i++) fn(i * sp + off - travel, i); };
-      each(46 * u, 12 * u, (ax, i) => {                  // anemones, each with a pair of clownfish circling it
+      each(46 * u, 12 * u, (ax, i) => {
         const ay = GY + gh * .55;
         g.strokeStyle = '#ff8fc8'; g.lineWidth = Math.max(1, u * .4); g.lineCap = 'round'; g.beginPath();
         for (let k = -3; k <= 3; k++) { const sw = Math.sin(t / 700 + k + i) * u * .6 * sway; g.moveTo(ax + k * u * .45, ay); g.quadraticCurveTo(ax + k * u * .7 + sw, ay - u * 1.5, ax + k * u * .9 + sw * 1.5, ay - u * 2.6); }
         g.stroke();
         for (let j = 0; j < 2; j++) { const a = t / 900 + j * Math.PI + i; drawPix(g, CLOWN, px, ax + Math.cos(a) * u * 2.6 - u, ay - u * 3.5 + Math.sin(a * 2) * u * .6, Math.sin(a) > 0); }
       });
-      each(64 * u, 33 * u, (x, i) => drawPix(g, SEAHORSE, px, x, GY + gh * .3 - u * 5 + Math.sin(t / 900 + i) * u, (i & 1) === 1));   // seahorses bobbing by the coral
+      each(64 * u, 33 * u, (x, i) => drawPix(g, SEAHORSE, px, x, GY + gh * .3 - u * 5 + Math.sin(t / 900 + i) * u, (i & 1) === 1));
       each(120 * u, 80 * u, x => drawPix(g, OCTO[E.bands[3].flash > .5 ? 1 : 0][Math.floor(t / 520) % 2], px, x, GY + gh * .62 - spH(OCTO[0][0], px), false));   // octopus flushes on mid hits
       for (const c of st.crabs) {                        // crabs scuttle sideways, faster with the beat
         swim(c, E, 1 + 2.5 * beat);
@@ -424,7 +421,6 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
   });
 }
 
-// =====================================================================================================
 // Abyssal City: glass domes and towers glowing cyan in the deep dark, marine snow, jellyfish and an anglerfish.
 // Music: jellyfish pulse and jet upward on the bass, the angler's lure flares with the treble, vents throb with the kick.
 {
@@ -464,7 +460,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     kit: { styles: ['ribbon', 'slim', 'grid', 'cols', 'ribbon'], roofs: [null, null, ['antenna', 6], ['spire', 8], ['antenna2', 6], null], tall: .4, shrink: .8, w0: 7, gaps: [.6, 1.6] },
     minF: .3, maxF: .75, noWeather: true, planes: false, roofLights: false, stars: false, moon: false, cloud: CLEAR, rain: CLEAR, fogRGB: '20,80,100',
     sky: [[0, '#06283a'], [.35, '#03131f'], [1, '#00050a']], skyToGround: true,
-    drawSky(g, E) {                                      // one faint god-ray reaching down from far above
+    drawSky(g, E) {
       const { W, GY, t } = E, k = `${W},${GY}`;
       if (st.rk !== k) { st.rk = k; st.ray = lin(g, 0, 0, 0, GY * .8, [[0, 'rgba(120,220,255,.16)'], [1, 'rgba(120,220,255,0)']]); }
       const x = W * (.42 + .04 * Math.sin(t / 9000)), w = W * .07;
@@ -478,11 +474,11 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     drawExtras(g, b, cx, tip, E) {
       if (b.lm) return;
       const u = E.unit, tw = b.tiers[b.tiers.length - 1].w * u, ty = E.GY - b.hU * u, lv = b.level;
-      if (b.dots) eachTier(b, cx, E, (x0, y, w) => {     // bioluminescent studs along each ledge
+      if (b.dots) eachTier(b, cx, E, (x0, y, w) => {
         g.fillStyle = `hsla(${b.hueD},100%,70%,${.35 + .65 * b.flash})`;
         for (let x = x0 + u; x < x0 + w - u * .5; x += u * 2) g.fillRect(x, y - Math.max(1, u * .2), Math.max(1, u * .4), Math.max(1, u * .4));
       });
-      if (b.glass) {                                     // a glass dome glowing from inside
+      if (b.glass) {
         const rx = tw * .5, ry = Math.min(tw * .45, 10 * u);
         glow(g, '60,230,255', cx, ty - ry * .4, rx * 1.3, .2 + .55 * lv);
         g.fillStyle = 'rgba(80,230,255,.13)'; g.beginPath(); g.ellipse(cx, ty, rx, ry, 0, Math.PI, TAU); g.fill();
@@ -491,7 +487,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.strokeStyle = 'rgba(120,240,255,.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx, ty - ry); g.lineTo(cx, ty); g.ellipse(cx, ty, rx * .5, ry, 0, Math.PI, TAU); g.stroke();
       }
     },
-    drawBehind(g, E) {                                   // a whale shark passing far off in the dark
+    drawBehind(g, E) {
       sync(E);
       const s = st.shark; if (!s) return;
       swim(s, E); withAlpha(g, .32, () => drawPix(g, WSHARK, s.px, s.x, s.y + Math.sin(E.t / 4000) * E.unit * 1.5, s.dir < 0));
@@ -499,7 +495,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     drawFront(g, E) {
       sync(E);
       const { W, H, GY, t, dt, unit: u, scrollV } = E;
-      g.fillStyle = 'rgba(200,230,235,.45)';             // marine snow drifting down
+      g.fillStyle = 'rgba(200,230,235,.45)';
       for (const p of st.snow) {
         p.y += u * (.5 + p.s) * dt; p.x += (Math.sin(t / 2000 + p.ph) * u * .3 - scrollV * (.4 + .6 * p.s)) * dt;
         if (p.y > H) { p.y = -2; p.x = Math.random() * W; }
@@ -516,7 +512,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.fillStyle = `rgba(${150 + 105 * wave | 0},220,255,${a})`; g.fillRect(bx - u * .3, by - u * .3, Math.max(1, u * .6), Math.max(1, u * .6));
       }
       g.fillStyle = 'rgba(180,230,255,.06)'; g.strokeStyle = 'rgba(200,240,255,.35)'; g.lineWidth = 1;
-      for (const b of st.bubbles) {                      // empty bubbles rising slowly from the seabed
+      for (const b of st.bubbles) {
         b.y -= b.v * dt; b.x += (Math.sin(t / 1500 + b.ph) * u * .5 - scrollV * .8) * dt;
         if (b.y < -b.r * 2) { b.y = GY + b.r * 2; b.x = Math.random() * W; }
         if (b.x < -20) b.x += W + 40; else if (b.x > W + 20) b.x -= W + 40;
@@ -542,14 +538,14 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         glow(g, rgb, j.x + jw / 2, j.y + jh * .25, jw * 1.2, .3 + .5 * E.bassFlash);
         withAlpha(g, .9, () => drawPix(g, sp, j.px, j.x, j.y, false));
       }
-      const a = st.ang; swim(a, E);                      // the anglerfish and its lure
+      const a = st.ang; swim(a, E);
       const ay = a.y + Math.sin(t / 2200) * u, P = Math.max(1, Math.round(a.px)), lx = a.x + (a.dir < 0 ? (15 - 12) * P : 12 * P) + P / 2, ly = ay + 2.5 * P;
       const lure = .5 + .5 * avg(E.bands, 5, 7) + .4 * E.bands[6].flash;
       glow(g, '160,255,235', lx, ly, u * (2 + 3 * lure), .35 + .5 * lure);
       drawPix(g, a.sp, a.px, a.x, ay, a.dir < 0);
       glow(g, '230,255,250', lx, ly, u * .8, .9);
     },
-    ground: { h: .1, draw(g, E) {                        // dark seabed: rocks, glowing vents and bioluminescent plants
+    ground: { h: .1, draw(g, E) {
       const { W, H, GY, unit: u, travel, t } = E, gh = H - GY, k = `${GY},${H}`;
       if (st.gk !== k) { st.gk = k; st.gg = lin(g, 0, GY, 0, H, [[0, '#0b1a20'], [1, '#010507']]); }
       g.fillStyle = st.gg; g.fillRect(0, GY, W, gh);
@@ -585,13 +581,12 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.fillRect(x - u * .2, by - h - u * .5, Math.max(1, u * .65), Math.max(1, u * .6));
       }
       sync(E);
-      const iso = st.iso; swim(iso, E);                  // a giant isopod plodding along the seabed
+      const iso = st.iso; swim(iso, E);
       drawPix(g, ISOPOD[Math.floor(iso.x / Math.max(1, u * .6)) & 1], iso.px, iso.x, GY + gh * .7 - spH(ISOPOD[0], iso.px), false);
     } },
   });
 }
 
-// =====================================================================================================
 // Aurora Harbor: a snowy, low waterfront of warm-lit houses on a frozen bay under rippling auroras.
 // Music: the aurora curtains brighten, grow and ripple faster with the mids and highs, and flare on hits.
 {
@@ -606,7 +601,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'pairs'], roofs: [['pyramid', 4], ['pyramid', 5], ['pyramid', 3], null, ['pyramid', 6], ['antenna', 4]], tall: .15, shrink: .8, w0: 6, gaps: [.6, 1.2] },
     minF: .15, maxF: .45, weather: 'snow', widgetSky: true,
     sky: [[0, '#01040f'], [.55, '#061430'], [1, '#14304a']], skyToGround: true,
-    drawSky(g, E) {                                      // aurora curtains: vertical glowing strips along wandering ribbons
+    drawSky(g, E) {
       const { W, GY, t, dt, bands } = E;
       const en = .25 + .55 * avg(bands, 3, 5) + .45 * avg(bands, 6, 7);
       st.en += (en - st.en) * Math.min(1, dt * 3);
@@ -632,12 +627,12 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     back: { h: .6, density: .7, body: '#0a1424', win: () => 'rgba(255,190,110,.28)' },
     searchlights: false,
     afterLayout(list) { st.list = list; },
-    drawExtras(g, b, cx, tip, E) {                       // snow caps on the gables
+    drawExtras(g, b, cx, tip, E) {
       if (b.lm || !b.roof || b.roof[0] !== 'pyramid') return;
       const tw = b.tiers[b.tiers.length - 1].w * E.unit, h = b.roof[1] * E.unit, k = .5;
       g.fillStyle = '#e6edf8'; g.beginPath(); g.moveTo(tip[0], tip[1] - .5); g.lineTo(tip[0] - tw / 2 * k, tip[1] + h * k); g.lineTo(tip[0] - tw * .1, tip[1] + h * k * .8); g.lineTo(tip[0] + tw * .05, tip[1] + h * k); g.lineTo(tip[0] + tw / 2 * k, tip[1] + h * k); g.fill();
     },
-    ground: { h: .12, draw(g, E) {                       // snowy shore, then the frozen bay with cracks and soft reflections
+    ground: { h: .12, draw(g, E) {
       const { W, H, GY, unit: u, travel, t } = E, gh = H - GY, shore = gh * .3, iy = GY + shore, ih = gh - shore;
       const k = `${W},${H},${GY}`;
       if (st.ik !== k) {
@@ -652,11 +647,11 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       const ox = ((travel % W) + W) % W;
       g.drawImage(st.ice, -ox, iy, W, ih); g.drawImage(st.ice, W - ox, iy, W, ih);
       withAlpha(g, .1 + .25 * st.en, () => { g.fillStyle = lin(g, 0, iy, 0, H, [[0, 'rgba(80,255,180,.0)'], [.4, 'rgba(80,255,180,.6)'], [1, 'rgba(150,90,255,.0)']]); g.fillRect(0, iy, W, ih); });
-      for (const b of st.list) {                         // warm window light smeared on the ice below each house
+      for (const b of st.list) {
         const x = E.toScreen(b.cx); if (x < -b.wpx || x > W + b.wpx) continue;
         withAlpha(g, .12 + .4 * b.level, () => g.drawImage(sprite('255,180,90'), x - b.wpx * .45, iy - ih * .1, b.wpx * .9, ih * 1.1));
       }
-      const bs = 55 * u;                                  // a few boats frozen in at the quay
+      const bs = 55 * u;
       for (let i = Math.floor((travel - 6 * u) / bs); i * bs - travel < W + 6 * u; i++) {
         if (hash(i, 1, 41) < .4) continue;
         const x = i * bs - travel + hash(i, 2, 41) * bs * .6, y = iy + ih * .35, L = u * (4 + 2 * hash(i, 3, 41));
@@ -665,7 +660,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.fillStyle = '#e6edf8'; g.fillRect(x - L / 2, y - u - Math.max(1, u * .25), L, Math.max(1, u * .25));
         if ((t / 1000 + i) % 3 < 1.5) { g.fillStyle = '#ffcf80'; g.fillRect(x - u * .2, y - u * 5.2, Math.max(1, u * .4), Math.max(1, u * .4)); }
       }
-      g.fillStyle = '#dfe8f4'; g.beginPath(); g.moveTo(0, GY);   // snowy shore with a soft, drifted edge
+      g.fillStyle = '#dfe8f4'; g.beginPath(); g.moveTo(0, GY);
       for (let x = 0; x <= W + 20; x += 20) g.lineTo(x, iy - shore * .15 * (1 + Math.sin((x + travel) / (u * 9)) * .6));
       g.lineTo(W, GY); g.fill();
       g.fillStyle = 'rgba(150,180,220,.35)'; g.fillRect(0, GY + shore * .5, W, shore * .3);
@@ -673,7 +668,6 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
   });
 }
 
-// =====================================================================================================
 // Lunar Colony: domes, habitat modules and antenna towers on a grey cratered plain, Earth hanging in a black sky.
 // Music: landing beacons blink with the beat, dishes sweep faster with the mids, and a big bass hit launches a rocket.
 {
@@ -702,7 +696,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     kit: { styles: ['wide', 'ribbon', 'grid', 'wide'], roofs: [['dome', 5], ['dome', 7], ['antenna', 9], ['antenna2', 8], null, ['dome', 4]], tall: .2, shrink: .72, w0: 7, gaps: [.4, 1.4] },
     minF: .12, maxF: .45, noWeather: true, planes: false, widgetSky: true, stars: true, moon: false, cloud: CLEAR, rain: CLEAR, fogRGB: '120,120,130',
     sky: [[0, '#000000'], [1, '#06070c']],
-    drawSky(g, E) {                                      // Earth, lit from the left
+    drawSky(g, E) {
       const { W, H } = E, R = Math.round(Math.min(W, H) * .065);
       if (st.ek !== R) { st.ek = R; st.earth = earth(R); }
       const d = dpr(), s = st.earth.width / d;
@@ -720,10 +714,10 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     drawExtras(g, b, cx, tip, E) {
       if (b.lm) return;
       const u = E.unit, GY = E.GY, tw = b.tiers[b.tiers.length - 1].w * u, ty = GY - b.hU * u;
-      if (b.roof && b.roof[0] === 'dome') {              // glassy highlight on the domes
+      if (b.roof && b.roof[0] === 'dome') {
         g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(cx - tw * .15, ty - b.roof[1] * u * .55, tw * .14, b.roof[1] * u * .22, -.5, 0, TAU); g.fill();
       }
-      if (b.dish) {                                      // a sweeping radar dish on the roof
+      if (b.dish) {
         const x = cx + tw * .28, y = ty - u * 1.2, a = Math.sin(E.t / 1800 * (1 + avg(E.bands, 2, 4)) + b.dphase) * .7 - Math.PI / 2;
         g.fillStyle = '#8e939b'; g.fillRect(x - Math.max(.5, u * .15), y, Math.max(1, u * .3), u * 1.2);
         g.fillStyle = '#e4e6ea'; g.beginPath(); g.ellipse(x, y, u * 1.6, u * .5, a + Math.PI / 2, 0, Math.PI); g.fill();
@@ -737,7 +731,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.fillStyle = 'rgba(0,0,0,.25)'; for (let x = x0 + u; x < x1; x += u * 1.5) g.fillRect(x, ty2 - u * .7, 1, u * 1.4);
       }
     },
-    ground: { h: .14, draw(g, E) {                       // regolith, craters and landing pads with beacons
+    ground: { h: .14, draw(g, E) {
       const { W, H, GY, unit: u, travel, t } = E, gh = H - GY, k = `${GY},${H}`;
       if (st.gk !== k) { st.gk = k; st.gg = lin(g, 0, GY, 0, H, [[0, '#9a9ca2'], [1, '#4c4e54']]); }
       g.fillStyle = st.gg; g.fillRect(0, GY, W, gh);
@@ -765,11 +759,11 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     } },
     drawTop(g, E) {                                      // the rover and the odd launch stand in front of the ground
       const { W, H, GY, unit: u, t, dt, scrollV } = E, gh = H - GY, py = GY + gh * .35, pads = st.pads || [];
-      const px = pxOf(E, .5);                             // the rover trundling along
+      const px = pxOf(E, .5);
       if (!st.rover || st.key !== keyOf(E)) { st.key = keyOf(E); st.rover = { sp: ROVER, px, dir: 1, v: u * 1.6, par: 1, m: spW(ROVER, px) + 4 * u, x: W * .2 }; st.rk = null; st.smoke = []; }
       const rv = st.rover; swim(rv, E);
       drawPix(g, ROVER, rv.px, rv.x, GY + gh * .55 - spH(ROVER, rv.px) + Math.round(Math.sin(t / 300) * .6), false);
-      if (!st.rk && st.prevBF < .9 && E.bassFlash >= .9 && t - st.last > 18000) {   // big bass hit: launch from a pad on screen
+      if (!st.rk && st.prevBF < .9 && E.bassFlash >= .9 && t - st.last > 18000) {
         const x = pads.find(x => x > W * .1 && x < W * .9) ?? W * .3;
         st.rk = { x, y: py, v: 0 }; st.last = t;
       }

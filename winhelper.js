@@ -118,7 +118,7 @@ public static class CP {
     return "{\"ok\":true}";
   }
 
-  public static void RefreshWallpaper() {                                                    // repaint the normal wallpaper after we leave
+  public static void RefreshWallpaper() {
     var sb = new StringBuilder(520);
     SystemParametersInfo(0x0073, 520, sb, 0);                                                 // SPI_GETDESKWALLPAPER
     SystemParametersInfo(0x0014, 0, sb.ToString(), 0x2);                                      // SPI_SETDESKWALLPAPER, broadcast change

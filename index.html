@@ -35,7 +35,6 @@
   #panel .row2 input{flex:1;min-width:0;font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:3px 5px}
   #panel .presets button{padding:3px 8px;font-size:inherit}
   html.widget #panel .body{gap:5px;padding-top:5px}
-  /* desktop widget (Electron, ?widget=1): transparent, draggable top bar, compact buttons */
   html.widget,html.widget body{background:transparent}
   html.widget #ui{top:0;left:0;right:0;padding:4px;gap:4px;background:#05060cdd;border-radius:8px;-webkit-app-region:drag}
   html.widget #ui button{-webkit-app-region:no-drag;padding:3px 6px;font-size:11px}
@@ -48,16 +47,13 @@
   html.app #output{display:block}
   html.app #share{display:none}
   html.widget #output{max-width:150px;padding:2px 4px;font-size:11px}
-  /* settings window: just the panel, full size and easy to read */
   html.settings canvas,html.settings #ui{display:none}
   html.settings,html.settings body{overflow:auto;background:#0b0e1c}
   html.settings #panel{position:static;width:auto;max-height:none;border:0;border-radius:0;padding:14px 16px 24px;font-size:14px;gap:10px;background:none}
   html.settings #panel select,html.settings #panel input[type=color],html.settings #panel .row2 input{padding:6px;font-size:14px}
   html.settings #panel summary{padding:9px 10px;font-size:15px}
   html.settings #panel .body{gap:12px;padding:12px 4px 6px}
-  /* live wallpaper: no controls at all */
   html.wall #ui,html.wall #panel{display:none !important}
-  /* control center (?control=1): the app's own window, controls only, in the settings panel's style */
   #cc,#ccOpen{display:none}
   html.app #ccOpen:not([hidden]){display:inline-block}
   html.control canvas,html.control #ui,html.control #panel{display:none !important}
@@ -222,7 +218,7 @@ let savedView;                                           // span mode forces the
 function loadSettings(json) {
   S = { ...DEF, ...JSON.parse(json) };
   if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
-  if (S.preset === 'Background') S.preset = 'Lounge';    // the built-in preset's old name
+  if (S.preset === 'Background') S.preset = 'Lounge';
   savedView = S.view; if (spanMode) S.view = 'tour';
 }
 try { loadSettings(stored); } catch { loadSettings('{}'); }
@@ -233,10 +229,10 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(spanMode ? {
 // One style per building, so every building keeps the same kind of window top to bottom.
 const STY = {
   grid:   { cw: 2,   ch: 2,   ww: .5,  wh: .55 },          // square windows
-  tall:   { cw: 1.6, ch: 2.6, ww: .4,  wh: .7 },           // tall narrow
-  wide:   { cw: 3,   ch: 1.8, ww: .8,  wh: .45 },          // wide, short
+  tall:   { cw: 1.6, ch: 2.6, ww: .4,  wh: .7 },
+  wide:   { cw: 3,   ch: 1.8, ww: .8,  wh: .45 },
   ribbon: { cw: 0,   ch: 1.6, ww: 1,   wh: .4 },           // one glass strip per floor
-  pairs:  { cw: 1.5, ch: 2.2, ww: .6,  wh: .6, skip: 3 },  // windows in pairs
+  pairs:  { cw: 1.5, ch: 2.2, ww: .6,  wh: .6, skip: 3 },
   slim:   { cw: 1.2, ch: 1.5, ww: .45, wh: .5 },           // dense, small (tall towers)
   cols:   { cw: 1.4, ch: 3.5, ww: .35, wh: .85 },          // vertical slits
 };
@@ -252,13 +248,13 @@ function latticeTower({ hw, top, decks, arches, ant }) {
     for (let y = 0; y <= top; y += .5) g.lineTo(hw(y), -y);
     for (let y = top; y >= 0; y -= .5) g.lineTo(-hw(y), -y);
     g.closePath();
-    for (const [aw, ah, ay] of arches) {                 // arch openings between the legs
+    for (const [aw, ah, ay] of arches) {
       g.moveTo(aw, -ay); g.quadraticCurveTo(aw, -ay - ah * 1.3, 0, -ay - ah); g.quadraticCurveTo(-aw, -ay - ah * 1.3, -aw, -ay); g.closePath();
     }
     g.fill('evenodd');
     for (const [y, w, th] of decks) g.fillRect(-w, -y - th, 2 * w, th);
     g.fillRect(-ant[2], -ant[1], ant[2] * 2, ant[1] - ant[0]);
-    if (L.edge) {                                        // criss-cross girders
+    if (L.edge) {
       g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
       for (let y = 0; y < top - 2; y += 2.5) {
         const a = hw(y), b = hw(y + 2.5);
@@ -266,7 +262,7 @@ function latticeTower({ hw, top, decks, arches, ant }) {
       }
       g.stroke();
     }
-    for (let y = 1; y < top; y += 1.6) {                 // lattice lights
+    for (let y = 1; y < top; y += 1.6) {
       g.fillStyle = L.win(L.lit(y)); const w = hw(y);
       for (const k of [.9, .62, .35]) for (const s of [-1, 1]) {
         const x = s * w * k; if (!inArch(x, y)) g.fillRect(x - .22, -y - .22, .44, .44);
@@ -285,65 +281,65 @@ const LM = {
   needle: { w: 15, h: 72, draw(g, L) {
     const hw = y => y < 30 ? .9 + 4.6 * (1 - y / 30) ** 2 : .9 + 1.6 * ((y - 30) / 16) ** 2;
     g.strokeStyle = g.fillStyle = L.body; g.lineWidth = .7; g.beginPath();
-    for (const s of [-1, 1]) { g.moveTo(s * hw(0), 0); for (let y = 1; y <= 46; y++) g.lineTo(s * hw(y), -y); }   // hourglass legs
+    for (const s of [-1, 1]) { g.moveTo(s * hw(0), 0); for (let y = 1; y <= 46; y++) g.lineTo(s * hw(y), -y); }
     g.stroke();
-    g.fillRect(-.6, -46, 1.2, 46);                       // core
-    g.fillRect(-2.4, -14.6, 4.8, .8);                    // lower platform ring
-    g.beginPath();                                       // saucer + roof
+    g.fillRect(-.6, -46, 1.2, 46);
+    g.fillRect(-2.4, -14.6, 4.8, .8);
+    g.beginPath();
     [[-2.5, -46], [-7.2, -49.6], [-6.4, -50.8], [-5, -51.2], [-1.4, -54], [1.4, -54], [5, -51.2], [6.4, -50.8], [7.2, -49.6], [2.5, -46]]
       .forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
     g.fill();
-    g.beginPath(); g.moveTo(-.6, -54); g.lineTo(0, -72); g.lineTo(.6, -54); g.fill();   // spire
+    g.beginPath(); g.moveTo(-.6, -54); g.lineTo(0, -72); g.lineTo(.6, -54); g.fill();
     if (L.edge) { g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath(); g.moveTo(-7.2, -49.6); g.lineTo(7.2, -49.6); g.moveTo(-5, -51.2); g.lineTo(5, -51.2); g.stroke(); }
-    for (let y = 1; y < 45; y += 2) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.3, -y - .6, .6, .6); }   // elevator lights climbing the core
-    g.fillStyle = L.win(L.lit(47.5));                    // lights under the saucer
+    for (let y = 1; y < 45; y += 2) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.3, -y - .6, .6, .6); }
+    g.fillStyle = L.win(L.lit(47.5));
     for (let i = 0; i <= 6; i++) { const f = i / 6; for (const s of [-1, 1]) g.fillRect(s * (2.5 + 4.5 * f) - .2, -46 - 3.5 * f - .2, .4, .4); }
-    g.fillStyle = L.win(L.lit(50));                      // restaurant windows
+    g.fillStyle = L.win(L.lit(50));
     for (let x = -6.5; x < 6.4; x += .9) g.fillRect(x, -50.6, .55, .7);
   } },
   bigben: { w: 9, h: 63, draw(g, L) {
     g.fillStyle = L.body;
-    g.fillRect(-3, -36, 6, 36);                          // shaft
-    g.fillRect(-3.7, -44.5, 7.4, 8.5);                   // clock stage
-    g.fillRect(-3.9, -45.3, 7.8, .8);                    // cornice
-    g.fillRect(-3.2, -50, 6.4, 4.7);                     // belfry
-    g.beginPath(); g.moveTo(-3.6, -50); g.lineTo(0, -60.5); g.lineTo(3.6, -50); g.fill();   // spire
-    for (const x of [-3.6, -1.6, 1.6, 3.6]) { g.beginPath(); g.moveTo(x - .45, -50); g.lineTo(x, -53.5); g.lineTo(x + .45, -50); g.fill(); }   // pinnacles
-    g.fillRect(-.12, -63, .24, 2.6);                     // finial
-    if (L.edge) {                                        // stone pilasters and ledges
+    g.fillRect(-3, -36, 6, 36);
+    g.fillRect(-3.7, -44.5, 7.4, 8.5);
+    g.fillRect(-3.9, -45.3, 7.8, .8);
+    g.fillRect(-3.2, -50, 6.4, 4.7);
+    g.beginPath(); g.moveTo(-3.6, -50); g.lineTo(0, -60.5); g.lineTo(3.6, -50); g.fill();
+    for (const x of [-3.6, -1.6, 1.6, 3.6]) { g.beginPath(); g.moveTo(x - .45, -50); g.lineTo(x, -53.5); g.lineTo(x + .45, -50); g.fill(); }
+    g.fillRect(-.12, -63, .24, 2.6);
+    if (L.edge) {
       g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
       for (const x of [-3, -1.5, 1.5, 3]) { g.moveTo(x, 0); g.lineTo(x, -36); }
       for (let y = 6; y < 36; y += 6) { g.moveTo(-3, -y); g.lineTo(3, -y); }
       g.rect(-3.7, -44.5, 7.4, 8.5); g.stroke();
     }
-    for (let y = 3; y < 34; y += 3.4) { g.fillStyle = L.win(L.lit(y)); for (const x of [-2.25, -.25, 1.75]) g.fillRect(x, -y - 2, .5, 2); }   // shaft slits
-    g.fillStyle = L.win(Math.max(L.lit(40), .2));        // clock face, always softly lit
+    for (let y = 3; y < 34; y += 3.4) { g.fillStyle = L.win(L.lit(y)); for (const x of [-2.25, -.25, 1.75]) g.fillRect(x, -y - 2, .5, 2); }
+    g.fillStyle = L.win(Math.max(L.lit(40), .2));
     g.beginPath(); g.arc(0, -40.2, 2.6, 0, 7); g.fill();
     g.strokeStyle = L.body; g.lineWidth = .25; g.beginPath();
     g.moveTo(0, -40.2); g.lineTo(0, -42.2); g.moveTo(0, -40.2); g.lineTo(1.3, -40.2); g.stroke();
-    g.fillStyle = L.win(L.lit(47.5));                    // belfry arches
+    g.fillStyle = L.win(L.lit(47.5));
     for (const x of [-2.1, -.7, .7, 2.1]) { g.fillRect(x - .35, -48.6, .7, 2.4); g.beginPath(); g.arc(x, -48.6, .35, Math.PI, 0); g.fill(); }
   } },
   chrysler: { w: 13, h: 100, draw(g, L) {
     g.fillStyle = L.body;
-    g.fillRect(-6.5, -24, 13, 24);                       // base block
-    g.fillRect(-5, -58, 10, 34);                         // main shaft
-    g.fillRect(-4, -64, 8, 6);                           // setback below the crown
-    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(s * 5, -58); g.lineTo(s * 6.2, -57); g.lineTo(s * 5, -56); g.fill(); }   // eagle gargoyles
-    const arches = [];                                   // the terraced sunburst crown: stacked arches, each narrower
+    g.fillRect(-6.5, -24, 13, 24);
+    g.fillRect(-5, -58, 10, 34);
+    g.fillRect(-4, -64, 8, 6);
+    for (const s of [-1, 1]) { g.beginPath(); g.moveTo(s * 5, -58); g.lineTo(s * 6.2, -57); g.lineTo(s * 5, -56); g.fill(); }
+    const arches = [];
     for (let i = 0; i < 6; i++) arches.push({ w: 4 - i * .6, y: -64 - i * 2.4 });
     for (const a of arches) { g.beginPath(); g.ellipse(0, a.y, a.w, 3, 0, Math.PI, 2 * Math.PI); g.fill(); }
-    g.beginPath(); g.moveTo(-.7, -76); g.lineTo(0, -100); g.lineTo(.7, -76); g.fill();   // needle spire
+    g.beginPath(); g.moveTo(-.7, -76); g.lineTo(0, -100); g.lineTo(.7, -76); g.fill();
     if (L.edge) {
       g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath();
       for (const x of [-5, -2.5, 2.5, 5]) { g.moveTo(x, -24); g.lineTo(x, -58); }
       g.moveTo(-6.5, -24); g.lineTo(6.5, -24); g.stroke();
     }
-    for (let y = 1.5; y < 57; y += 2.2) {                // windows
+    for (let y = 1.5; y < 57; y += 2.2) {
       g.fillStyle = L.win(L.lit(y)); const hw = y < 24 ? 5.6 : 4.2;
       for (let x = -hw; x <= hw - .5; x += 1.4) g.fillRect(x, -y - 1, .5, 1);
     }
-    for (const a of arches) {                            // the famous triangle windows in each arch
+    for (const a of arches) {
       g.fillStyle = L.win(Math.max(L.lit(-a.y), .25));
       for (let k = -2; k <= 2; k++) {
         const ang = Math.PI * 1.5 + k * .45, x = Math.cos(ang) * a.w * .72, y = a.y + Math.sin(ang) * 2.1;
@@ -353,14 +349,14 @@ const LM = {
   } },
   empire: { w: 15, h: 108, draw(g, L) {
     g.fillStyle = L.body;
-    g.fillRect(-7.5, -10, 15, 10);                       // five-storey base
-    g.fillRect(-5.5, -64, 11, 54);                       // main shaft
-    g.fillRect(-1.6, -64, 3.2, 54.5);                    // centre bay standing slightly proud
-    g.fillRect(-4.5, -68, 9, 4); g.fillRect(-3.5, -72, 7, 4); g.fillRect(-2.6, -76, 5.2, 4);   // the setbacks
-    g.fillRect(-1.8, -84, 3.6, 8);                       // crown tower
-    g.fillRect(-.9, -92, 1.8, 8); g.fillRect(-.5, -98, 1, 6);   // mooring mast
-    g.beginPath(); g.moveTo(-.4, -98); g.lineTo(0, -108); g.lineTo(.4, -98); g.fill();   // antenna
-    for (let y = 11; y < 63; y += 2) {                   // tall paired windows between piers
+    g.fillRect(-7.5, -10, 15, 10);
+    g.fillRect(-5.5, -64, 11, 54);
+    g.fillRect(-1.6, -64, 3.2, 54.5);
+    g.fillRect(-4.5, -68, 9, 4); g.fillRect(-3.5, -72, 7, 4); g.fillRect(-2.6, -76, 5.2, 4);
+    g.fillRect(-1.8, -84, 3.6, 8);
+    g.fillRect(-.9, -92, 1.8, 8); g.fillRect(-.5, -98, 1, 6);
+    g.beginPath(); g.moveTo(-.4, -98); g.lineTo(0, -108); g.lineTo(.4, -98); g.fill();
+    for (let y = 11; y < 63; y += 2) {
       g.fillStyle = L.win(L.lit(y));
       for (let x = -5; x < 4.8; x += 1.25) if (Math.abs(x + .3) > 1.2) g.fillRect(x, -y - 1.3, .45, 1.3);
     }
@@ -368,14 +364,14 @@ const LM = {
     for (const [y, w] of [[-79, 3], [-82, 3], [-88, 1.4]]) g.fillRect(-w / 2, y, w, 1);
   } },
   hancock: { w: 15, h: 104, draw(g, L) {
-    const hw = y => 7.5 - 2.5 * y / 76;                  // tapers from bottom to top
+    const hw = y => 7.5 - 2.5 * y / 76;
     g.fillStyle = L.body; g.beginPath(); g.moveTo(-7.5, 0); g.lineTo(-5, -76); g.lineTo(5, -76); g.lineTo(7.5, 0); g.fill();
-    g.fillRect(-2.9, -104, .6, 28); g.fillRect(2.3, -100, .6, 24);   // twin antennas
+    g.fillRect(-2.9, -104, .6, 28); g.fillRect(2.3, -100, .6, 24);
     for (let y = 1; y < 75; y += 1.6) {
       g.fillStyle = L.win(L.lit(y)); const w = hw(y) - .6;
       for (let x = -w; x < w - .3; x += 1) g.fillRect(x, -y - .8, .5, .7);
     }
-    g.strokeStyle = '#26272f'; g.lineWidth = .55; g.beginPath();   // the giant X-braces: the Hancock's signature, so always drawn
+    g.strokeStyle = '#26272f'; g.lineWidth = .55; g.beginPath();   // the Hancock's signature, so always drawn
     for (let y = 0; y < 76; y += 15.2) {
       const a = hw(y), b = hw(y + 15.2);
       g.moveTo(-a, -y); g.lineTo(b, -y - 15.2); g.moveTo(a, -y); g.lineTo(-b, -y - 15.2);
@@ -384,12 +380,12 @@ const LM = {
     g.stroke();
   } },
   burjarab: { w: 14, h: 62, draw(g, L) {
-    g.fillStyle = L.body; g.beginPath();                 // the sail: straight mast on the right, billowing curve on the left
+    g.fillStyle = L.body; g.beginPath();
     g.moveTo(4, 0); g.lineTo(4, -54); g.quadraticCurveTo(-9, -40, -6, 0); g.fill();
-    g.fillRect(3.6, -62, .8, 8);                         // mast tip
-    g.beginPath(); g.ellipse(-4.6, -40, 2.4, .5, 0, 0, 7); g.fill();   // helipad
+    g.fillRect(3.6, -62, .8, 8);
+    g.beginPath(); g.ellipse(-4.6, -40, 2.4, .5, 0, 0, 7); g.fill();
     g.fillRect(-3, -40, 2.4, .5);
-    for (let s = .03; s < .95; s += .03) {               // floors fanning across the sail, following its curved edge
+    for (let s = .03; s < .95; s += .03) {
       const y = 2 * (1 - s) * s * 40 + s * s * 54, xl = (1 - s) ** 2 * -6 + 2 * (1 - s) * s * -9 + s * s * 4 + .6;
       g.fillStyle = L.win(L.lit(y));
       for (let x = xl; x < 3.4; x += .9) g.fillRect(x, -y - .6, .5, .5);
@@ -402,7 +398,7 @@ const LM = {
     for (let y = 0; y <= 42; y += .5) g.lineTo(hw(y), -y);
     for (let y = 42; y >= 0; y -= .5) g.lineTo(-hw(y), -y);
     g.fill();
-    for (let y = 1; y < 40; y += 1.4) {                  // windows, skipping the dark spiral bands
+    for (let y = 1; y < 40; y += 1.4) {                  // skipping the dark spiral bands
       g.fillStyle = L.win(L.lit(y)); const w = hw(y + .6) - .6;
       for (let x = -w; x < w - .4; x += .9) if (((x + y * .6) % 4 + 4) % 4 > 1.2) g.fillRect(x, -y - .9, .55, .8);
     }
@@ -590,7 +586,7 @@ function renderBack() {
     if (show) for (const dx of tour && x + w > backW ? [0, -backW] : [0]) {   // the tile's last building also starts it, so it wraps without a seam
       bg.fillStyle = tour ? '#000' : tb.body;
       bg.fillRect(x + dx, top, w, h);
-      if (ant) bg.fillRect(x + dx + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);   // the odd antenna
+      if (ant) bg.fillRect(x + dx + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);
       for (const [wx, wy, c] of wins) {
         bg.fillStyle = tour ? 'rgba(255,255,255,.28)' : (tb.win && tb.win(c)) || 'rgba(150,160,220,.28)';
         bg.fillRect(wx + dx, wy, cw * .46, fh * .5);
@@ -606,7 +602,7 @@ function geom(h, T, s) {
   const gh = T.ground ? Math.round(h * T.ground.h * (widget ? 5 / 7 : 1))   // a little lower in the widget
     : s.ground === 'none' ? 0 : Math.max(widget ? 6 : 9, Math.round(h * (widget ? .045 : .032)));
   const waterH = !T.ground && s.ground.endsWith('Water') ? Math.max(4, Math.round(h * .022)) : 0;
-  const wallH = waterH && gh ? Math.max(3, Math.round(h * .012)) : 0;   // retaining wall between street/park and river
+  const wallH = waterH && gh ? Math.max(3, Math.round(h * .012)) : 0;
   return { GH: gh, WY: h - waterH, GY: h - waterH - wallH - gh };
 }
 const tourMaxH = () => Math.max(...Object.values(CITIES).map(c => specH(c.b)));
@@ -671,7 +667,7 @@ function layout() {
   } else {                                               // made-up cities: Neon City and the themed ones
     const span = W / unit - 2, mh = GY * theme.maxF / unit - 8;
     let spec;
-    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, theme.minF, theme.kit), span); startU = (W / unit - specW(spec) - 1.6) / 2; }   // centre including the 3D side face
+    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, theme.minF, theme.kit), span); startU = (W / unit - specW(spec) - 1.6) / 2; }
     else spec = gen(r, span * 4, mh, theme.minF, theme.kit);
     segs.push({ theme: key, spec });
   }
@@ -697,8 +693,8 @@ function layout() {
         });
         Object.assign(b, { st, roof, floors, hU: tiers.reduce((a, t) => a + t[1], 0),
           blink: (roof && ['antenna', 'antenna2', 'spire', 'crown'].includes(roof[0])) || floors > 34,
-          search: floors > 25 && r() < .2 });             // about 1 in 5 tall buildings carries a searchlight
-        if (T.decorate) T.decorate(b, r, E);             // theme extras: neon signs, holograms…
+          search: floors > 25 && r() < .2 });
+        if (T.decorate) T.decorate(b, r, E);
       }
       buildings.push(b);
       xU += wU;
@@ -1006,8 +1002,8 @@ function updateBands(t, dt) {
   for (let k = 0; k < NB; k++) {
     const b = bands[k], v = bandInput(k, t);
     b.level += (v - b.level) * (v > b.level ? atk : rel);
-    if (v > b.avg * 1.35 + .12 && t - b.hit > 120 + 350 * calm) { b.flash = 1; b.hit = t; }   // a hit in this band
-    else b.flash *= Math.pow(.25 + .6 * calm, dt);       // then a slow fade (slower when calm)
+    if (v > b.avg * 1.35 + .12 && t - b.hit > 120 + 350 * calm) { b.flash = 1; b.hit = t; }
+    else b.flash *= Math.pow(.25 + .6 * calm, dt);
     b.avg += (v - b.avg) * Math.min(1, dt * 2.5);
   }
 }
@@ -1126,14 +1122,14 @@ function drawBuilding(g, b, cx, t) {
       }
       if (outline) { g.strokeStyle = outline; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }   // e.g. Synthwave's neon outlines
       else if (edge && !widget) { g.strokeStyle = edge; g.lineWidth = 1; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }
-      if (weatherNow() === 'snow') { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }   // snow on ledges
+      if (weatherNow() === 'snow') { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
     tip = b.roof ? (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u)) : [cx, y];
   }
-  if (T.drawExtras) T.drawExtras(g, b, cx, tip, E);     // theme extras: signs, holograms, the bat light…
-  if (S.search && b.search && T.searchlights) {         // searchlight: a soft beam sweeping slowly from the roof
+  if (T.drawExtras) T.drawExtras(g, b, cx, tip, E);
+  if (S.search && b.search && T.searchlights) {
     const ang = -Math.PI / 2 + Math.sin(t / 2600 + b.hue) * .55, len = H * 1.3, spread = .045;
     const grad = g.createLinearGradient(tip[0], tip[1], tip[0] + Math.cos(ang) * len, tip[1] + Math.sin(ang) * len);
     grad.addColorStop(0, `rgba(255,255,235,${.22 * S.bright / 100})`); grad.addColorStop(1, 'rgba(255,255,235,0)');
@@ -1141,9 +1137,9 @@ function drawBuilding(g, b, cx, t) {
     g.lineTo(tip[0] + Math.cos(ang - spread) * len, tip[1] + Math.sin(ang - spread) * len);
     g.lineTo(tip[0] + Math.cos(ang + spread) * len, tip[1] + Math.sin(ang + spread) * len); g.fill();
   }
-  if (S.roofLights && b.blink && T.roofLights) {                        // aircraft warning light
+  if (S.roofLights && b.blink && T.roofLights) {
     let on;
-    if (S.blinkBeat) on = bassFlash;                    // flash on bass hits, then fade
+    if (S.blinkBeat) on = bassFlash;
     else {
       const period = 3.2 - S.blinkSpeed / 100 * 2.8;    // 3.2 s (slow) .. 0.4 s (fast)
       on = ((t / 1000 + (S.blinkSync ? 0 : b.hue / 360 * period)) % period) < period * .15 ? 1 : 0;
@@ -1210,7 +1206,7 @@ function drawSky(g, t, dt) {
   const moonA = S.skyBody && clearSky ? skyShare(W * .82, moony) : 0;
   if (moonA > .01) {
     g.globalAlpha = moonA; g.fillStyle = '#ece8d6'; g.beginPath(); g.arc(W * .82, H * .16, m * .045, 0, 7); g.fill();
-    g.fillStyle = '#060716'; g.beginPath(); g.arc(W * .82 + m * .018, H * .16 - m * .008, m * .04, 0, 7); g.fill();   // crescent
+    g.fillStyle = '#060716'; g.beginPath(); g.arc(W * .82 + m * .018, H * .16 - m * .008, m * .04, 0, 7); g.fill();
     g.globalAlpha = 1;
   }
   // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Noir City.
@@ -1251,18 +1247,18 @@ function drawGround(g, dt, scrollV) {
   const u = unit, gh = GH, park = S.ground === 'parkWater';
   if (park) {
     g.fillStyle = '#050d08'; g.fillRect(0, GY, W, gh);
-    g.fillStyle = 'rgba(200,190,150,.08)'; g.fillRect(0, GY + gh * .55, W, Math.max(1, gh * .12));   // footpath
-    const sp = 9 * u;                                     // trees, spaced irregularly
+    g.fillStyle = 'rgba(200,190,150,.08)'; g.fillRect(0, GY + gh * .55, W, Math.max(1, gh * .12));
+    const sp = 9 * u;
     for (let k = Math.floor((travel - 6 * u) / sp); k * sp - travel < W + 6 * u; k++) {
       const x = k * sp - travel + hash(k, 1, 2) * sp * .6, r = (1.4 + hash(k, 3, 4) * 1.2) * u, top = GY + gh * .3;
       g.fillStyle = '#04080a'; g.fillRect(x - u * .2, top - u * 1.2, u * .4, u * 1.4);
       g.fillStyle = '#030907'; g.beginPath(); g.arc(x, top - u * 1.2 - r * .6, r, 0, 7); g.arc(x + r * .6, top - u * 1.2 - r * .3, r * .7, 0, 7); g.fill();
     }
   } else {
-    g.fillStyle = '#121219'; g.fillRect(0, GY, W, gh * .2);                       // sidewalk
-    g.fillStyle = '#08080c'; g.fillRect(0, GY + gh * .2, W, gh * .8);             // asphalt
-    g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(0, GY + gh * .2, W, 1);    // curb
-    g.fillStyle = 'rgba(230,190,90,.4)';                                           // dashed centre line
+    g.fillStyle = '#121219'; g.fillRect(0, GY, W, gh * .2);
+    g.fillStyle = '#08080c'; g.fillRect(0, GY + gh * .2, W, gh * .8);
+    g.fillStyle = 'rgba(255,255,255,.07)'; g.fillRect(0, GY + gh * .2, W, 1);
+    g.fillStyle = 'rgba(230,190,90,.4)';
     const dash = 3 * u, mid = GY + gh * .6;
     for (let x = -((travel % (dash * 2)) + dash * 2); x < W; x += dash * 2) g.fillRect(x, mid - .5, dash, Math.max(1, gh * .04));
     // cars: far lane drives left (taillights toward us), near lane drives right
@@ -1283,7 +1279,6 @@ function drawGround(g, dt, scrollV) {
       g.fillStyle = '#ff2a2a'; g.fillRect(bx - .75, cy - ch * .75, 1.5, Math.max(1, ch * .3));
     }
   }
-  // street lamps along the sidewalk, each with a warm pool of light
   const sp = 24 * u, lampH = Math.max(gh * 1.4, 4.5 * u), glow = sprite('255,200,120');
   for (let k = Math.floor(travel / sp) - 1; k * sp - travel < W + sp; k++) {
     const x = k * sp - travel + sp / 2, ly = GY + gh * .15 - lampH;
@@ -1291,11 +1286,11 @@ function drawGround(g, dt, scrollV) {
     g.globalAlpha = .45; g.drawImage(glow, x - u * 3, ly - u * 3, u * 6, u * 6); g.globalAlpha = 1;
     g.fillStyle = 'rgba(255,200,120,.07)'; g.beginPath(); g.ellipse(x, GY + gh * .5, u * 4, gh * .4, 0, 0, 7); g.fill();
   }
-  if (WY - GY > gh) {                                    // retaining wall between the street (or park) and the river
+  if (WY - GY > gh) {
     const wy = GY + gh, wh = WY - wy;
     g.fillStyle = '#16161d'; g.fillRect(0, wy, W, wh);
-    g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(0, wy, W, 1);            // coping along the top
-    g.fillStyle = '#0d0d12';                                                   // block joints
+    g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(0, wy, W, 1);
+    g.fillStyle = '#0d0d12';
     const bw = 4 * u;
     for (let x = -(travel % bw); x < W; x += bw) g.fillRect(x, wy + 1, 1, wh);
     g.fillRect(0, wy + wh * .55, W, 1);
@@ -1327,7 +1322,7 @@ function drawWater(g, t) {
   const tint = g.createLinearGradient(0, WY, 0, H);
   tint.addColorStop(0, 'rgba(4,6,18,.45)'); tint.addColorStop(1, 'rgba(4,6,18,.85)');
   g.fillStyle = tint; g.fillRect(0, WY, W, wh);
-  g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(0, WY, W, 1);   // waterline
+  g.fillStyle = 'rgba(255,255,255,.08)'; g.fillRect(0, WY, W, 1);
 }
 
 // Weather particles, in screen space.
@@ -1455,7 +1450,7 @@ function frame(t) {
   calm = 1 - S.react / 100;
   updateBands(t, dt);
 
-  for (const b of buildings) {                           // each building follows its band
+  for (const b of buildings) {
     const band = bands[b.band];
     b.level = band.level; b.flash = band.flash;
     const litF = litFloors(b);                           // peak: hold briefly, then drop one floor at a time, same speed everywhere
@@ -1500,7 +1495,7 @@ function frame(t) {
   g.clearRect(0, 0, W, H);
   if (!widget) drawSky(g, t, dt);                      // the widget never draws a sky: the desktop shows behind
   else perStretch(g, paintSky, T => T.widgetSky);       // unless the theme asks for its sky there
-  if (S.back && backW) {                                // back skyline, sliding at half speed for depth
+  if (S.back && backW) {
     // cut: trimming with destination-in, which clears everything outside what's drawn, so each wrap copy keeps to its own span
     const row = (g, cut) => { for (const x of tour ? [-bo, backW - bo] : [-bo]) {
       if (cut) { g.save(); g.beginPath(); g.rect(x, 0, backW, GY); g.clip(); }
@@ -1525,7 +1520,6 @@ function frame(t) {
   perStretch(g, (g, T) => T.drawTop(g, E), T => T.drawTop);
   drawWeather(g, t, dt);
 
-  // City name fades in near the top as each skyline scrolls into the middle of the tour.
   // One name at a time: the nearest city's, fully bright when its centre is at screen centre, fading to
   // nothing exactly halfway to the next city, where the next name starts fading in.
   if (near && S.captions) {
@@ -1539,7 +1533,6 @@ function frame(t) {
   const tf = S.drift && !widget ? `translate(${Math.round(Math.sin(t / 190000) * 3)}px,${Math.round(Math.sin(t / 140000) * 2)}px)` : '';
   if (tf !== cv.style.transform) cv.style.transform = tf;   // only touch the style when it actually moves
 
-  // The City line itself, with a label, while the controls are showing.
   if (lineShown()) {
     const y = Math.round(GY - cityLineY()) + .5;
     g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1; g.setLineDash([6, 5]);
@@ -1651,7 +1644,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     const sw = s.vert ? 1.6 * u : s.len * u, sh = s.vert ? s.len * u : 1.6 * u;
     const x = Math.min(bx + s.fx * Math.max(0, b.wpx - sw), bx + b.wpx - sw * .6), y = Math.max(top + unit, GY - b.hU * unit * s.fy - sh);
     const col = `hsl(${s.hue},100%,${45 + 25 * glow}%)`;
-    g.fillStyle = `hsla(${s.hue},100%,60%,${.16 * glow})`; g.fillRect(x - u * .6, y - u * .6, sw + u * 1.2, sh + u * 1.2);   // halo
+    g.fillStyle = `hsla(${s.hue},100%,60%,${.16 * glow})`; g.fillRect(x - u * .6, y - u * .6, sw + u * 1.2, sh + u * 1.2);
     g.fillStyle = '#07020b'; g.fillRect(x, y, sw, sh);
     g.strokeStyle = col; g.lineWidth = Math.max(1, u * .15); g.strokeRect(x + .5, y + .5, sw - 1, sh - 1);
     g.fillStyle = col;
@@ -1673,7 +1666,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       const bh = h * .85 * Math.min(1, sp[i] * 1.1);
       g.fillStyle = `hsla(${190 + i * 11},100%,65%,.75)`; g.fillRect(x + i * bw + bw * .15, y + h - bh, bw * .7, bh);
     }
-    g.fillStyle = 'rgba(255,255,255,.06)'; for (let sy = y; sy < y + h; sy += 3) g.fillRect(x, sy, w, 1);   // scanlines
+    g.fillStyle = 'rgba(255,255,255,.06)'; for (let sy = y; sy < y + h; sy += 3) g.fillRect(x, sy, w, 1);
     g.strokeStyle = 'rgba(120,240,255,.6)'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
   };
   // Flying cars: little light pairs gliding between the towers, some behind (layer 0), some in front (layer 1).
@@ -1690,7 +1683,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       const front = f.x + f.dir * u * 1.1, back = f.x - f.dir * u * 1.1;
       const tr = g.createLinearGradient(back, 0, back - f.dir * u * 8, 0);
       tr.addColorStop(0, `hsla(${f.hue},100%,60%,.35)`); tr.addColorStop(1, `hsla(${f.hue},100%,60%,0)`);
-      g.fillStyle = tr; g.fillRect(Math.min(back, back - f.dir * u * 8), f.y - u * .12, u * 8, u * .24);   // light trail
+      g.fillStyle = tr; g.fillRect(Math.min(back, back - f.dir * u * 8), f.y - u * .12, u * 8, u * .24);
       g.fillStyle = '#0a0a12'; g.fillRect(f.x - u * 1.1, f.y - u * .3, u * 2.2, u * .6);
       g.fillStyle = `hsl(${f.hue},100%,75%)`; g.fillRect(front - u * .2, f.y - u * .15, u * .4, u * .3);
       g.fillStyle = '#ff3355'; g.fillRect(back - u * .15, f.y - u * .12, u * .3, u * .24);
@@ -1698,7 +1691,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
   };
   registerTheme('cyber', { name: 'Cyberpunk', kit: KITS.cyber, minF: .4, maxF: .9, weather: 'rain',
     sky: [[0, '#05010d'], [.7, '#1d0630'], [1, '#3a0a48']],
-    drawSky(g, { W, GY }) {                              // neon haze over the horizon
+    drawSky(g, { W, GY }) {
       const hz = g.createLinearGradient(0, GY * .55, 0, GY);
       hz.addColorStop(0, 'rgba(255,40,170,0)'); hz.addColorStop(1, 'rgba(255,40,170,.16)');
       g.fillStyle = hz; g.fillRect(0, GY * .55, W, GY * .45);
@@ -1706,7 +1699,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     stars: false, moon: false, cloud: 'rgba(120,40,140,.25)', rain: 'rgba(200,170,255,.3)', fogRGB: '200,90,210',
     side: '#100a18', top: '#1c1228',
     back: { h: 1.1, density: 1, body: '#120a20', win: c => c < .5 ? 'rgba(255,90,210,.25)' : 'rgba(80,220,255,.25)' },
-    decorate(b, r) {                                     // neon signs and the odd hologram billboard
+    decorate(b, r) {
       b.signs = [];
       const n = r() < .65 ? 1 + (r() < .4 ? 1 : 0) : 0;
       for (let i = 0; i < n; i++) b.signs.push({ vert: r() < .65, fy: .2 + .6 * r(), fx: r(), len: 5 + 7 * r(), hue: NEON[Math.floor(r() * NEON.length)], seed: Math.floor(r() * 1e6) });
@@ -1801,13 +1794,13 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       const r = Math.min(W, H) * .19, cx = W / 2, cy = GY * .42;   // high enough to clear the towers
       const sun = g.createLinearGradient(0, cy - r, 0, cy + r);
       sun.addColorStop(0, '#ffe66d'); sun.addColorStop(.55, '#ff8a5c'); sun.addColorStop(1, '#ff3d8b');
-      g.fillStyle = 'rgba(255,90,150,.18)'; g.beginPath(); g.arc(cx, cy, r * 1.25, 0, 7); g.fill();   // haze
+      g.fillStyle = 'rgba(255,90,150,.18)'; g.beginPath(); g.arc(cx, cy, r * 1.25, 0, 7); g.fill();
       g.fillStyle = sun; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
-      g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();   // stripes cut through the lower half, growing thicker
+      g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();
       g.fillStyle = sky;
       for (let i = 0; i < 8; i++) g.fillRect(cx - r, cy - r * .05 + i * r * .15, r * 2, 1 + i * r * .02);
       g.restore();
-      g.fillStyle = '#1a0634'; g.beginPath(); g.moveTo(0, GY);  // mountains along the horizon
+      g.fillStyle = '#1a0634'; g.beginPath(); g.moveTo(0, GY);
       const pts = [];
       for (let x = 0; x <= W + 40; x += 40) pts.push([x, GY - (hash(x, 9, 9) * .5 + .2 * Math.abs(Math.sin(x / 210))) * GY * .2]);
       pts.forEach(([x, y]) => g.lineTo(x, y)); g.lineTo(W, GY); g.fill();
@@ -1816,7 +1809,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     moon: false, cloud: 'rgba(255,90,170,.16)', fogRGB: '255,110,200',
     side: '#12062a', top: '#1e0a3c', outline: b => b.id % 2 ? 'rgba(255,79,216,.8)' : 'rgba(62,240,255,.8)',
     back: { h: .6, density: .6, body: '#170a2c', win: c => c < .5 ? 'rgba(255,80,200,.28)' : 'rgba(80,230,255,.28)' },
-    ground: { h: .14, draw(g, { W, H, GY, dt, travel }) {   // neon perspective grid rolling toward you
+    ground: { h: .14, draw(g, { W, H, GY, dt, travel }) {
       const gh = H - GY, vx = W / 2, step = W * .08;
       gridT = (gridT + dt * .35) % 1;
       const fl = g.createLinearGradient(0, GY, 0, H);
@@ -1826,7 +1819,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       for (let i = 0; i < 12; i++) { const y = GY + gh * ((i + gridT) / 12) ** 2; g.moveTo(0, y); g.lineTo(W, y); }
       for (let k = -24; k <= 24; k++) { const xb = vx + k * step - (travel % step); g.moveTo(vx + (xb - vx) * .08, GY); g.lineTo(xb, H); }
       g.stroke();
-      g.fillStyle = 'rgba(255,79,216,.9)'; g.fillRect(0, GY, W, 1.5);   // glowing horizon line
+      g.fillStyle = 'rgba(255,79,216,.9)'; g.fillRect(0, GY, W, 1.5);
     } },
   });
 }

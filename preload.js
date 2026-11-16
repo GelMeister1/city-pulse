@@ -12,7 +12,6 @@ contextBridge.exposeInMainWorld('cityPulse', {
   sources: () => ipcRenderer.invoke('sources'),          // [{ id, name, kind: 'output'|'input', selected }]
   setSource: id => ipcRenderer.invoke('set-source', id), // shared by all windows
   onSources: cb => listen('sources', cb),
-  // Control Center
   control: {
     open: () => ipcRenderer.send('open-control'),
     state: () => ipcRenderer.invoke('control-state'),    // { fullMode, wallMode, wallScreen, widgetShown, screens: [{ index, label, w, h }] }

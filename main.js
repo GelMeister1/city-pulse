@@ -1,5 +1,4 @@
-// City Pulse app: a tray icon, the desktop widget, a full-screen view, a settings window and an
-// experimental live wallpaper. The visualizer itself is index.html; windows differ only by URL flags.
+// The visualizer itself is index.html; windows differ only by URL flags.
 const { app, BrowserWindow, screen, session, ipcMain, Tray, Menu, nativeImage, dialog, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -12,7 +11,7 @@ const { autoUpdater } = require('electron-updater');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // Chromium stops painting windows it thinks are covered; the live wallpaper sits behind the desktop, so it always looks covered.
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
-if (!app.requestSingleInstanceLock()) app.quit();           // one City Pulse at a time; a second launch shows the widget
+if (!app.requestSingleInstanceLock()) app.quit();
 
 // The only page this app ever shows. Anything else is refused. (file: URLs have origin "null",
 // so compare the URL with its query and hash cut off.)
@@ -28,8 +27,8 @@ let prefs = {};
 const savePrefs = () => { try { fs.writeFileSync(prefsFile(), JSON.stringify(prefs)); } catch {} };
 
 let tray, widget, control;
-let fulls = [], walls = [];                                  // full-screen and wallpaper windows (one per screen in multi-screen modes)
-const settings = {};                                         // one settings window per target (and screen)
+let fulls = [], walls = [];                                  // one per screen in multi-screen modes
+const settings = {};
 
 // No navigating away and no pop-ups, in every window. All new windows are opened by this file.
 app.on('web-contents-created', (_, wc) => {
@@ -47,7 +46,7 @@ function createWidget() {
     skipTaskbar: true, title: 'City Pulse', icon: ICON, webPreferences: PREFS,
   });
   load(widget, { widget: '1' });
-  widget.on('close', e => { if (!app.quitting) { e.preventDefault(); widget.hide(); } });   // ✕ tucks it into the tray
+  widget.on('close', e => { if (!app.quitting) { e.preventDefault(); widget.hide(); } });
 }
 
 // Screens left to right, as arranged in Windows. "Screen 1" is the left-most.
@@ -65,9 +64,9 @@ function windowsFor(mode, oneDisplay) {
   return list.map((d, i) => ({ d, query: { mode, screen: String(i), screens: screensParam(list) } }));
 }
 
-// Full screen. In 'one' mode it opens on whichever screen the widget is on: drag the widget to the TV, press full screen.
+// In 'one' mode it opens on whichever screen the widget is on: drag the widget to the TV, press full screen.
 function openFull(mode = prefs.fullMode || 'one') {
-  if (alive(fulls).length) return closeFull();               // pressing it again closes it
+  if (alive(fulls).length) return closeFull();
   prefs.fullMode = mode; savePrefs();
   const home = displayOf(widget);
   fulls = windowsFor(mode, home).map(({ d, query }) => {
@@ -90,11 +89,10 @@ function openFull(mode = prefs.fullMode || 'one') {
 function closeFull() {
   globalShortcut.unregister('Escape');
   alive(fulls).forEach(w => w.close()); fulls = [];
-  [...Object.values(settings), control].forEach(w => { if (w && !w.isDestroyed()) w.setAlwaysOnTop(false); });   // back to normal windows
+  [...Object.values(settings), control].forEach(w => { if (w && !w.isDestroyed()) w.setAlwaysOnTop(false); });
   updateTray();
 }
 
-// Settings window for the widget, full screen or wallpaper (optionally one screen of a per-screen setup); changes apply live.
 // It opens on the screen it's about: that screen for per-screen settings, otherwise the widget's screen.
 async function openSettings(target = 'widget', screenIdx = null) {
   // Per-screen settings only show while that view runs as "own city each". If it's running another way, offer to switch.
@@ -119,7 +117,6 @@ async function openSettings(target = 'widget', screenIdx = null) {
 // Settings must sit above full screen, which otherwise covers it and swallows the clicks.
 function raise(w) { if (alive(fulls).length) w.setAlwaysOnTop(true, 'screen-saver'); w.show(); w.focus(); }
 
-// Experimental live wallpaper: full-screen views parented behind the desktop icons.
 // prefs.wall = { mode: 'off' | 'one' | 'per' | 'span', display: id (for 'one') }
 async function setWallpaper(cfg) {
   if (alive(walls).length) {
@@ -141,7 +138,7 @@ async function setWallpaper(cfg) {
         await setWallpaper({ mode: 'off' });
         tray.displayBalloon?.({ title: 'City Pulse', content: 'Live wallpaper isn’t available on this version of Windows.' });
       } else {
-        w.showInactive();                                 // tell Chromium it's visible so it actually draws (it was black before)
+        w.showInactive();                                 // tell Chromium it's visible so it actually draws
         await win32.wallpaper(hwnd, rel);                 // and re-seat it in case showing moved it
       }
     });
@@ -150,7 +147,6 @@ async function setWallpaper(cfg) {
   updateTray();
 }
 
-// ---- updates: one installed copy that keeps itself current ----
 // The installed app checks GitHub Releases at startup and every 6 hours, downloads a newer version in the
 // background, and installs it over itself the next time City Pulse quits (or right away from the tray).
 let update = { state: 'idle' };                            // idle | checking | downloading | ready | latest | error
@@ -187,7 +183,6 @@ function updateMenuItem() {
   }
 }
 
-// ---- uninstall: runs the app's own uninstaller (also in Windows Settings → Apps) ----
 async function uninstall() {
   const exe = path.join(path.dirname(app.getPath('exe')), `Uninstall ${app.getName()}.exe`);
   if (!app.isPackaged || !fs.existsSync(exe)) return dialog.showMessageBox({ message: 'Uninstall City Pulse from Windows Settings → Apps.' });
@@ -204,7 +199,7 @@ function updateTray() {
   const wall = prefs.wall || { mode: 'off' }, fullOpen = alive(fulls).length > 0, fm = prefs.fullMode || 'one';
   const screenName = (d, i) => `Screen ${i + 1}: ${d.label || 'display'} (${d.bounds.width}×${d.bounds.height})`;
   const perScreen = target => list.map((d, i) => ({ label: `${screenName(d, i)}…`, click: () => openSettings(target, i) }));
-  if (control && !control.isDestroyed()) control.webContents.send('control-state', controlState());   // keep the Control Center in step
+  if (control && !control.isDestroyed()) control.webContents.send('control-state', controlState());
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Control Center…', click: openControl },
     { label: shown ? 'Hide widget' : 'Show widget', click: () => { shown ? widget.hide() : widget.show(); updateTray(); } },
@@ -241,7 +236,7 @@ function updateTray() {
   ]));
 }
 
-// ---- audio: one native capture, sent to every window that draws a city ----
+// One native capture, sent to every window that draws a city.
 // prefs.source = { id, input }: id '' = the Windows default output (followed if it changes).
 let stopCapture = null, captureKey = '', defaultOut = null, retry = null;
 const cityWindows = () => [widget, ...fulls, ...walls].filter(w => w && !w.isDestroyed());
@@ -269,18 +264,16 @@ async function broadcastSources() {
 }
 async function setSource(id) {
   const match = (await sourceList()).find(s => s.id === (id || ''));
-  if (!match) return false;                              // only devices that actually exist
+  if (!match) return false;
   prefs.source = { id: match.id, input: match.kind === 'input' }; savePrefs();
   startCapture(); broadcastSources();
   return true;
 }
-// Follow the Windows default output when that's the source, and keep the device lists fresh.
 async function watchDefault() {
   const v = await win32.volume();
   if (v && v.id !== defaultOut) { defaultOut = v.id; if (!(prefs.source || {}).id) startCapture(); broadcastSources(); }
 }
 
-// ---- Control Center: a persistent window for everything desktop-wide ----
 function openControl() {
   if (control && !control.isDestroyed()) { control.show(); return control.focus(); }
   const d = displayOf(widget), wa = d.workArea, b = prefs.controlBounds;
@@ -331,7 +324,7 @@ ipcMain.on('control-settings', (e, target, idx) => {
   if (fromUs(e) && ['widget', 'full', 'wall'].includes(target)) openSettings(target, Number.isInteger(idx) ? idx : null);
 });
 
-app.on('second-instance', () => { widget?.show(); openControl(); updateTray(); });   // launching again opens the Control Center
+app.on('second-instance', () => { widget?.show(); openControl(); updateTray(); });
 
 app.whenReady().then(() => {
   try { prefs = JSON.parse(fs.readFileSync(prefsFile(), 'utf8')); } catch { prefs = {}; }
@@ -344,20 +337,18 @@ app.whenReady().then(() => {
   createWidget();
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
   tray.setToolTip('City Pulse');
-  tray.on('click', openControl);                         // the tray icon opens the Control Center; right-click for the quick menu
+  tray.on('click', openControl);
   startCapture();
   watchDefault(); setInterval(watchDefault, 2000);
   widget.on('show', updateTray); widget.on('hide', updateTray);
   updateTray();
-  if (prefs.wallpaper && !prefs.wall) prefs.wall = { mode: 'one', display: prefs.wallpaper };   // setting from 0.2.x
+  if (prefs.wallpaper && !prefs.wall) prefs.wall = { mode: 'one', display: prefs.wallpaper };
   if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall);
   setupUpdates();
-  // Screens added or removed: rebuild the menu, and re-lay multi-screen wallpapers across the new arrangement.
   const rearranged = () => { updateTray(); if (prefs.wall && ['per', 'span'].includes(prefs.wall.mode)) setWallpaper(prefs.wall); };
   screen.on('display-added', rearranged); screen.on('display-removed', rearranged);
 });
 
-// Leaving: take the wallpaper down and repaint the normal one, then stop the helper.
 app.on('before-quit', e => {
   app.quitting = true;
   stopCapture?.(); clearTimeout(retry);

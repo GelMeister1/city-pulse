@@ -47,7 +47,7 @@
       g.strokeStyle = `rgba(255,176,80,${.3 + .35 * b.level})`; g.lineWidth = Math.max(1, u * .28); g.beginPath();   // gilded eave trim, warming with the building's band
       for (const [ry, tw, rh, ov] of dims) trimPath(g, cx, ry, tw, rh, ov);
       g.stroke();
-      const [ry, , rh, , rw] = dims[n - 1], ridge = ry - rh;   // ridge horns, and a finial on the towers
+      const [ry, , rh, , rw] = dims[n - 1], ridge = ry - rh;
       g.fillStyle = ROOF; g.beginPath();
       for (const s of [-1, 1]) { const x = cx + s * rw / 2; g.moveTo(x - s * u * .5, ridge + .5); g.lineTo(x + s * u * .7, ridge - u * .9); g.lineTo(x + s * u * .2, ridge + .5); }
       if (b.tower) { g.rect(cx - u * .18, ridge - u * 4, u * .36, u * 4); g.rect(cx - u * .6, ridge - u * 1.4, u * 1.2, u * .4); g.rect(cx - u * .45, ridge - u * 2.4, u * .9, u * .35); }
@@ -83,7 +83,7 @@
         for (let i = 0; i < L.length; i += 2) { g.moveTo(L[i] + rx, L[i + 1]); g.ellipse(L[i], L[i + 1], rx, ry, 0, 0, 7); }
         g.fill();
       }
-      g.fillStyle = '#2a0c06'; g.beginPath();              // dark caps top and bottom
+      g.fillStyle = '#2a0c06'; g.beginPath();
       for (const L of [bodies, golds]) for (let i = 0; i < L.length; i += 2) {
         g.rect(L[i] - rx * .6, L[i + 1] - ry - 1, rx * 1.2, Math.max(1, ry * .3)); g.rect(L[i] - rx * .6, L[i + 1] + ry * .8, rx * 1.2, Math.max(1, ry * .3));
       }
@@ -95,7 +95,7 @@
       sky: [[0, '#06061f'], [.55, '#151245'], [.85, '#2e1846'], [1, '#4a2238']],
       drawSky(g, { W, H, GY, S, bassFlash }) {
         const m = Math.min(W, H);
-        if (S.skyBody) {                                   // a big warm moon
+        if (S.skyBody) {
           const r = m * .075, x = W * .68, y = GY * .22, pa = g.globalAlpha;
           g.globalAlpha = pa * (.3 + .15 * bassFlash); g.drawImage(sprite('255,215,160'), x - r * 3.5, y - r * 3.5, r * 7, r * 7); g.globalAlpha = pa;
           g.fillStyle = '#f7e6c2'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
@@ -103,7 +103,7 @@
           for (const [dx, dy, rr] of [[-.3, -.2, .22], [.25, .3, .16], [.35, -.35, .1]]) { g.moveTo(x + (dx + rr) * r, y + dy * r); g.arc(x + dx * r, y + dy * r, rr * r, 0, 7); }
           g.fill();
         }
-        const hz = g.createLinearGradient(0, GY * .5, 0, GY);   // soft warm haze from all the lanterns
+        const hz = g.createLinearGradient(0, GY * .5, 0, GY);
         hz.addColorStop(0, 'rgba(255,120,60,0)'); hz.addColorStop(1, 'rgba(255,120,60,.24)');
         g.fillStyle = hz; g.fillRect(0, GY * .5, W, GY * .5);
       },
@@ -129,7 +129,7 @@
         const { a, sag, seed, low } = b.str, u = E.unit, acx = cx + a.cx - b.cx;
         const [x0, y0] = tie(a, acx, 1, b.hU, u, E.GY), [x1, y1] = tie(b, cx, -1, a.hU, u, E.GY);
         if (x1 - x0 > u * 2) drawString(g, x0, y0, x1, y1, sag * u, seed, E);
-        if (low) {                                         // a second, lower string across the alley
+        if (low) {
           const h = Math.min(a.hU, b.hU) * .55, lx0 = acx + halfAt(a, h) * u, lx1 = cx - halfAt(b, h) * u;
           if (lx1 - lx0 > u * 3) drawString(g, lx0, E.GY - h * u, lx1, E.GY - h * u, (sag * .7 + .5) * u, seed + 3, E);
         }
@@ -153,7 +153,7 @@
         x.fillStyle = `rgba(${b > .9 ? '255,225,190' : b > .8 ? '190,215,255' : '255,255,255'},${.15 + .6 * b * (1 - sy / GY)})`;
         x.fillRect(sx, sy, b > .97 ? 2 : 1, b > .97 ? 2 : 1);
       }
-      for (let i = 0, n = Math.round(W * 2.2); i < n; i++) {   // the galaxy: a soft diagonal river of tiny stars
+      for (let i = 0, n = Math.round(W * 2.2); i < n; i++) {
         const p = Math.random(), off = (Math.random() + Math.random() + Math.random() - 1.5) * GY * .09;
         x.fillStyle = `rgba(230,225,255,${.08 + .25 * Math.random()})`;
         x.fillRect(p * W, GY * (.05 + .45 * p) + off, 1, 1);
@@ -179,7 +179,7 @@
           for (const [dx, dy, rr] of CRATERS) { g.moveTo(x + dx * r + rr * r, y + dy * r); g.arc(x + dx * r, y + dy * r, rr * r, 0, 7); }
           g.fill();
         }
-        const hz = g.createLinearGradient(0, GY * .62, 0, GY);   // warm dusty haze on the horizon
+        const hz = g.createLinearGradient(0, GY * .62, 0, GY);
         hz.addColorStop(0, 'rgba(255,170,110,0)'); hz.addColorStop(1, `rgba(255,160,100,${.22 + .1 * bands[3].level})`);
         g.fillStyle = hz; g.fillRect(0, GY * .62, W, GY * .38);
       },
@@ -188,8 +188,8 @@
       win: (c, b) => ({ h: b.hue < 180 ? 36 : 175, s: 90, m: c.m }),   // each building stays amber or turquoise
       back: { h: .8, density: .7, body: '#16101e', win: c => c < .6 ? 'rgba(255,170,70,.25)' : 'rgba(70,220,210,.22)' },
       decorate(b, r) {
-        if (!b.roof && r() < .75) b.parapet = true;        // crenellated rooftops
-        if (r() < .3) b.mina = { side: r() < .5 ? -1 : 1, h: 9 + 12 * r() };   // a slender tower rising from the roof
+        if (!b.roof && r() < .75) b.parapet = true;
+        if (r() < .3) b.mina = { side: r() < .5 ? -1 : 1, h: 9 + 12 * r() };
       },
       drawExtras(g, b, cx, tip, E) {
         const u = E.unit, top = topT(b), tw = top.w * u, y = E.GY - b.hU * u;
@@ -199,23 +199,23 @@
         if (b.mina) {
           const { side, h } = b.mina, mx = cx + side * (tw / 2 - u * 1.1), mh = h * u;
           g.rect(mx - u * .8, y - mh, u * 1.6, mh + .5);
-          g.rect(mx - u * 1.3, y - mh * .72, u * 2.6, u * .6);   // balcony
-          g.moveTo(mx + u * .8, y - mh); g.ellipse(mx, y - mh, u * .8, u * 1.3, 0, Math.PI, 2 * Math.PI);   // small cap
-          g.rect(mx - u * .1, y - mh - u * 3, u * .2, u * 1.8);   // plain needle
+          g.rect(mx - u * 1.3, y - mh * .72, u * 2.6, u * .6);
+          g.moveTo(mx + u * .8, y - mh); g.ellipse(mx, y - mh, u * .8, u * 1.3, 0, Math.PI, 2 * Math.PI);
+          g.rect(mx - u * .1, y - mh - u * 3, u * .2, u * 1.8);
           mt = [mx, y, mh];
         }
         g.fill();
-        if (b.roof && b.roof[0] === 'dome') {              // moonlight catching the dome from the left
+        if (b.roof && b.roof[0] === 'dome') {
           g.strokeStyle = 'rgba(255,225,180,.22)'; g.lineWidth = Math.max(1, u * .25); g.beginPath();
           g.ellipse(cx, y, tw / 2 - .5, b.roof[1] * u - .5, 0, Math.PI * 1.05, Math.PI * 1.45); g.stroke();
         }
-        if (mt) {                                          // lit slits up the slender tower
+        if (mt) {
           const [mx, by, mh] = mt, c = b.id % 2 ? 36 : 175;
           g.fillStyle = `hsl(${c},90%,${18 + 50 * b.level}%)`;
           for (let k = 1; k <= 3; k++) g.fillRect(mx - u * .2, by - mh * (.2 + k * .17), u * .4, u * 1.1);
         }
       },
-      drawFront(g, E) {                                    // heat shimmer: the bottom of the skyline wobbles like a mirage
+      drawFront(g, E) {
         if (E.widget) return;
         const { W, GY, unit: u, t } = E, cv = E.scene, sc = cv.width / W, band = Math.round(Math.max(8, GY * .06));
         const bw = cv.width, bh = Math.ceil(band * sc);
@@ -227,7 +227,7 @@
         hz.addColorStop(0, 'rgba(255,175,110,0)'); hz.addColorStop(1, 'rgba(255,175,110,.12)');
         g.fillStyle = hz; g.fillRect(0, GY - band * 2, W, band * 2);
       },
-      ground: { h: .12, draw(g, E) {                       // rolling dunes and wind-blown sand
+      ground: { h: .12, draw(g, E) {
         const { W, H, GY, unit: u, travel, dt, scrollV } = E, gh = H - GY;
         g.fillStyle = '#2c1f14'; g.fillRect(0, GY, W, gh);
         const dune = (base, amp, par, col) => {
@@ -240,7 +240,7 @@
         };
         dune(.3, .16, .7, '#3b2a1b');
         dune(.62, .2, 1, '#1a110a');
-        g.fillStyle = 'rgba(255,215,160,.08)'; g.fillRect(0, GY, W, Math.max(1, gh * .06));   // moonlit flat at the foot of the towers
+        g.fillStyle = 'rgba(255,215,160,.08)'; g.fillRect(0, GY, W, Math.max(1, gh * .06));
         const n = Math.round(W / 12);
         if (sand.length !== n) sand = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random(), s: Math.random() }));
         const first = tick(E), wind = u * (5 + 14 * E.bands[6].level);
@@ -287,7 +287,7 @@
       for (const s of ships) {
         const px = Math.max(1, Math.round(u * .45 * s.k)), sw = 23 * px;
         if (first) { s.x += (s.dir * s.v - scrollV * .2) * dt; if (s.x > W + sw) s.x = -sw * 2; else if (s.x < -sw * 2) s.x = W + sw; }
-        if (s === ships[0]) {                              // the lead ship sweeps a searchlight over the city
+        if (s === ships[0]) {
           const bx = s.x + sw / 2, by = s.y + 11 * px, ang = Math.PI / 2 + Math.sin(t / 2600) * .45, len = GY * .9, sp = .08;
           const gr = g.createLinearGradient(bx, by, bx + Math.cos(ang) * len, by + Math.sin(ang) * len);
           gr.addColorStop(0, `rgba(255,225,160,${.14 + .18 * E.bands[3].level})`); gr.addColorStop(1, 'rgba(255,225,160,0)');
@@ -327,12 +327,12 @@
       minF: .3, maxF: .78,
       sky: [[0, '#0c0812'], [.5, '#24162a'], [.8, '#3e2a30'], [1, '#5c402c']],
       drawSky(g, { W, H, GY, S }) {
-        if (S.skyBody) {                                   // a hazy moon through the smog
+        if (S.skyBody) {
           const r = Math.min(W, H) * .05, x = W * .6, y = GY * .18, pa = g.globalAlpha;
           g.globalAlpha = pa * .35; g.drawImage(sprite('255,200,140'), x - r * 4, y - r * 4, r * 8, r * 8);
           g.globalAlpha = pa * .75; g.fillStyle = '#e6c48c'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.globalAlpha = pa;
         }
-        const hz = g.createLinearGradient(0, GY * .45, 0, GY);   // sepia smog settling over the rooftops
+        const hz = g.createLinearGradient(0, GY * .45, 0, GY);
         hz.addColorStop(0, 'rgba(200,140,90,0)'); hz.addColorStop(1, 'rgba(200,140,90,.22)');
         g.fillStyle = hz; g.fillRect(0, GY * .45, W, GY * .55);
       },
@@ -350,7 +350,7 @@
       drawExtras(g, b, cx, tip, E) {
         const u = E.unit, GY = E.GY;
         let y = GY;
-        g.fillStyle = '#6a4422'; g.beginPath();            // riveted brass bands
+        g.fillStyle = '#6a4422'; g.beginPath();
         const rivets = [];
         for (const tr of b.tiers) {
           const tw = tr.w * u, x0 = cx - tw / 2;
@@ -370,7 +370,7 @@
         }
         if (b.stacks) {
           const t = E.t, hit = E.bassFlash > .9 && t - b.lastPuff > 220, idle = t > b.nextIdle;
-          for (const s of b.stacks) {                      // tall smokestacks with copper rings and a glowing throat
+          for (const s of b.stacks) {
             const sx = cx + s.fx * (tw - s.w * u), sw = s.w * u, sh = s.h * u, st = ty - sh;
             g.fillStyle = '#1b120b'; g.fillRect(sx - sw / 2, st, sw, sh + 1); g.fillRect(sx - sw * .7, st, sw * 1.4, u * .7);
             g.fillStyle = '#9a6430'; g.fillRect(sx - sw / 2, st + sh * .35, sw, Math.max(1, u * .3)); g.fillRect(sx - sw / 2, st + sh * .7, sw, Math.max(1, u * .3));
@@ -383,7 +383,7 @@
           if (idle) b.nextIdle = t + 1200 + Math.random() * 1600;
           if (b.puffs.length > 45) b.puffs.splice(0, b.puffs.length - 45);
           const spr = puffSpr(), pa = g.globalAlpha;
-          for (let i = b.puffs.length - 1; i >= 0; i--) {  // soft steam rising and fading
+          for (let i = b.puffs.length - 1; i >= 0; i--) {
             const p = b.puffs[i]; p.age += E.dt;
             if (p.age > p.life) { b.puffs.splice(i, 1); continue; }
             p.y += (2.2 + p.age) * E.dt; p.x += p.vx * E.dt;
@@ -449,7 +449,7 @@
       kit: { styles: ['wide', 'grid', 'ribbon', 'wide'], roofs: [null], tall: .12, shrink: .85, w0: 9, gaps: [.8, 2] },
       minF: .2, maxF: .5,
       sky: [[0, '#05030f'], [.55, '#140a2a'], [1, '#3a0f3c']],
-      drawSky(g, { W, GY, bands }) {                       // the glow of the signs on the night sky
+      drawSky(g, { W, GY, bands }) {
         const hz = g.createLinearGradient(0, GY * .35, 0, GY);
         hz.addColorStop(0, 'rgba(255,60,170,0)'); hz.addColorStop(.7, 'rgba(120,70,220,.12)'); hz.addColorStop(1, `rgba(255,80,170,${.26 + .12 * bands[0].level})`);
         g.fillStyle = hz; g.fillRect(0, GY * .35, W, GY * .65);
@@ -468,7 +468,7 @@
         if (tick(E)) chase += E.dt * (3 + 16 * E.bands[1].level + 10 * E.bassFlash);   // the bulbs chase faster on a strong beat
         const u = E.unit, sg = b.sg, top = topT(b), tw = top.w * u, ty = E.GY - b.hU * u, sp = Math.max(3, u * 1.15);
         const a = (.55 + .45 * b.level) * (hash(b.id, Math.floor(E.t / 90), 3) < .012 ? .15 : 1);   // the odd tube flicker
-        if (sg.kind === 'marquee') {                       // rooftop billboard on legs
+        if (sg.kind === 'marquee') {
           const pw = Math.max(7 * u, tw * .92), ph = sg.ph * u, px = cx - pw / 2, py = ty - u * 1.4 - ph;
           g.fillStyle = '#100a14'; g.fillRect(cx - pw * .3, py + ph, u * .4, u * 1.5); g.fillRect(cx + pw * .3 - u * .4, py + ph, u * .4, u * 1.5);
           g.fillStyle = '#0b0710'; g.fillRect(px, py, pw, ph);
@@ -507,18 +507,18 @@
         }
         flushBulbs(g, E);
       },
-      ground: { h: .16, draw(g, E) {                       // wide boulevard: sidewalk, lanes, light streaks and palms
+      ground: { h: .16, draw(g, E) {
         const { W, H, GY, unit: u, travel, t } = E, gh = H - GY;
         g.fillStyle = '#17111f'; g.fillRect(0, GY, W, gh * .14);
         g.fillStyle = '#09070e'; g.fillRect(0, GY + gh * .14, W, gh * .86);
-        const rf = g.createLinearGradient(0, GY + gh * .14, 0, H);   // sign glow on the wet-look tarmac
+        const rf = g.createLinearGradient(0, GY + gh * .14, 0, H);
         rf.addColorStop(0, 'rgba(255,70,180,.16)'); rf.addColorStop(1, 'rgba(80,200,255,.05)');
         g.fillStyle = rf; g.fillRect(0, GY + gh * .14, W, gh * .86);
         g.fillStyle = 'rgba(255,120,210,.35)'; g.fillRect(0, GY + gh * .14, W, 1);
         g.fillStyle = 'rgba(255,220,120,.45)';
         const dash = 3 * u;
         for (const ly of [.42, .72]) for (let x = -(travel % (dash * 2)) - dash * 2; x < W; x += dash * 2) g.fillRect(x, GY + gh * ly, dash, Math.max(1, gh * .025));
-        const streak = (lane, dir, col, n) => {            // cruising cars as light streaks
+        const streak = (lane, dir, col, n) => {
           g.fillStyle = col;
           for (let k = 0; k < n; k++) {
             const span = W + 20 * u, x = ((hash(k, lane, 7) * span + dir * t / 1000 * u * (6 + 4 * hash(k, lane, 8)) - travel) % span + span) % span - 10 * u;
@@ -528,7 +528,7 @@
         const n = Math.max(2, Math.round(W / (u * 22)));
         streak(.3, -1, 'rgba(255,60,60,.75)', n); streak(.56, -1, 'rgba(255,60,60,.6)', n);
         streak(.84, 1, 'rgba(255,245,210,.8)', n); streak(.62, 1, 'rgba(255,245,210,.6)', n);
-        const spc = 26 * u, ph = 13 * u;                   // palm silhouettes along the sidewalk
+        const spc = 26 * u, ph = 13 * u;
         g.strokeStyle = g.fillStyle = '#050309';
         for (let k = Math.floor((travel - spc) / spc); k * spc - travel < W + spc; k++) {
           const x = k * spc - travel + hash(k, 3, 3) * spc * .4, by = GY + gh * .12, lean = (hash(k, 4, 4) - .5) * 4 * u, tx = x + lean, ty = by - ph * (.8 + .3 * hash(k, 5, 5));
