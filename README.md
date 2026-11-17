@@ -12,13 +12,15 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 
 ![Chicago skyline with some buildings lit and others dark on the beat](docs/beat.png)
 
-| Shanghai | Noir City in the rain |
+| Shanghai: Floors with random colors, during a loud song | Noir City in the rain: one solid color |
 | --- | --- |
-| ![Shanghai skyline with the Pearl Tower and lit skyscrapers](docs/shanghai.png) | ![Noir City in grey rain with muted colored windows](docs/noir.png) |
+| ![Shanghai skyline with buildings filled almost to the top in random colors](docs/shanghai.png) | ![Noir City in grey rain with every window in one dark teal](docs/noir.png) |
+
+**Pan view:** the city keeps going past the screen edges. Drag or scroll to choose your part of it.
 
 | Abyssal City | Aero |
 | --- | --- |
-| ![Underwater city with glass domes, glowing jellyfish and fish](docs/abyssal.png) | ![Bright daytime city of white glass towers, blue sky and bubbles](docs/aero.png) |
+| ![Underwater city with glass domes and jellyfish, buildings running off both edges](docs/abyssal.png) | ![Bright daytime city of white glass towers, buildings running off both edges](docs/aero.png) |
 
 ## Features
 
