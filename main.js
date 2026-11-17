@@ -30,7 +30,6 @@ const savePrefs = () => { try { fs.writeFileSync(prefsFile(), JSON.stringify(pre
 
 let tray, widget, control;
 let fulls = [], walls = [];                                  // one per screen in multi-screen modes
-const settings = {};
 
 // No navigating away and no pop-ups, in every window. All new windows are opened by this file.
 app.on('web-contents-created', (_, wc) => {
@@ -94,32 +93,17 @@ function openFull(mode = prefs.fullMode || 'one') {
 function closeFull() {
   globalShortcut.unregister('Escape');
   alive(fulls).forEach(w => w.close()); fulls = [];
-  [...Object.values(settings), control].forEach(w => { if (w && !w.isDestroyed()) w.setAlwaysOnTop(false); });
+  [control].forEach(w => { if (w && !w.isDestroyed()) w.setAlwaysOnTop(false); });
   updateTray();
 }
 
-// It opens on the screen it's about: that screen for per-screen settings, otherwise the widget's screen.
-async function openSettings(target = 'widget', screenIdx = null) {
-  // A screen's own settings: its city and everything while "own city each" runs; just its lights while the tour runs
-  // across all screens. While one screen runs, offer to switch.
-  const running = target === 'full' ? (alive(fulls).length ? prefs.fullMode : null) : target === 'wall' ? (prefs.wall || {}).mode : null;
-  const span = screenIdx !== null && running === 'span';
-  if (screenIdx !== null && running === 'one') {
-    const what = target === 'full' ? 'Full screen' : 'The wallpaper';
-    const parent = alive(fulls)[0];                       // attach to full screen so the question can't hide behind it
-    const { response } = await dialog.showMessageBox(...(parent ? [parent] : []), { type: 'question', buttons: ['Switch to own city each', 'Just edit settings'], defaultId: 0, cancelId: 1,
-      message: `${what} is showing one screen right now.`,
-      detail: 'Per-screen settings apply when every screen shows its own city. Switch so your changes show?' });
-    if (response === 0) target === 'full' ? (closeFull(), openFull('per')) : await setWallpaper({ mode: 'per' });
-  }
-  const id = screenIdx === null ? target : `${target}:${span ? 'span' : ''}${screenIdx}`, open = settings[id];
-  if (open && !open.isDestroyed()) return raise(open);
-  const d = screenIdx === null ? displayOf(widget) : (screensLR()[screenIdx] || displayOf(widget));
-  const wa = d.workArea, ww = 380, wh = Math.min(760, wa.height - 40);
-  const w = settings[id] = new BrowserWindow({ width: ww, height: wh, minWidth: 320, x: Math.round(wa.x + (wa.width - ww) / 2), y: Math.round(wa.y + (wa.height - wh) / 2),
-    title: 'City Pulse Settings', icon: ICON, autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
-  load(w, { settings: '1', for: target, ...(screenIdx === null ? {} : { screen: String(screenIdx) }), ...(span ? { mode: 'span' } : {}) });
-  raise(w);
+// Every way into settings (the widget's gear, the tray) opens the Control Center at its Customize step for that target.
+function openSettings(target = 'widget', screenIdx = null) {
+  const fresh = !(control && !control.isDestroyed());
+  openControl();
+  const go = () => control.webContents.send('control-goto', { target, screen: screenIdx });
+  fresh || control.webContents.isLoading() ? control.webContents.once('did-finish-load', go) : go();
+  raise(control);
 }
 // Settings must sit above full screen, which otherwise covers it and swallows the clicks.
 function raise(w) { if (alive(fulls).length) w.setAlwaysOnTop(true, 'screen-saver'); w.show(); w.focus(); }
@@ -301,8 +285,8 @@ function openControl() {
   if (control && !control.isDestroyed()) { control.show(); return control.focus(); }
   const d = displayOf(widget), wa = d.workArea, b = prefs.controlBounds;
   const onScreen = b && screen.getAllDisplays().some(x => b.x >= x.workArea.x && b.y >= x.workArea.y && b.x < x.workArea.x + x.workArea.width && b.y < x.workArea.y + x.workArea.height);
-  control = new BrowserWindow({ width: 440, height: Math.min(720, wa.height - 40), minWidth: 360,
-    ...(onScreen ? { x: b.x, y: b.y } : { x: Math.round(wa.x + (wa.width - 440) / 2), y: Math.round(wa.y + 20) }),
+  control = new BrowserWindow({ width: 460, height: Math.min(900, wa.height - 40), minWidth: 380,
+    ...(onScreen ? { x: b.x, y: b.y } : { x: Math.round(wa.x + (wa.width - 460) / 2), y: Math.round(wa.y + 20) }),
     title: 'City Pulse Control Center', icon: ICON, autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
   load(control, { control: '1' });
   if (alive(fulls).length) control.setAlwaysOnTop(true, 'screen-saver');   // stays reachable over full screen
@@ -343,9 +327,6 @@ ipcMain.on('control-wall', (e, mode, idx) => {
   setWallpaper(mode === 'one' ? { mode, display: d.id } : { mode });
 });
 ipcMain.on('control-widget', (e, shown) => { if (fromUs(e)) { shown ? widget.show() : widget.hide(); updateTray(); } });
-ipcMain.on('control-settings', (e, target, idx) => {
-  if (fromUs(e) && ['widget', 'full', 'wall'].includes(target)) openSettings(target, Number.isInteger(idx) ? idx : null);
-});
 
 app.on('second-instance', () => { widget?.show(); openControl(); updateTray(); });
 

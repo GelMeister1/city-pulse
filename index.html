@@ -76,9 +76,16 @@
   #panel #tourList b{font-size:11px;opacity:.6;margin-top:4px}
   #cc button.on{border-color:#7cf;color:#fff;background:#16305a}
   #cc .big{padding:10px;font-size:15px;font-weight:600}
-  #cc .scr{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;align-items:center}
-  #cc .scr small{display:block;color:#778}
-  #cc .note{margin:6px 0 0;font-size:12px;color:#778}
+  #cc section{display:grid;gap:8px}
+  #cc h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;background:#16305a;color:#cfe6ff;font-size:12px}
+  #cc .where{display:grid;gap:4px}
+  #cc .where b{font-size:12px;font-weight:600;color:#9aa3c8}
+  #cc .note{margin:0;font-size:12px;color:#7d86a8}
+  #cc .crumb{margin:4px 0 0;padding:8px 10px;border-radius:6px;background:#121937;color:#cfe6ff;font-size:13px}
+  #cc #ccWhichWrap{display:grid;gap:6px}
+  #cc #ccWhichWrap[hidden]{display:none}
+  #cc iframe{width:100%;height:max(420px,calc(100vh - 140px));border:1px solid #2c3352;border-radius:8px;background:#0b0e1c}
+  html.embed #panel{padding-top:8px}
 </style>
 </head>
 <body>
@@ -94,13 +101,19 @@
 </div>
 <div id="cc">
   <h1>City Pulse</h1>
-  <section><h2>Listen to</h2><select id="ccSource"></select></section>
-  <section><h2>Full screen</h2><div class="seg" id="ccFull"></div><button id="ccFullSet" class="more">Full-screen settings…</button></section>
-  <section><h2>Live wallpaper</h2><div class="seg" id="ccWall"></div><button id="ccWallSet" class="more">Wallpaper settings…</button></section>
-  <button id="ccTour" class="big">Tour on every screen</button>
-  <section><h2>Screens</h2><div class="scr" id="ccScreens"></div>
-    <p class="note">The settings buttons above cover one screen and the tour across all screens. Each screen's city is used when full screen or the wallpaper shows its own city on each screen.</p></section>
-  <section><h2>Widget</h2><div class="seg"><button id="ccWidget">Show widget</button><button id="ccWidgetSet">Widget settings…</button></div></section>
+  <section><h2><span class="n">1</span> Listen to</h2><select id="ccSource"></select>
+    <p class="note">The sound the city lights up to.</p></section>
+  <section><h2><span class="n">2</span> Where the city shows</h2>
+    <div class="where"><b>Widget</b><div class="seg"><button id="ccWidget">Show widget</button></div></div>
+    <div class="where"><b>Full screen</b><div class="seg" id="ccFull"></div></div>
+    <div class="where"><b>Desktop wallpaper</b><div class="seg" id="ccWall"></div></div>
+    <button id="ccTour" class="big">Tour across every screen</button></section>
+  <section><h2><span class="n">3</span> Customize</h2>
+    <p class="note">Pick what to change. Everything applies as you go.</p>
+    <div class="seg" id="ccWhat"></div>
+    <div id="ccWhichWrap" hidden><p class="note" id="ccWhichNote"></p><div class="seg" id="ccWhich"></div></div>
+    <p class="crumb" id="ccCrumb"></p>
+    <iframe id="ccSettings" title="Settings"></iframe></section>
 </div>
 <div id="panel" hidden>
   <div class="presets">
@@ -206,7 +219,7 @@ const qs = new URLSearchParams(location.search);
 const widget = qs.has('widget'), full = qs.has('full'), settingsMode = qs.has('settings'), wallMode = qs.has('wall'), controlMode = qs.has('control');
 const noCity = settingsMode || controlMode;
 const inApp = !!window.cityPulse;                                    // set by the app's preload; absent in a plain browser
-for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'settings'], [wallMode, 'wall'], [controlMode, 'control'], [inApp, 'app']])
+for (const [on, cls] of [[widget, 'widget'], [full, 'full'], [settingsMode, 'settings'], [wallMode, 'wall'], [controlMode, 'control'], [inApp, 'app'], [qs.has('embed'), 'embed']])
   if (on) document.documentElement.classList.add(cls);
 // Whose settings this window uses. The settings window edits whichever one it was opened for (?settings=1&for=…).
 const TARGET = settingsMode ? (['widget', 'full', 'wall'].includes(qs.get('for')) ? qs.get('for') : 'widget')
@@ -1155,8 +1168,6 @@ addEventListener('storage', e => {
   } else if (e.key === 'cityPulsePresets') {                  // presets saved in any window appear everywhere right away
     mine = readMine(e.newValue);
     fillPresets();
-  } else if (controlMode) {                            // a screen's city changed somewhere: show it
-    if (e.key?.startsWith('cityPulse:')) ccCities();
   } else if (e.key === KEY || (spanMode && e.key === OWN_KEY)) {   // another window changed these settings: apply them live
     const before = RELAYOUT.map(k => S[k]).join('|');
     try { loadSettings(stored()); } catch { return; }
@@ -1165,7 +1176,7 @@ addEventListener('storage', e => {
   }
 });
 $('gear').onclick = () => {
-  if (widget) return cityPulse.openSettings();          // the widget is too small for the panel: use the settings window
+  if (widget) return cityPulse.openSettings();          // the widget is too small for the panel: settings open in the Control Center
   $('panel').hidden = !$('panel').hidden; $('gear').classList.toggle('on', !$('panel').hidden); $('gear').setAttribute('aria-expanded', !$('panel').hidden);
 };
 if (settingsMode) {
@@ -2346,15 +2357,12 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
 }
 
 // ---------- control center (?control=1) ----------
-// The app's own window: what to listen to, where the city shows, which city each screen gets, and the widget. The app
-// (cityPulse.control) owns the windows and pushes its state; each screen's city goes straight into that screen's settings.
-let ccState = null, ccScreensKey = '';
-function screenSettings(target, i) {                     // a screen's own settings, or the shared ones it starts from, like its window does
-  const shared = `cityPulse:${target}`;
-  try { return JSON.parse(localStorage.getItem(`${shared}:${i}`) || localStorage.getItem(shared) || (target === 'wall' && localStorage.getItem('cityPulse:full')) || '{}'); }
-  catch { return {}; }
-}
-function ccCities() { for (const el of document.querySelectorAll('#ccScreens select')) el.value = screenSettings(el.dataset.t, +el.dataset.i).city || DEF.city; }
+// The app's one settings window, in three steps: what to listen to, where the city shows, and Customize: pick what to
+// change (widget, full screen, wallpaper), then which screen when there are several, and its settings appear below (the
+// settings page itself, embedded, so it saves and updates the city windows exactly as before). The app (cityPulse.control)
+// owns the windows, pushes its state, and can open it at a given step (Settings in the tray or the widget's gear).
+let ccState = null;
+const cc = { what: 'widget', which: 'all' };             // what you're customising, and which screen ('all' or its index)
 function ccSeg(el, items) {                              // a row of buttons: [label, current?, action]
   el.innerHTML = items.map(([label, on], i) => `<button data-i="${i}"${on ? ' class="on"' : ''}>${esc(label)}</button>`).join('');
   el.onclick = e => { const b = e.target.closest('button'); if (b) items[+b.dataset.i][2](); };
@@ -2369,26 +2377,32 @@ function ccRender(st) {
     ['All screens: own city each', st.wallMode === 'per', () => C.setWall('per')], ['All screens: one tour across', st.wallMode === 'span', () => C.setWall('span')]]);
   $('ccWidget').textContent = st.widgetShown ? 'Hide widget' : 'Show widget';
   $('ccWidget').classList.toggle('on', !!st.widgetShown);
-  const key = JSON.stringify(st.screens);
-  if (key !== ccScreensKey) ccScreenRows(st);            // rebuild the screen rows only when the screens change
-  ccScreensKey = key;
-  for (const b of document.querySelectorAll('#ccScreens button'))   // in the tour across all screens, a screen's button sets its own lights
-    b.textContent = (b.dataset.t === 'full' ? st.fullMode : st.wallMode) === 'span' ? 'Lights on this screen…' : 'More settings…';
+  ccCustomize();
 }
-function ccScreenRows(st) {
-  const C = cityPulse.control, name = x => x.label || `Screen ${x.index + 1}`;
-  const pickCity = (t, i) => `<select data-t="${t}" data-i="${i}" aria-label="${t === 'full' ? 'Full-screen' : 'Wallpaper'} city">${$('city').innerHTML}</select>`;
-  const more = (t, i) => `<button data-t="${t}" data-i="${i}">More settings…</button>`;
-  $('ccScreens').innerHTML = '<span></span><b>Full screen</b><b>Wallpaper</b>' + st.screens.map(x =>
-    `<span>${esc(name(x))}<small>${x.w}×${x.h}</small></span>${pickCity('full', x.index)}${pickCity('wall', x.index)}<span></span>${more('full', x.index)}${more('wall', x.index)}`).join('');
-  for (const el of document.querySelectorAll('#ccScreens select')) el.onchange = () => {
-    const t = el.dataset.t, i = +el.dataset.i, s = screenSettings(t, i);
-    s.city = el.value;
-    cityWeather(s);                                   // as picking it in Settings does
-    try { localStorage.setItem(`cityPulse:${t}:${i}`, JSON.stringify(s)); } catch {}
-  };
-  for (const b of document.querySelectorAll('#ccScreens button')) b.onclick = () => C.openSettings(b.dataset.t, +b.dataset.i);
-  ccCities();
+// Step 3: what to change, which screen (when it matters), a line saying exactly what you're changing, then its settings.
+function ccCustomize() {
+  const st = ccState; if (!st) return;
+  const name = i => { const x = st.screens[i]; return x ? `Screen ${i + 1}${x.label ? ` (${x.label})` : ''}` : 'that screen'; };
+  ccSeg($('ccWhat'), [['Widget', 'widget'], ['Full screen', 'full'], ['Wallpaper', 'wall']].map(([label, k]) =>
+    [label, cc.what === k, () => { cc.what = k; cc.which = 'all'; ccCustomize(); }]));
+  const mode = cc.what === 'full' ? st.fullMode : cc.what === 'wall' ? st.wallMode : null, span = mode === 'span';
+  const multi = cc.what !== 'widget' && st.screens.length > 1;
+  if (!multi || (cc.which !== 'all' && !st.screens[cc.which])) cc.which = 'all';
+  $('ccWhichWrap').hidden = !multi;
+  if (multi) {
+    ccSeg($('ccWhich'), [['All screens', cc.which === 'all', () => { cc.which = 'all'; ccCustomize(); }],
+      ...st.screens.map(x => [`Screen ${x.index + 1}`, cc.which === x.index, () => { cc.which = x.index; ccCustomize(); }])]);
+    $('ccWhichNote').textContent = span ? 'Which screen? In the tour across every screen, one screen can have its own lights.'
+      : 'Which screen? One screen\'s own settings are used when every screen shows its own city.';
+  }
+  const what = { widget: 'the widget', full: 'full screen', wall: 'the desktop wallpaper' }[cc.what];
+  $('ccCrumb').textContent = cc.which === 'all'
+    ? `Changing ${what}${multi ? ` on every screen${span ? ' (the tour across all of them)' : ''}` : ''}.`
+    : `Changing ${what} on ${name(cc.which)}: ${span ? 'its own lights in the tour.' : 'its own city and look.'}`;
+  const q = new URLSearchParams({ settings: '1', for: cc.what, embed: '1' });
+  if (cc.which !== 'all') { q.set('screen', cc.which); if (span) q.set('mode', 'span'); }
+  const fr = $('ccSettings'), src = 'index.html?' + q;
+  if (fr.dataset.src !== src) { fr.dataset.src = src; fr.src = src; }   // only reload when the choice changes
 }
 function startControl() {
   document.title = 'City Pulse';
@@ -2400,9 +2414,10 @@ function startControl() {
     if (w) C.setWall('span');
   };
   $('ccWidget').onclick = () => C.setWidget(!(ccState && ccState.widgetShown));
-  $('ccWidgetSet').onclick = () => C.openSettings('widget', null);
-  $('ccFullSet').onclick = () => C.openSettings('full', null);
-  $('ccWallSet').onclick = () => C.openSettings('wall', null);
+  C.onGoto?.(({ target, screen }) => {                   // opened from the tray or the widget's gear: jump to that step
+    cc.what = ['widget', 'full', 'wall'].includes(target) ? target : 'widget'; cc.which = Number.isInteger(screen) ? screen : 'all';
+    ccCustomize(); $('ccSettings').scrollIntoView({ block: 'nearest' });
+  });
   C.state().then(ccRender);
   C.onState(ccRender);
 }
@@ -2437,6 +2452,7 @@ function start() {
   if (![...$('city').options].some(o => o.value === S.city)) S.city = DEF.city;   // its plugin is gone
   showSetting('city'); refreshPanel();
   if (controlMode) return startControl();
+  if (settingsMode) return;                              // a settings page draws no city, so no layout or animation loop
   layout();
   addEventListener('resize', layout);
   // The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.

@@ -55,12 +55,12 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Presets:** four built in (Lounge, Chill Night, Party, Neon Tour). Your own presets are shared between the widget and full screen.
 - **TV-friendly:**
   - full screen opens on whichever display the widget is on
-  - **multiple screens:** full screen and the live wallpaper can each run on all screens, with either **its own city on each screen** or **one tour across all of them**. In the tour, cities scroll from screen to screen, each screen shows its own city name, and each screen can have **its own lights** (colors, style, brightness): use **Lights on this screen…** in the Control Center.
+  - **multiple screens:** full screen and the live wallpaper can each run on all screens, with either **its own city on each screen** or **one tour across all of them**. In the tour, cities scroll from screen to screen, each screen shows its own city name, and each screen can have **its own lights** (colors, style, brightness): in the Control Center, choose **Customize → Full screen** (or Wallpaper) and pick the screen.
   - the controls auto-hide
   - optional burn-in protection creeps the picture a few pixels over about 20 minutes
-- **Control Center:** a window you can keep open on any screen. It has the audio source, full screen and wallpaper modes, a city for each screen, a **Tour on every screen** button, and links to every settings window. Click the tray icon, the ☰ button, or launch City Pulse again to open it.
+- **Control Center:** the one window for everything, in three steps: **1. Listen to** (the audio source), **2. Where the city shows** (widget, full screen, wallpaper, and a **Tour across every screen** button), **3. Customize**: pick Widget, Full screen or Wallpaper, then the screen if you have several, and its settings appear right below. Click the tray icon, the ☰ button, or launch City Pulse again to open it.
 - **Lives in the tray:** no taskbar button. The tray icon by the clock shows or hides the widget, and also has full screen, Settings, Start with Windows and Quit.
-- **Live wallpaper (experimental):** puts City Pulse behind your desktop icons on the display you choose, with its own look (tray → Wallpaper settings…). It relies on an unofficial Windows feature, so a future Windows update could break it. If that happens, it switches itself off.
+- **Live wallpaper (experimental):** puts City Pulse behind your desktop icons on the display you choose, with its own look (Control Center → Customize → Wallpaper). It relies on an unofficial Windows feature, so a future Windows update could break it. If that happens, it switches itself off.
 
 ## Install (Windows)
 
@@ -107,8 +107,8 @@ Use the tray's **Uninstall City Pulse…**, or go to Windows **Settings → Apps
 
 - The widget opens in the bottom-right corner. Hover over it to show the toolbar, drag the toolbar to move the widget, and drag the edges to resize it. **✕** tucks it into the tray.
 - **⛶ Full screen** opens the big view on the widget's display: drag the widget to your TV first. **Esc** closes full screen. When it covers all screens, Esc closes every screen at once, whichever window has focus.
-- **⚙ Settings** opens a settings window with presets plus the Skyline, Lights, Scene, Weather and Ambient sections. Changes apply to the widget live. In full screen, ⚙ opens the panel on screen instead.
-- **Right-click the tray icon** for full screen, separate settings for the widget, full screen and wallpaper, Live wallpaper, Start with Windows, Check for updates, Uninstall and Quit.
+- **⚙ Settings** opens the Control Center at the widget’s settings: presets plus the Skyline, Lights, Scene, Weather and Ambient sections. Changes apply to the widget live. In full screen, ⚙ opens the panel on screen instead.
+- **Right-click the tray icon** for full screen, settings for the widget, full screen and wallpaper (each opens the Control Center there), Live wallpaper, Start with Windows, Check for updates, Uninstall and Quit.
 - Keyboard shortcuts:
 
 | Key | Action |
