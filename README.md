@@ -135,24 +135,20 @@ On a Mac, `npm run dist:mac` builds the `.dmg` files. Without a Mac, GitHub buil
 
 ## Publish a new version (maintainers)
 
-1. Bump `"version"` in `package.json`, for example from 0.5.0 to 0.5.1, then commit and push.
-2. Tag that commit and push the tag (GitHub won't publish a release without one):
+1. Bump `"version"` in `package.json`, for example from 0.6.1 to 0.6.2, then commit and push.
+2. Create the release, which also makes its tag. Doing this first matters: if the release script has to create it, it can end up making two.
 
 ```bash
-git tag v0.5.1
+gh release create v0.6.2 --title "City Pulse 0.6.2" --generate-notes
 ```
 
-```bash
-git push origin v0.5.1
-```
-
-3. Run the release script with a GitHub token:
+3. Within two hours, run the release script with a GitHub token. It uploads into that release:
 
 ```bash
 GH_TOKEN=$(gh auth token) npm run release
 ```
 
-This builds the installer and publishes it as a GitHub Release, together with `latest.yml`, the file installed copies check to find updates. Every installed Windows copy then updates itself. Publishing the release also starts the **Mac build**, which adds the two `.dmg` files to it a few minutes later.
+This builds the installer and adds it to the release, together with `latest.yml`, the file installed copies check to find updates. Every installed Windows copy then updates itself. Creating the release also starts the **Mac build**, which adds the two `.dmg` files to it a few minutes later.
 
 Automatic updates need the repository to be **public**, because installed copies read the Releases page without signing in.
 
