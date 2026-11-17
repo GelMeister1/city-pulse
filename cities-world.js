@@ -5,6 +5,30 @@
   const CP = window.CityPulse;
   if (!CP) return;
   const { registerLandmark: lm, registerCity: city } = CP;
+
+  // Far landmarks (hazy, behind the back row; see FAR in index.html): units from the ground, x = 0 at the centre.
+  const farTowers = list => Object.assign((g, L) => {      // a distant cluster of towers [x, width, height]
+    for (const [x, wd, h] of list) g.fillRect(x, -h, wd, h);
+    g.fillStyle = L; for (const [x, wd, h] of list) for (let y = -h + 2; y < -3; y += 3.5) g.fillRect(x + wd / 2 - .4, y, .8, 1.3);
+  }, { w: Math.max(...list.map(([x, wd]) => x + wd)) - Math.min(...list.map(([x]) => x)) });
+  const casaLoma = (g, L) => {                            // Casa Loma: a castle with round turrets on its hill
+    g.beginPath(); g.moveTo(-22, 0); g.quadraticCurveTo(0, -12, 22, 0); g.fill();
+    g.fillRect(-11, -18, 22, 9);
+    for (const [x, h] of [[-12, 23], [-3, 26], [7, 22], [11, 20]]) {
+      g.fillRect(x - 1.4, -h, 2.8, h - 9); g.beginPath(); g.moveTo(x - 1.8, -h); g.lineTo(x, -h - 3.5); g.lineTo(x + 1.8, -h); g.fill();
+    }
+    g.fillStyle = L; for (let x = -9; x < 10; x += 3) g.fillRect(x, -15, .9, 1.4);
+  };
+  casaLoma.w = 44;
+  const anzac = (g, L) => {                               // the Anzac Bridge: two tall pylons with fans of cables
+    g.fillRect(-26, -6, 52, 1.2);
+    for (const x of [-11, 11]) { g.fillRect(x - .8, -30, 1.6, 30); }
+    g.strokeStyle = g.fillStyle; g.lineWidth = .2; g.beginPath();
+    for (const x of [-11, 11]) for (let k = 1; k <= 6; k++) { g.moveTo(x, -29 + k * 2.4); g.lineTo(x - k * 2.4, -6); g.moveTo(x, -29 + k * 2.4); g.lineTo(x + k * 2.4, -6); }
+    g.stroke();
+    g.fillStyle = L; for (const x of [-11, 11]) g.fillRect(x - .4, -31, .8, .8);
+  };
+  anzac.w = 52;
   const path = (g, pts) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); };
   const mirror = pts => [...pts, ...pts.slice().reverse().map(([x, y]) => [-x, y])];   // right half → whole outline
   const glow = (L, y, min) => L.win(Math.max(L.lit(y), min));                        // lights that never go fully dark
@@ -58,7 +82,7 @@
     g.fillStyle = glow(L, 6.4, .12); g.fillRect(-16.6, -6.9, 33.2, .45);
     for (const y of [2.2, 4.4]) { g.fillStyle = L.win(L.lit(y)); for (let x = -15; x < 15; x += 1.25) g.fillRect(x, -y - .9, .6, .9); }
   } });
-  city('toronto', { name: 'Toronto', back: [.7, .9], b: [
+  city('toronto', { name: 'Toronto', back: [.75, 1], far: [casaLoma, farTowers([[-10, 5, 30], [-4, 6, 38], [3, 5, 26], [9, 6, 34]]), farTowers([[-6, 5, 28], [0, 6, 36], [7, 4, 24]])], b: [
     [0, '@rogers'],                                                              // Rogers Centre
     [-1, '@cntower'],                                                            // CN Tower
     [3, 'wide', null, [[11, 22]]],
@@ -128,7 +152,7 @@
     for (let x = -HB_A + .7; x < HB_A; x += 1.4) { g.fillStyle = glow(L, hbTop(x), .1); g.fillRect(x - .2, -hbTop(x) - .55, .4, .4); }
     g.fillStyle = L.win(L.lit(HB_D)); for (let x = -35.5; x < 36; x += 1.2) g.fillRect(x, -HB_D - .6, .5, .3);
   } });
-  city('sydney', { name: 'Sydney', back: [.55, .7], b: [
+  city('sydney', { name: 'Sydney', back: [.6, .95], far: [anzac, farTowers([[-9, 5, 30], [-3, 6, 36], [4, 5, 27], [10, 5, 22]])], b: [
     [0, 'grid', null, [[10, 28]]],
     [.5, 'ribbon', ['antenna2', 5], [[9, 40]]],                                  // Chifley Tower
     [.5, 'tall', null, [[9, 33]]],

@@ -5,7 +5,7 @@
 'use strict';
 const CP = window.CityPulse;
 if (!CP) return;
-const { registerTheme, hash, sprite, pixelArt } = CP;
+const { registerTheme, hash, sprite, pixelArt, domeBase, collar } = CP;
 const TAU = Math.PI * 2, CLEAR = 'rgba(0,0,0,0)';
 
 const mk = (w, h, draw) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); draw(c.getContext('2d'), c.width, c.height); return c; };
@@ -478,8 +478,10 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.fillStyle = `hsla(${b.hueD},100%,70%,${.35 + .65 * b.flash})`;
         for (let x = x0 + u; x < x0 + w - u * .5; x += u * 2) g.fillRect(x, y - Math.max(1, u * .2), Math.max(1, u * .4), Math.max(1, u * .4));
       });
-      if (b.glass) {                                     // a glass dome: on the block's 3D top (with 3D detail), its far rim seen through it
-        const d = E.S.detail ? Math.min(1.6 * u, tw * .18) : 0, x = cx + d / 2, by = ty - d / 4, rx = tw * .5, ry = Math.min(tw * .45, 10 * u), rb = Math.max(1, d / 4 || u * .4);
+      if (b.glass) {                                     // a glass dome over the whole roof, on a glowing collar, its far rim seen through it
+        const B = domeBase(cx, ty, tw), x = B.x, rx = B.rx, ry = Math.min(tw * .45, 10 * u), rb = Math.max(1, B.rb || u * .4);
+        collar(g, B, ['#0a3a48', '#052733', '#03121a'], `rgba(120,245,255,${.5 + .45 * lv})`);
+        const by = B.by - B.c;
         glow(g, '60,230,255', x, by - ry * .4, rx * 1.3, .2 + .55 * lv);
         const gl = g.createRadialGradient(x - rx * .4, by - ry * .7, 0, x, by - ry * .3, Math.max(rx, ry) * 1.2);
         gl.addColorStop(0, 'rgba(170,250,255,.30)'); gl.addColorStop(.6, 'rgba(70,220,255,.12)'); gl.addColorStop(1, 'rgba(20,120,160,.22)');

@@ -15,7 +15,7 @@
   button.on{border-color:#7cf;color:#fff}
   #hint{color:#889;font-size:12px;align-self:center}
   body.idle,body.idle canvas{cursor:none}
-  #panel{position:fixed;top:52px;right:12px;width:220px;max-height:calc(100vh - 64px);overflow:hidden auto;box-sizing:border-box;
+  #panel{position:fixed;top:52px;right:12px;width:220px;max-height:calc(100vh - 64px);overflow:hidden auto;scrollbar-gutter:stable;box-sizing:border-box;
     background:#0b0e1cf2;border:1px solid #2c3352;border-radius:10px;padding:10px;color:#b9bdd0;font-size:12px;
     display:grid;gap:6px;transition:opacity .5s;-webkit-app-region:no-drag}
   #panel[hidden],#panel [hidden]{display:none}
@@ -66,7 +66,12 @@
   #cc .seg{display:flex;flex-wrap:wrap;gap:6px}
   #cc button{font-size:13px}
   #cc button.more{margin-top:6px}
-  #panel .tourPick{display:grid;gap:3px}
+  #panel #tourPick{display:grid;gap:4px;border:1px solid #333a58;border-radius:6px;padding:4px}
+  #panel #tourPick > summary{background:none;font-weight:500;color:#cfe6ff;padding:3px 4px;font-size:inherit}
+  #panel #tourPick > summary b{font-weight:400;color:#7f93b8;margin-left:4px}
+  #panel #tourPick .batch{display:flex;align-items:center;gap:4px}
+  #panel #tourPick .batch span{color:#7f93b8;margin-right:2px}
+  #panel #tourPick .batch button{flex:1;min-width:0;padding-left:2px;padding-right:2px}
   #panel #tourList{display:grid;gap:2px;max-height:180px;overflow:auto;padding:4px 6px;border:1px solid #333a58;border-radius:4px;background:#05060c}
   #panel #tourList b{font-size:11px;opacity:.6;margin-top:4px}
   #cc button.on{border-color:#7cf;color:#fff;background:#16305a}
@@ -109,8 +114,13 @@
       <option value="fit">Fit</option>
       <option value="pan">Pan</option>
       <option value="tour">Tour</option>
+      <option value="scroll">Scroll</option>
     </select></label>
-    <div class="tourPick"><span>Tour cities</span><div id="tourList"></div></div>
+    <label>Position <input type="range" id="pan" min="0" max="1" step="0.001"></label>
+    <details id="tourPick"><summary>Tour cities <b id="tourCount"></b></summary>
+      <div class="batch"><span>Select</span><button data-pick="all" title="Every city">All</button><button data-pick="real" title="Only the real cities">Real</button><button data-pick="themed" title="Only the themed cities">Themed</button></div>
+      <div id="tourList"></div>
+    </details>
     <label>Scroll speed <input type="range" id="scroll" min="1" max="100"></label>
     <label>Scroll direction <select id="scrollDir">
       <option value="rtl">Right to left</option>
@@ -439,6 +449,68 @@ const LM = {
 
 // Skylines: [gap before, window style | '@landmark', roof [type, height] | null, tiers bottom-up [width, height, noWindows?]].
 // All sizes in units. back = [height, density] of the hazy skyline behind it: low for cities without big towers.
+// Far landmarks: hazy silhouettes behind a city's back row, placed where its front skyline is lowest (first in the list
+// gets the best spot). draw(g, light) in units, x = 0 at the centre, y = 0 the ground, filled in the haze colour already
+// set; light is for a few faint windows. draw.w is its width in units.
+const FAR = {
+  stpauls(g, L) {                                         // St Paul's Cathedral: dome on a drum with a lantern, two west towers
+    g.fillRect(-14, -14, 28, 14); g.fillRect(-5.5, -22, 11, 8);
+    g.beginPath(); g.ellipse(0, -22, 6.5, 7.5, 0, Math.PI, 0); g.fill();
+    g.fillRect(-1, -33, 2, 4); g.beginPath(); g.moveTo(-.6, -33); g.lineTo(0, -36); g.lineTo(.6, -33); g.fill();
+    for (const x of [-12, 9]) { g.fillRect(x, -21, 3, 7); g.beginPath(); g.moveTo(x, -21); g.lineTo(x + 1.5, -25); g.lineTo(x + 3, -21); g.fill(); }
+    g.fillStyle = L; for (let x = -12; x < 12; x += 3) g.fillRect(x, -9, 1, 2);
+  },
+  eye(g, L) {                                             // the London Eye: a rim on spokes, capsules round it, an A-frame leg
+    g.strokeStyle = g.fillStyle; g.lineWidth = .6;
+    g.beginPath(); g.arc(0, -17, 15, 0, Math.PI * 2); g.stroke();
+    g.lineWidth = .25; g.beginPath();
+    for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; g.moveTo(0, -17); g.lineTo(Math.cos(a) * 15, -17 + Math.sin(a) * 15); }
+    g.stroke();
+    for (let k = 0; k < 32; k++) { const a = k * Math.PI / 16; g.fillRect(Math.cos(a) * 15 - .5, -17 + Math.sin(a) * 15 - .5, 1, 1); }
+    g.lineWidth = .8; g.beginPath(); g.moveTo(-5, 0); g.lineTo(0, -17); g.lineTo(3, 0); g.stroke();
+    g.fillStyle = L; g.fillRect(-.5, -17.5, 1, 1);
+  },
+  towerbridge(g, L) {                                     // Tower Bridge: two Gothic towers, high walkways, the road deck
+    g.fillRect(-20, -5, 40, 1.4);
+    for (const x of [-9, 9]) {
+      g.fillRect(x - 3, -22, 6, 22);
+      g.beginPath(); g.moveTo(x - 3, -22); g.lineTo(x, -27); g.lineTo(x + 3, -22); g.fill();
+      for (const p of [-3, 2.3]) { g.fillRect(x + p, -25, .7, 3); }
+    }
+    g.fillRect(-6, -19, 12, 1.2); g.fillRect(-6, -16.5, 12, .8);
+    g.fillStyle = L; for (const x of [-9, 9]) for (let y = -19; y < -6; y += 4) g.fillRect(x - .4, y, .8, 1.5);
+  },
+  bttower(g, L) {                                         // the BT Tower: a slim shaft ringed with dishes, an aerial on top
+    g.fillRect(-1.6, -40, 3.2, 40); g.fillRect(-2.4, -40, 4.8, 9);
+    for (const y of [-38, -35, -32]) g.fillRect(-2.9, y, 5.8, 1);
+    g.fillRect(-.5, -47, 1, 7);
+    g.fillStyle = L; for (let y = -28; y < -2; y += 3) g.fillRect(-.4, y, .8, 1.2);
+  },
+  sacrecoeur(g, L) {                                      // Sacré-Cœur, white domes on top of the hill of Montmartre
+    g.beginPath(); g.moveTo(-26, 0); g.quadraticCurveTo(0, -18, 26, 0); g.fill();
+    g.fillRect(-8, -22, 16, 9); g.fillRect(-2.6, -29, 5.2, 7);
+    g.beginPath(); g.ellipse(0, -29, 3.4, 5.5, 0, Math.PI, 0); g.fill(); g.fillRect(-.4, -37, .8, 3);
+    for (const x of [-6, 6]) { g.beginPath(); g.ellipse(x, -22, 2, 3, 0, Math.PI, 0); g.fill(); }
+    g.fillRect(9, -27, 2.6, 13); g.beginPath(); g.ellipse(10.3, -27, 1.3, 2, 0, Math.PI, 0); g.fill();   // the bell tower
+    g.fillStyle = L; for (let x = -6; x < 7; x += 2.5) g.fillRect(x, -18, .8, 1.5);
+  },
+  arc(g, L) {                                             // the Arc de Triomphe
+    g.beginPath(); g.rect(-9, -19, 18, 19); g.moveTo(-3.6, 0); g.lineTo(-3.6, -9); g.arc(0, -9, 3.6, Math.PI, 0); g.lineTo(3.6, 0); g.closePath(); g.fill('evenodd');
+    g.fillRect(-9.6, -20.5, 19.2, 1.5);
+  },
+  notredame(g, L) {                                       // Notre-Dame: twin square towers, the nave and its slender spire
+    g.fillRect(-12, -24, 7, 24); g.fillRect(-3, -24, 7, 24); g.fillRect(-12, -14, 16, 14);
+    g.fillRect(4, -13, 16, 13); g.beginPath(); g.moveTo(4, -13); g.lineTo(12, -18); g.lineTo(20, -13); g.fill();
+    g.beginPath(); g.moveTo(11.3, -17); g.lineTo(12, -31); g.lineTo(12.7, -17); g.fill();
+    g.fillStyle = L; g.beginPath(); g.arc(-4.5, -16, 1.6, 0, Math.PI * 2); g.fill();   // the rose window
+  },
+  grandearche(g, L) {                                     // La Grande Arche with towers beside it
+    g.beginPath(); g.rect(-9, -20, 18, 20); g.rect(-6, -17, 12, 17); g.fill('evenodd');
+    for (const [x, w, h] of [[-20, 6, 30], [-13, 4, 24], [12, 5, 34], [18, 4, 22]]) g.fillRect(x, -h, w, h);
+    g.fillStyle = L; for (const [x, h] of [[-18, 26], [14, 30]]) for (let y = -h; y < -3; y += 3) g.fillRect(x, y, 1, 1.4);
+  },
+};
+for (const [k, w] of Object.entries({ stpauls: 30, eye: 32, towerbridge: 42, bttower: 7, sacrecoeur: 52, arc: 20, notredame: 34, grandearche: 40 })) FAR[k].w = w;
 const CITIES = {
   nyc: { name: 'New York', back: [1, 1], b: [
     [0, 'grid', null, [[10, 30]]],
@@ -493,7 +565,7 @@ const CITIES = {
     [.5, 'grid', ['antenna', 5], [[11, 38]]],
     [.5, 'cols', null, [[8, 60]]],                                               // Cayan Tower
   ]},
-  paris: { name: 'Paris', back: [.28, .7], b: [
+  paris: { name: 'Paris', back: [.42, 1, 'mansard'], far: [FAR.sacrecoeur, FAR.notredame, FAR.grandearche, FAR.arc], b: [
     [0, 'pairs', ['pyramid', 3], [[14, 12]]],
     [0, 'pairs', ['pyramid', 3], [[12, 13]]],
     [1, 'cols', null, [[12, 45]]],                                               // Montparnasse
@@ -513,7 +585,7 @@ const CITIES = {
     [1.5, 'pairs', null, [[12, 26]]],
     [.5, 'wide', ['dome', 4], [[10, 38]]],
   ]},
-  london: { name: 'London', back: [.45, .7], b: [
+  london: { name: 'London', back: [.55, .95, 'terrace'], far: [FAR.eye, FAR.stpauls, FAR.towerbridge, FAR.bttower], b: [
     [0, '@bigben'],                                                              // Elizabeth Tower (Big Ben)
     [1, 'pairs', null, [[14, 14]]],
     [.5, 'ribbon', null, [[10, 30], [12, 10]]],                                  // Walkie-Talkie
@@ -598,18 +670,40 @@ const rng = seed => () => (seed = seed * 16807 % 2147483647) / 2147483647;
 const bc = document.createElement('canvas'), bg = bc.getContext('2d');
 let backW = 0;
 function renderBack() {
-  const r = rng(13), city = CITIES[S.city], tb = theme.back, tour = S.view === 'tour';
+  const r = rng(13), city = CITIES[S.city], tb = theme.back, tour = touring(S.view);
   // The tour's row slides at half speed past stretches of every look, so it's a colourless tile (black bodies, faint white
   // windows) two screens wide that repeats seamlessly, and each stretch tints its own part as it's drawn (see frame).
-  const [hf, density] = tour ? [.7, .8] : city ? city.back : [tb.h, tb.density];
+  const [hf, density, style] = tour ? [.7, .8] : city ? city.back : [tb.h, tb.density];
   const tallest = Math.max(...buildings.map(b => b.lm ? b.lm.h : b.tiers.reduce((a, t) => a + t.h, 0))) * unit;
   const refH = Math.min(tallest * .8, GY * .75) * hf;
   backW = Math.ceil(tour ? tileU * unit : W + Math.max(0, worldW - W) / 2);
   bc.width = backW; bc.height = Math.ceil(GY);
   if (!S.back) return;
   const u = unit, cw = 2 * u, fh = 2.2 * u;
+  if (!tour && city && city.far) {                       // hazy far landmarks, behind the back row (Fit and Pan)
+    // Each goes where the front skyline is lowest, so it fills the dead space instead of hiding behind a tower.
+    const fs = u * 1.7, k = backW / Math.max(W, worldW), taken = [];
+    const front = (a, z) => Math.max(0, ...buildings.filter(b => b.cx * k + b.half * k > a && (b.cx - b.wpx / 2) * k < z).map(b => b.hU));
+    for (const draw of city.far) {
+      const w = (draw.w || 30) * fs, step = 4 * u;
+      let best = null;
+      for (let x = w / 2; x <= backW - w / 2; x += step) {
+        if (taken.some(([a, z]) => x + w / 2 > a && x - w / 2 < z)) continue;
+        const score = front(x - w / 2, x + w / 2);
+        if (!best || score < best[1]) best = [x, score];
+      }
+      if (!best) continue;
+      taken.push([best[0] - w / 2 - 2 * u, best[0] + w / 2 + 2 * u]);
+      bg.save(); bg.translate(Math.round(best[0]), GY); bg.scale(fs, fs); bg.fillStyle = FAR_HAZE;
+      try { draw(bg, FAR_LIGHT); } catch (e) { console.error(`City Pulse: a far landmark of "${S.city}" failed.`, e); }
+      bg.restore();
+    }
+  }
   for (let x = tour ? 0 : -u * 4; x < backW;) {
-    const w = (8 + Math.floor(r() * 10)) * u, h = refH * (.45 + .55 * r()), top = GY - h, show = r() < density, ant = r() < .3;
+    // Row styles: towers (default); 'mansard', low Parisian blocks under slate mansard roofs with chimneys; 'terrace', London's
+    // pitched-roof terraces with the odd mid-rise among them.
+    const low = style === 'mansard' || (style === 'terrace' && r() < .6);
+    const w = (low ? 6 + Math.floor(r() * 6) : 8 + Math.floor(r() * 10)) * u, h = refH * (low ? .55 + .25 * r() : .45 + .55 * r()), top = GY - h, show = r() < density, ant = !low && r() < .3;
     const cols = Math.floor((w - u) / cw), left = x + (w - cols * cw) / 2, wins = [];
     for (let y = GY - fh; y > top + u; y -= fh) for (let k = 0; k < cols; k++) {
       const on = r() < .16, c = r();
@@ -619,14 +713,22 @@ function renderBack() {
       bg.fillStyle = tour ? '#000' : tb.body;
       bg.fillRect(x + dx, top, w, h);
       if (ant) bg.fillRect(x + dx + w / 2 - u * .2, top - 4 * u, u * .4, 4 * u);
+      if (low && style === 'mansard') {                  // slate roof, sloped in from the walls, with chimney stacks
+        const rh = 2.4 * u; bg.beginPath(); bg.moveTo(x + dx, top); bg.lineTo(x + dx + u * .9, top - rh); bg.lineTo(x + dx + w - u * .9, top - rh); bg.lineTo(x + dx + w, top); bg.fill();
+        for (let k = 0, n = 1 + Math.floor(w / (5 * u)); k < n; k++) bg.fillRect(x + dx + u * (1.6 + k * 4.2), top - rh - u * 1.3, u * .9, u * 1.4);
+      } else if (low) {                                  // terrace: a pitched roof and a chimney
+        const rh = Math.min(w * .3, 3 * u); bg.beginPath(); bg.moveTo(x + dx, top); bg.lineTo(x + dx + w / 2, top - rh); bg.lineTo(x + dx + w, top); bg.fill();
+        bg.fillRect(x + dx + w * .7, top - rh * .9, u * .8, rh * .7);
+      }
       for (const [wx, wy, c] of wins) {
         bg.fillStyle = tour ? 'rgba(255,255,255,.28)' : (tb.win && tb.win(c)) || 'rgba(150,160,220,.28)';
         bg.fillRect(wx + dx, wy, cw * .46, fh * .5);
       }
     }
-    x += w + (r() < .5 ? 0 : u * 1.5);
+    x += w + (low || r() < .5 ? 0 : u * 1.5);            // rooftop rows run on without gaps
   }
 }
+const FAR_HAZE = '#231f55', FAR_LIGHT = 'rgba(225,215,255,.32)';   // far landmarks: misty, a little lighter than the night sky, lit by the city
 
 // Ground strip for a window h px tall: street or park, then optionally a retaining wall and a thin band of water.
 // A theme can replace it with its own (Synthwave's glowing grid), with no water under it.
@@ -637,16 +739,20 @@ function geom(h, T, s) {
   const wallH = waterH && gh ? Math.max(3, Math.round(h * .012)) : 0;
   return { GH: gh, WY: h - waterH, GY: h - waterH - wallH - gh };
 }
-const tourMaxH = () => Math.max(...Object.values(CITIES).map(c => specH(c.b)));
+// Tour and Scroll share the looping world: the tour visits every chosen city, Scroll repeats the one you picked.
+const touring = view => view === 'tour' || view === 'scroll';
+// The tallest city on the loop, which sets the scale: every city in the tour, or the scrolling one (a themed city keeps its usual size).
+const tourMaxH = (s = S) => s.view === 'scroll' ? (CITIES[s.city] ? specH(CITIES[s.city].b) : 93.5) : Math.max(...Object.values(CITIES).map(c => specH(c.b)));
 // Pixels per unit for a w x h window. A pure function, so span mode can work out every screen's scale, not just its own.
 function unitFor(w, h, s) {
-  const tour = s.view === 'tour', city = !tour && CITIES[s.city], { GY } = geom(h, THEMES[tour ? 'none' : themeKey(s.city)], s);
-  if (tour) return Math.max(1.8, GY * .85 / tourMaxH());
+  const tour = touring(s.view), city = !tour && CITIES[s.city], { GY } = geom(h, THEMES[tour ? 'none' : themeKey(s.city)], s);
+  if (tour) return Math.max(1.8, GY * .85 / tourMaxH(s));
   if (city) return Math.max(1.8, Math.min(w * .95 / specW(city.b), GY * .85 / specH(city.b)));
   return Math.max(2.5, Math.min(w, GY) / 110);
 }
 // The tour's stops: every real city, with the themed ones spread evenly between them.
 function tourStops() {
+  if (S.view === 'scroll') { const c = CITIES[S.city], k = themeKey(S.city); return [c ? { name: c.name, theme: 'none', b: c.b } : { name: THEMES[k].name, theme: k }]; }
   const on = k => !S.tourOff.includes(k === 'none' ? 'generic' : k);
   let real = Object.keys(CITIES).filter(on), themed = Object.keys(THEMES).filter(on);
   if (!real.length && !themed.length) [real, themed] = [Object.keys(CITIES), Object.keys(THEMES)];   // never an empty tour
@@ -657,6 +763,7 @@ function tourStops() {
     out.push({ name: c.name, theme: 'none', b: c.b });
     while (placed < themed.length && (placed + 1) * real.length <= (j + 1) * themed.length) { const k = themed[placed++]; out.push({ name: THEMES[k].name, theme: k }); }
   });
+  for (const k of themed.slice(placed)) out.push({ name: THEMES[k].name, theme: k });   // no real cities chosen: just the themed ones
   return out;
 }
 
@@ -664,7 +771,7 @@ function layout() {
   dpr = devicePixelRatio || 1;
   W = innerWidth; H = Math.max(1, innerHeight - INSET);
   cv.style.height = INSET ? H + 'px' : '';
-  const tour = S.view === 'tour';
+  const tour = touring(S.view);
   for (const c of [cv, lay, acc]) {                      // the blend buffers are only used by the tour
     const s = c === cv || tour ? dpr : 0;
     c.width = W * s; c.height = H * s; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -680,7 +787,7 @@ function layout() {
   if (tour) {                                            // every city in a row: real ones with made-up blocks either side, themed ones in their own style
     // Every stretch is at least a screen and a blend band wide, so a screen never shows more than two cities. Span mode
     // sizes them by its widest screen, so every window builds the same world.
-    const mh = tourMaxH(), minU = (spanMode && screens.length ? Math.max(...screens.map(([w, h]) => w / unitFor(w, h, S))) : W / unit) + FEATHER + 2;
+    const mh = tourMaxH(S), minU = (spanMode && screens.length ? Math.max(...screens.map(([w, h]) => w / unitFor(w, h, S))) : W / unit) + FEATHER + 2;
     // gen() counts raw gaps but the row is laid out with the Spacing slider's, so top up until the laid-out row is wide enough
     const fill = (want, ...a) => { const sp = gen(r, want, ...a); while (specW(sp) < want) sp.push(...gen(r, want - specW(sp), ...a)); return sp; };
     tileU = 2 * Math.ceil(minU);
@@ -886,7 +993,8 @@ function hexToHS(hex) {
 const hide = (id, yes) => { $(id).parentElement.hidden = yes; };
 function refreshPanel() {
   hide('color', !['static', 'breathing'].includes(S.effect));
-  hide('scroll', S.view !== 'tour'); hide('scrollDir', S.view !== 'tour');
+  hide('scroll', !touring(S.view)); hide('scrollDir', !touring(S.view));
+  hide('pan', S.view !== 'pan');
   hide('peak', S.mode !== 'floors');
   hide('cityLine', S.mode !== 'floors');                // heights only mean something in the Floors style
   hide('lineH', S.mode !== 'floors' || !S.cityLine);
@@ -895,10 +1003,12 @@ function refreshPanel() {
   for (const id of ['blinkSpeed', 'blinkSync', 'blinkBeat', 'blinkColor']) hide(id, !S.roofLights);
   hide('blinkSpeed', !S.roofLights || S.blinkBeat); hide('blinkSync', !S.roofLights || S.blinkBeat);
   hide('flickAmt', !S.flicker);
-  hide('captions', S.view !== 'tour');
+  hide('captions', !touring(S.view));
   hide('tourList', S.view !== 'tour');
   hide('ownLights', !spanScreen);
-  for (const el of $('tourList').querySelectorAll('input')) el.checked = !S.tourOff.includes(el.value);
+  const boxes = [...$('tourList').querySelectorAll('input')];
+  for (const el of boxes) el.checked = !S.tourOff.includes(el.value);
+  $('tourCount').textContent = boxes.length ? `${boxes.filter(el => el.checked).length} of ${boxes.length}` : '';
   hide('traffic', !S.ground.startsWith('street'));
   hide('wxAmt', S.weather === 'none');
   hide('flyers', S.city !== 'cyber' && S.view !== 'tour');
@@ -909,7 +1019,7 @@ function refreshPanel() {
 const RELAYOUT = ['city', 'view', 'gap', 'back', 'ground', 'tourOff'];
 const showSetting = k => { const el = $(k); if (el) el.type === 'checkbox' ? el.checked = S[k] : el.value = S[k]; };
 for (const k of Object.keys(DEF)) {
-  const el = $(k); if (!el) continue;                  // pan is set by dragging, not a control
+  const el = $(k); if (!el) continue;
   showSetting(k);
   el.oninput = () => {
     S[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value;
@@ -919,6 +1029,7 @@ for (const k of Object.keys(DEF)) {
     if (T && T.weather && S.weather === 'none') { S.weather = T.weather; showSetting('weather'); }   // e.g. Cyberpunk and Noir City rain by default
     save();
     if (RELAYOUT.includes(k) && W) layout();
+    if (k === 'view' && S.view === 'tour') $('tourPick').open = true;
     if (k === 'color') pick = hexToHS(S.color);
     refreshPanel();
   };
@@ -1026,7 +1137,7 @@ addEventListener('keydown', e => {
 });
 
 // Pan view: drag or scroll the skyline to choose which part is shown.
-function nudge(px) { S.pan = Math.min(1, Math.max(0, S.pan + px / Math.max(1, worldW - W))); }
+function nudge(px) { S.pan = Math.min(1, Math.max(0, S.pan + px / Math.max(1, worldW - W))); showSetting('pan'); }
 cv.addEventListener('wheel', e => { if (S.view !== 'pan') return; e.preventDefault(); nudge(e.deltaY + e.deltaX); save(); }, { passive: false });
 // City line: drag the dotted line up or down (it's shown while the controls are visible).
 const lineShown = () => S.cityLine && S.mode === 'floors' && !wallMode && !document.body.classList.contains('idle');
@@ -1160,21 +1271,39 @@ function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for th
   return [cx, y - h];
 }
 
-// A dome on the top tier. With 3D detail it stands on the block's top face (shifted back like that face) and is lit from
-// the upper left, the same way the side and top faces are shaded; a thin rim catches the light along the left of the curve.
-function dome(g, T, hU, cx, y, tw) {
-  const h = hU * unit, r = tw / 2;
+// Where a dome sits on a top tier tw wide whose front top edge is at y. With 3D detail it covers the whole roof, from the
+// front-left corner across the 3D top to the back-right edge, and stands on a short collar, so it reads as built on, not
+// set on a box. Without 3D detail it's a flat half-oval on the front. Plugins use this too (CityPulse.domeBase / collar).
+function domeBase(cx, y, tw) {
+  if (!S.detail) return { x: cx, by: y, rx: tw / 2, rb: 0, c: 0 };
+  const d = Math.min(1.6 * unit, tw * .18);
+  return { x: cx + d / 2, by: y - d / 4, rx: (tw + d) / 2, rb: d / 4, c: Math.max(1.5, unit * .7) };
+}
+// The collar: a short drum, shaded left to right like the faces below ([lit, mid, shadow]), its top edge catching the light.
+function collar(g, B, shades, rim) {
+  const { x, by, rx, rb, c } = B;
+  if (!c) return;
+  const gr = g.createLinearGradient(x - rx, 0, x + rx, 0);
+  gr.addColorStop(0, shades[0]); gr.addColorStop(.45, shades[1]); gr.addColorStop(1, shades[2]);
+  g.fillStyle = gr; g.beginPath();
+  g.ellipse(x, by, rx, rb, 0, 0, Math.PI); g.lineTo(x - rx, by - c); g.ellipse(x, by - c, rx, rb, 0, Math.PI, 0, true); g.closePath(); g.fill();
+  g.strokeStyle = rim; g.lineWidth = Math.max(1, unit * .18); g.beginPath(); g.ellipse(x, by - c, rx, rb, 0, 0, Math.PI); g.stroke();
+}
+// A dome lit from the upper left, the way the side and top faces are shaded; a thin rim catches the light on its left.
+function dome(g, T, hU, cx, y, tw, b) {
+  const h = hU * unit, B = domeBase(cx, y, tw), { x, rx, rb } = B, y0 = B.by - B.c;
+  b.dome = { x, y: y0, rx, h };                         // for themes that decorate the dome
   g.beginPath();
-  if (!S.detail) { g.fillStyle = T.body; g.ellipse(cx, y, r, h, 0, Math.PI, 2 * Math.PI); g.fill(); return [cx, y - h]; }
-  const d = Math.min(1.6 * unit, tw * .18), x = cx + d / 2, by = y - d / 4;   // the top face's middle
-  const gr = g.createRadialGradient(x - r * .45, by - h * .75, 0, x - r * .15, by - h * .35, Math.max(r, h) * 1.3);
+  if (!S.detail) { g.fillStyle = T.body; g.ellipse(x, y0, rx, h, 0, Math.PI, 2 * Math.PI); g.fill(); return [x, y0 - h]; }
+  collar(g, B, [T.top, T.side, T.body], 'rgba(255,255,255,.2)');
+  const gr = g.createRadialGradient(x - rx * .45, y0 - h * .75, 0, x - rx * .15, y0 - h * .35, Math.max(rx, h) * 1.3);
   gr.addColorStop(0, T.top); gr.addColorStop(.55, T.side); gr.addColorStop(1, T.body);
-  g.fillStyle = gr;
-  g.ellipse(x, by, r, h, 0, Math.PI, 2 * Math.PI); g.ellipse(x, by, r, d / 4, 0, 0, Math.PI);   // the curve, then the near half of its base ring
+  g.fillStyle = gr; g.beginPath();
+  g.ellipse(x, y0, rx, h, 0, Math.PI, 2 * Math.PI); g.ellipse(x, y0, rx, rb, 0, 0, Math.PI);   // the curve, then the near half of its base
   g.fill();
   g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = Math.max(1, unit * .25); g.beginPath();
-  g.ellipse(x, by, Math.max(.5, r - g.lineWidth / 2), Math.max(.5, h - g.lineWidth / 2), 0, Math.PI * 1.1, Math.PI * 1.42); g.stroke();
-  return [x, by - h];
+  g.ellipse(x, y0, Math.max(.5, rx - g.lineWidth / 2), Math.max(.5, h - g.lineWidth / 2), 0, Math.PI * 1.1, Math.PI * 1.42); g.stroke();
+  return [x, y0 - h];
 }
 
 function drawBuilding(g, b, cx, t) {
@@ -1229,7 +1358,7 @@ function drawBuilding(g, b, cx, t) {
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
-    tip = !b.roof ? [cx, y] : b.roof[0] === 'dome' ? dome(g, T, b.roof[1], cx, y + .5, top.w * u) : (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u));
+    tip = !b.roof ? [cx, y] : b.roof[0] === 'dome' ? dome(g, T, b.roof[1], cx, y + .5, top.w * u, b) : (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u));
   }
   if (T.drawExtras) T.drawExtras(g, b, cx, tip, E);
   if (S.search && b.search && T.searchlights) {
@@ -1574,7 +1703,7 @@ function frame(t) {
   else if (!inApp) peak = .5 + .4 * bands[0].level;      // demo beat
   meterLvl = Math.max(Math.min(1, peak) * vol, meterLvl * Math.pow(.15, dt));
 
-  const prevOff = off, prevTravel = travel, tour = S.view === 'tour';
+  const prevOff = off, prevTravel = travel, tour = touring(S.view);
   let bo;                                                // back skyline offset
   const dir = S.scrollDir === 'ltr' ? -1 : 1;            // tour direction: cities travel right→left (default) or left→right
   if (spanMode) {                                        // one world across all screens, placed by the clock so separate windows agree without talking
@@ -1666,12 +1795,12 @@ function frame(t) {
 const WRAP1 = [0], WRAP2 = [0, 1];
 const E = { hash, sprite, pixelArt, bands, widget, wallMode, scene: cv, sky: null,
   toScreen(x) {                                          // a building's world cx → screen x this frame (the visible copy in the tour)
-    if (S.view !== 'tour') return x - off;
+    if (!touring(S.view)) return x - off;
     x = ((x - off) % worldW + worldW) % worldW;
     return x - W / 2 > worldW / 2 ? x - worldW : x;
   } };
 function env(t, dt, scrollV) {
-  Object.assign(E, { W, H, GY, WY, GH, unit, t, dt, off, worldW, travel, scrollV, spectrum, bassFlash, S, wrapK: S.view === 'tour' ? WRAP2 : WRAP1, left: 0, right: W });
+  Object.assign(E, { W, H, GY, WY, GH, unit, t, dt, off, worldW, travel, scrollV, spectrum, bassFlash, S, wrapK: touring(S.view) ? WRAP2 : WRAP1, left: 0, right: W });
 }
 // Crisp pixel sprite: rows of palette keys ('.' or ' ' = clear), top-left at (x, y), each pixel px CSS px, snapped to whole pixels.
 function pixelArt(g, rows, palette, x, y, px) {
@@ -1737,7 +1866,7 @@ function registerLandmark(key, def) {
   LM[key] = { ...def };
   guard(`landmark "${key}"`, LM[key], 'draw');
 }
-window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt });
+window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt, domeBase, collar, FAR });
 
 // Cyberpunk: neon signs, hologram billboards, skybridges and flying cars in a rainy magenta haze.
 {
@@ -1881,7 +2010,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     back: { h: 1.1, density: 1, body: '#0d0d0f', win: () => 'rgba(210,170,100,.16)' },
     searchlights: false,                                 // just the one light
     afterLayout(list, r, E) {                            // one rooftop near the left third carries the bat spotlight
-      const at = (E.S.view === 'tour' ? list[0].cx : 0) + E.W * .3;
+      const at = (touring(E.S.view) ? list[0].cx : 0) + E.W * .3;
       const cands = list.filter(b => !b.lm && b.floors > 12 && b.floors < 40);
       (cands.length ? cands : list).reduce((a, b) => Math.abs(b.cx - at) < Math.abs(a.cx - at) ? b : a).bat = true;
     },
@@ -1990,11 +2119,16 @@ function startControl() {
   C.onState(ccRender);
 }
 
+function setTourOff(off) {
+  S.tourOff = off; save(); refreshPanel();
+  if (W && S.view === 'tour') layout();
+}
 // Start-up that needs every plugin's themes, cities and landmarks: run by the last script on the page, after the plugins.
+let tourGroups = [];                                     // [[group name, [[menu value, city name]…]]…], built at start
 function start() {
   for (const [k, c] of Object.entries(CITIES)) if (!c.b.every(okSpec)) { console.error(`City Pulse: city "${k}" ignored: it uses an unknown window style or landmark.`); delete CITIES[k]; }
   const opt = (k, name) => `<option value="${esc(k)}">${esc(name)}</option>`;
-  const groups = [['Real cities', Object.entries(CITIES).map(([k, c]) => [k, c.name])],
+  const groups = tourGroups = [['Real cities', Object.entries(CITIES).map(([k, c]) => [k, c.name])],
     ['Themed', [['generic', 'Neon City'], ...Object.keys(THEMES).filter(k => k !== 'none').map(k => [k, THEMES[k].name])]
       .sort(([, a], [, b]) => a.replace(/^The /, '').localeCompare(b.replace(/^The /, '')))]];   // A to Z, "The Grid" under G
   $('city').innerHTML = groups.map(([g, list]) => `<optgroup label="${g}">${list.map(([k, n]) => opt(k, n)).join('')}</optgroup>`).join('');
@@ -2004,7 +2138,13 @@ function start() {
     const k = e.target.value, off = new Set(S.tourOff);
     e.target.checked ? off.delete(k) : off.add(k);
     if (off.size >= $('city').options.length) { e.target.checked = true; return; }   // keep at least one city
-    S.tourOff = [...off]; save(); if (W && S.view === 'tour') layout();
+    setTourOff([...off]);
+  };
+  $('tourPick').querySelector('.batch').onclick = e => {   // a batch replaces the choice: just those cities
+    const pick = e.target.dataset && e.target.dataset.pick;
+    if (!pick) return;
+    const [real, themed] = tourGroups.map(([, list]) => list.map(([k]) => k));
+    setTourOff(pick === 'all' ? [] : pick === 'real' ? themed : real);
   };
   if (![...$('city').options].some(o => o.value === S.city)) S.city = 'generic';   // its plugin is gone
   showSetting('city'); refreshPanel();

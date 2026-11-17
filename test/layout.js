@@ -1,7 +1,7 @@
 // Run with: electron test/layout.js
 // Lays out every city in every view at a few window sizes, in a hidden, muted, off-screen window, and checks each has buildings.
 const { app, BrowserWindow } = require('electron'), path = require('path');
-const SIZES = [[45, 60], [420, 240], [1920, 1080]], VIEWS = ['fit', 'pan', 'tour'];
+const SIZES = [[45, 60], [420, 240], [1920, 1080]], VIEWS = ['fit', 'pan', 'tour', 'scroll'];
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 800, height: 600, useContentSize: true, frame: false,
     webPreferences: { offscreen: true, backgroundThrottling: false } });
@@ -21,9 +21,10 @@ app.whenReady().then(async () => {
     }
   }
   // The tour picker: any choice of cities, even a single one or none at all, still builds a tour.
-  for (const off of [cities.slice(1), cities, cities.filter((_, i) => i % 2)]) {
+  const realKeys = await win.webContents.executeJavaScript(`Object.keys(CITIES)`);
+  for (const off of [cities.slice(1), cities, cities.filter((_, i) => i % 2), realKeys, cities.filter(k => !realKeys.includes(k))]) {
     const n = await win.webContents.executeJavaScript(`(() => { S.view = 'tour'; S.tourOff = ${JSON.stringify(off)};
-      try { layout(); return buildings.length && tourStops().length; } catch (e) { return 'threw ' + e.message; } })()`);
+      try { layout(); return buildings.length && tourStops().length === ${off.length === cities.length ? cities.length : cities.length - off.length} && tourStops().length; } catch (e) { return 'threw ' + e.message; } })()`);
     if (!(n > 0)) fails.push(`tour leaving out ${off.length} cities: ${n}`);
   }
   const first = await win.webContents.executeJavaScript(`(S.tourOff = [], document.getElementById('city').options[0].parentElement.label)`);
