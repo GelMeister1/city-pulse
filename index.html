@@ -36,7 +36,7 @@
   #panel .presets button{padding:3px 8px;font-size:inherit}
   html.widget #panel .body{gap:5px;padding-top:5px}
   html.widget,html.widget body{background:transparent}
-  html.widget #ui{top:0;left:0;right:0;padding:4px;gap:4px;background:#05060cdd;border-radius:8px;-webkit-app-region:drag}
+  html.widget #ui{top:auto;bottom:0;left:0;right:0;padding:4px;gap:4px;background:#05060cdd;border-radius:8px;-webkit-app-region:drag}   /* along the bottom, shown on hover */
   html.widget #ui button{-webkit-app-region:no-drag;padding:3px 6px;font-size:11px}
   html.widget #hint{display:none}
   html.widget #panel{top:32px;right:4px;width:196px;max-height:calc(100vh - 36px);padding:6px;font-size:11px}
@@ -806,12 +806,11 @@ function tourStops() {
 
 function layout() {
   dpr = devicePixelRatio || 1;
-  W = innerWidth; H = Math.max(1, innerHeight - INSET);
-  cv.style.height = INSET ? H + 'px' : '';
+  W = innerWidth; H = Math.max(1, innerHeight - INSET);   // the wallpaper lays the city out above the taskbar
   const tour = touring(S.view);
   for (const c of [cv, lay, acc]) {                      // the blend buffers are only used by the tour
     const s = c === cv || tour ? dpr : 0;
-    c.width = W * s; c.height = H * s; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.width = W * s; c.height = (H + (c === cv ? INSET : 0)) * s; c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   const r = rng(7), city = !tour && CITIES[S.city], key = tour ? 'none' : themeKey(S.city);
@@ -1873,6 +1872,9 @@ function frame(t) {
     if (a > .01) { g.fillStyle = `rgba(255,255,255,${a * .6})`; g.fillText(near.cur.name.toUpperCase(), W / 2, H * .13); }
     g.letterSpacing = '0px';
   }
+  // Under the taskbar: the bottom of the scene (street or water) carries on to the screen edge, so a see-through taskbar
+  // shows the city, not a dark band.
+  if (INSET) ctx.drawImage(cv, 0, Math.floor((H - 2) * dpr), cv.width, Math.max(1, Math.round(2 * dpr)), 0, H, W, INSET + 1);
   // TV burn-in protection: the whole picture creeps at most 3 px, one pixel every minute or so (a full cycle takes ~20 min).
   const tf = S.drift && !widget ? `translate(${Math.round(Math.sin(t / 190000) * 3)}px,${Math.round(Math.sin(t / 140000) * 2)}px)` : '';
   if (tf !== cv.style.transform) cv.style.transform = tf;   // only touch the style when it actually moves

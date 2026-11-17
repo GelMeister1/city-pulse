@@ -136,7 +136,10 @@ async function applyWallpaper(cfg) {
   prefs.wall = cfg; savePrefs();
   const one = cfg.mode === 'one' && screen.getAllDisplays().find(x => x.id === cfg.display);
   if (cfg.mode === 'off' || (cfg.mode === 'one' && !one)) return updateTray();
-  const all = screen.getAllDisplays(), vx = Math.min(...all.map(x => x.bounds.x)), vy = Math.min(...all.map(x => x.bounds.y));
+  // Windows places the window in physical pixels, measured from the top-left of the whole desktop; Electron's display
+  // bounds are scaled (DIP). Convert, so a monitor at 125% or 150%, or a mix of scalings, is still covered edge to edge.
+  const phys = r => (MAC ? r : screen.dipToScreenRect(null, r));
+  const all = screen.getAllDisplays().map(x => phys(x.bounds)), vx = Math.min(...all.map(b => b.x)), vy = Math.min(...all.map(b => b.y));
   walls = windowsFor(cfg.mode, one, true).map(({ d, query }) => {
     const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, thickFrame: false, resizable: false, skipTaskbar: true, focusable: false,
       backgroundColor: '#05060c', title: 'City Pulse Wallpaper', ...(MAC ? { type: 'desktop' } : {}), webPreferences: { ...PREFS, backgroundThrottling: false } });
@@ -144,7 +147,7 @@ async function applyWallpaper(cfg) {
     w.once('ready-to-show', async () => {
       if (w.isDestroyed()) return;
       if (MAC) { w.setVisibleOnAllWorkspaces(true); return w.showInactive(); }   // type 'desktop' already sits behind the icons
-      const hwnd = w.getNativeWindowHandle().readBigUInt64LE(0), rel = { x: d.bounds.x - vx, y: d.bounds.y - vy, width: d.bounds.width, height: d.bounds.height };
+      const hwnd = w.getNativeWindowHandle().readBigUInt64LE(0), pb = phys(d.bounds), rel = { x: pb.x - vx, y: pb.y - vy, width: pb.width, height: pb.height };
       const res = await win32.wallpaper(hwnd, rel);
       if (w.isDestroyed() || !res) return;                // replaced meanwhile, or the helper restarted (it isn't a "no")
       if (!res.ok) {                                      // Windows didn't allow it: back out quietly
