@@ -19,7 +19,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Loudness meter:** on Windows, tops out at your Windows volume, so at 50% volume it peaks halfway.
 - **Skylines:**
   - **12 real cities** with hand-drawn landmarks: New York, Chicago, Seattle, San Francisco, Toronto, Dubai, Paris, London, Tokyo, Sydney, Hong Kong and Shanghai.
-  - **13 themed cities**: Neon City, Cyberpunk, Noir City, Synthwave, Aero, Atlantis, Abyssal City, Aurora Harbor, Lantern District, Desert Mirage, Brasshaven, Lunar Colony and Neon Strip. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
+  - **14 themed cities**: Abyssal City, Aero, Atlantis, Aurora Harbor, Brasshaven, Cyberpunk, Desert Mirage, The Grid, Lantern District, Lunar Colony, Neon City, Neon Strip, Noir City and Synthwave. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
 - **Light styles:**
   - **Floors:** an equalizer that climbs each building, with a falling peak marker.
   - **Pulse:** each building's windows follow the volume.

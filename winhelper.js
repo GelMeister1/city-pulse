@@ -97,9 +97,10 @@ public static class CP {
     if (worker == IntPtr.Zero) return "{\"ok\":false}";
     var win = new IntPtr(hwnd);
     long style = GetWindowLongPtr(win, -16).ToInt64();                                     // GWL_STYLE: make it a proper child window
-    SetWindowLongPtr(win, -16, new IntPtr((style & ~0x80000000L) | 0x40000000L));           // drop WS_POPUP, add WS_CHILD
+    style &= ~(0x80000000L | 0x00C00000L | 0x00040000L | 0x00080000L | 0x00030000L);        // no popup, caption, resize frame, menu, min/max
+    SetWindowLongPtr(win, -16, new IntPtr(style | 0x40000000L));                             // WS_CHILD: the frame would eat a border
     SetParent(win, worker);
-    SetWindowPos(new IntPtr(hwnd), IntPtr.Zero, x, y, w, h, 0x0040 | 0x0004);              // SHOWWINDOW | NOZORDER, coords relative to the layer
+    SetWindowPos(new IntPtr(hwnd), IntPtr.Zero, x, y, w, h, 0x0040 | 0x0004 | 0x0020);     // SHOWWINDOW | NOZORDER | FRAMECHANGED, relative to the layer
     return "{\"ok\":true}";
   }
 

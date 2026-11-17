@@ -53,17 +53,19 @@ function createWidget() {
 
 // Screens left to right, as arranged in Windows. "Screen 1" is the left-most.
 const screensLR = () => screen.getAllDisplays().sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y);
-const screensParam = list => list.map(d => `${d.bounds.width}x${d.bounds.height}`).join(',');
 const alive = list => list.filter(w => !w.isDestroyed());
 
 // Multi-screen modes, shared by full screen and the wallpaper:
 //   one  - a single screen (full screen: the widget's screen; wallpaper: the chosen screen)
 //   per  - every screen, each with its own city and settings
 //   span - every screen showing one continuous tour that scrolls from screen to screen
-function windowsFor(mode, oneDisplay) {
-  const list = screensLR();
-  if (mode === 'one') return [{ d: oneDisplay, query: {} }];
-  return list.map((d, i) => ({ d, query: { mode, screen: String(i), screens: screensParam(list) } }));
+// wall: the city stays above the taskbar, so each screen is described by the height above it.
+const insetOf = d => Math.max(0, d.bounds.y + d.bounds.height - (d.workArea.y + d.workArea.height));
+function windowsFor(mode, oneDisplay, wall = false) {
+  const list = screensLR(), inset = d => (wall ? { inset: String(insetOf(d)) } : {});
+  if (mode === 'one') return [{ d: oneDisplay, query: inset(oneDisplay) }];
+  const sizes = list.map(d => `${d.bounds.width}x${d.bounds.height - (wall ? insetOf(d) : 0)}`).join(',');
+  return list.map((d, i) => ({ d, query: { mode, screen: String(i), screens: sizes, ...inset(d) } }));
 }
 
 // In 'one' mode it opens on whichever screen the widget is on: drag the widget to the TV, press full screen.
@@ -135,8 +137,8 @@ async function applyWallpaper(cfg) {
   const one = cfg.mode === 'one' && screen.getAllDisplays().find(x => x.id === cfg.display);
   if (cfg.mode === 'off' || (cfg.mode === 'one' && !one)) return updateTray();
   const all = screen.getAllDisplays(), vx = Math.min(...all.map(x => x.bounds.x)), vy = Math.min(...all.map(x => x.bounds.y));
-  walls = windowsFor(cfg.mode, one).map(({ d, query }) => {
-    const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, skipTaskbar: true, focusable: false,
+  walls = windowsFor(cfg.mode, one, true).map(({ d, query }) => {
+    const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, thickFrame: false, resizable: false, skipTaskbar: true, focusable: false,
       backgroundColor: '#05060c', title: 'City Pulse Wallpaper', ...(MAC ? { type: 'desktop' } : {}), webPreferences: { ...PREFS, backgroundThrottling: false } });
     load(w, { full: '1', wall: '1', ...query });
     w.once('ready-to-show', async () => {
@@ -364,6 +366,11 @@ app.whenReady().then(() => {
   setupUpdates();
   const rearranged = () => { updateTray(); if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall); };
   screen.on('display-added', rearranged); screen.on('display-removed', rearranged);
+  let insetTimer;                                         // taskbar shown, hidden or resized: re-place the wallpaper above it
+  screen.on('display-metrics-changed', (_, d, changed) => {
+    if (!changed.includes('workArea') || !prefs.wall || prefs.wall.mode === 'off') return;
+    clearTimeout(insetTimer); insetTimer = setTimeout(() => setWallpaper(prefs.wall), 800);
+  });
 });
 
 app.on('before-quit', e => {

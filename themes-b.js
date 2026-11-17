@@ -1,6 +1,6 @@
 // City Pulse plugin: themed cities (themes-b). Loaded by index.html after the core script, before start().
 // Register with CityPulse.registerTheme(key, def); see the field list above registerTheme in index.html.
-// Lantern District, Desert Mirage, Brasshaven and Neon Strip. All sizes are in units (E.unit px) so they scale
+// Lantern District, Desert Mirage, Brasshaven, Neon Strip and The Grid. All sizes are in units (E.unit px) so they scale
 // from the widget to a 4K TV; per-frame state that must advance once per frame uses a frame-stamp guard.
 (() => {
   const CP = window.CityPulse;
@@ -217,7 +217,7 @@
       },
       drawFront(g, E) {
         if (E.widget) return;
-        const { W, GY, unit: u, t } = E, cv = E.scene, sc = cv.width / W, band = Math.round(Math.max(8, GY * .06));
+        const { W, GY, unit: u, t } = E, cv = E.scene, sc = cv.width / W, band = Math.round(Math.max(8, GY * .13));   // the lowest floors waver; strongest at street level
         const bw = cv.width, bh = Math.ceil(band * sc);
         if (tc.width !== bw || tc.height !== bh) { tc.width = bw; tc.height = bh; } else tcx.clearRect(0, 0, bw, bh);
         tcx.drawImage(cv, 0, Math.round((GY - band) * sc), bw, bh, 0, 0, bw, bh);
@@ -541,6 +541,94 @@
           g.stroke();
         }
       } },
+    });
+  }
+  // ---------- The Grid ----------
+  // A digital city: black glass towers traced in glowing lines on a lit grid floor, light-trail bikes racing across it,
+  // and streams of data rising from the rooftops. Music: each tower's lines glow with its band, a pulse runs down the
+  // floor toward you on every bass hit, the bikes speed up with the mids and the data streams brighten with the highs.
+  {
+    const TAU = Math.PI * 2, CYAN = '0,230,255', ORANGE = '255,140,30';
+    const glow = (g, rgb, x, y, r, a) => { if (a <= .01 || r <= 0) return; const pa = g.globalAlpha; g.globalAlpha = pa * Math.min(1, a); g.drawImage(sprite(rgb), x - r, y - r, 2 * r, 2 * r); g.globalAlpha = pa; };
+    const st = { key: '', bikes: [], pulses: [], prevBF: 0, ph: 0, sp: 1 };
+    const tick = once();
+    const update = E => {                                 // once per frame: the clock, the bikes, the floor pulses
+      if (!tick(E)) return;
+      const { W, H, unit: u, dt, bands, bassFlash, scrollV } = E, k = `${W}x${H}x${u}x${E.widget}`;
+      if (st.key !== k) {
+        st.key = k; st.pulses = [];
+        st.bikes = [[.32, 1, CYAN, .1], [.5, -1, ORANGE, .45], [.7, 1, CYAN, .7], [.88, -1, ORANGE, .25]]
+          .slice(0, E.widget ? 2 : 4).map(([lane, dir, rgb, x]) => ({ lane, dir, rgb, x: W * x, v: (14 + 6 * Math.random()) * u }));
+      }
+      st.sp += (1 + 1.2 * ((bands[3].level + bands[4].level) / 2) - st.sp) * Math.min(1, dt * 1.5);   // smoothed, so they surge rather than jerk
+      st.ph += dt;
+      for (const b of st.bikes) {
+        const trail = 32 * u, span = W + 2 * trail;
+        b.x += (b.dir * b.v * st.sp - scrollV) * dt;
+        if (b.x > W + trail) b.x -= span; else if (b.x < -trail) b.x += span;
+      }
+      if (st.prevBF < .9 && bassFlash >= .9) st.pulses.push(0);
+      st.prevBF = bassFlash;
+      st.pulses = st.pulses.map(p => p + dt / 1.6).filter(p => p < 1);
+    };
+    // An original light-trail bike: a low dark wedge with two glowing wheels and a long fading ribbon of light behind it.
+    const bike = (g, b, y, s, u) => {
+      const { x, dir, rgb } = b, L = 5 * u * s, h = 1.4 * u * s, r = .6 * u * s, tl = 32 * u * s;
+      const tr = g.createLinearGradient(x, 0, x - dir * tl, 0);
+      tr.addColorStop(0, `rgba(${rgb},.9)`); tr.addColorStop(1, `rgba(${rgb},0)`);
+      g.fillStyle = tr; g.fillRect(dir > 0 ? x - tl : x, y - h * .75, tl, Math.max(1, h * .4));
+      glow(g, rgb, x, y - h * .5, L * .9, .35);
+      g.fillStyle = '#020507'; g.strokeStyle = `rgba(${rgb},.95)`; g.lineWidth = Math.max(1, u * .15 * s);
+      g.beginPath(); g.moveTo(x - dir * L * .55, y - r); g.lineTo(x - dir * L * .2, y - h); g.lineTo(x + dir * L * .3, y - h * .85); g.lineTo(x + dir * L * .58, y - r); g.closePath(); g.fill(); g.stroke();
+      for (const wx of [x - dir * L * .4, x + dir * L * .4]) { g.beginPath(); g.arc(wx, y - r, r, 0, TAU); g.fill(); g.stroke(); }
+    };
+    registerTheme('grid', { name: 'The Grid',
+      kit: { styles: ['slim', 'ribbon', 'grid', 'cols', 'tall'], roofs: [null, null, ['antenna', 6], ['spire', 7], ['pyramid', 3], null], tall: .45, shrink: .82, w0: 7, gaps: [.8, 1.8] },
+      minF: .3, maxF: .72, noWeather: true, planes: false, stars: false, moon: false, roofLights: false, searchlights: false, widgetSky: true,
+      cloud: 'rgba(0,0,0,0)', rain: 'rgba(0,0,0,0)', fogRGB: '0,110,150',
+      sky: [[0, '#000205'], [.75, '#000d14'], [1, '#00202c']],
+      body: '#020507', side: '#03111a', top: '#062836',
+      outline: b => `rgba(${b.orange ? ORANGE : CYAN},${.4 + .6 * b.level})`,
+      win: (c, b) => ({ h: b.orange ? 28 : 186 + c.h / 360 * 18, s: 95, m: c.m }),
+      back: { h: .8, density: .75, body: '#010a0f', win: () => 'rgba(0,200,255,.16)' },
+      decorate(b, r) { b.orange = r() < .2; b.stream = r() < .35; b.sph = r(); },
+      drawSky(g, E) {                                     // a faint digital horizon: thin bright lines crowding toward the ground
+        const { W, GY } = E;
+        for (let i = 1; i <= 7; i++) { g.fillStyle = `rgba(${CYAN},${.03 + .015 * i})`; g.fillRect(0, GY - GY * .35 * (1 - i / 8) ** 2 - 1, W, 1); }
+        const hz = g.createLinearGradient(0, GY * .8, 0, GY); hz.addColorStop(0, `rgba(${CYAN},0)`); hz.addColorStop(1, `rgba(${CYAN},.14)`);
+        g.fillStyle = hz; g.fillRect(0, GY * .8, W, GY * .2);
+      },
+      drawExtras(g, b, cx, tip, E) {
+        if (b.lm) return;
+        update(E);
+        const u = E.unit, tw = topT(b).w * u, ty = E.GY - b.hU * u, rgb = b.orange ? ORANGE : CYAN, lv = b.level;
+        g.fillStyle = `rgba(${rgb},${.55 + .45 * lv})`; g.fillRect(cx - tw / 2, ty - 1, tw, Math.max(1.5, u * .25));   // the lit roofline
+        glow(g, rgb, cx, ty, tw * .6, .12 + .3 * lv);
+        if (!b.stream || E.widget) return;
+        const hi = (E.bands[6].level + E.bands[7].level) / 2, n = 6, rise = ty * .95;   // packets of light climbing from the roof
+        for (let k = 0; k < n; k++) {
+          const p = ((st.ph * (.12 + .06 * b.sph) + k / n + b.sph) % 1), y = tip[1] - p * rise;
+          g.fillStyle = `rgba(${rgb},${(1 - p) * (.25 + .6 * hi)})`;
+          g.fillRect(tip[0] - Math.max(.5, u * .12), y - u * 1.6, Math.max(1, u * .24), u * 1.6);
+        }
+      },
+      ground: { h: .14, draw(g, E) {                       // the lit floor: a square grid in perspective, and the bass pulses
+        update(E);
+        const { W, H, GY, travel } = E, gh = H - GY, vx = W / 2, cell = W * .06;
+        const fl = g.createLinearGradient(0, GY, 0, H); fl.addColorStop(0, '#001018'); fl.addColorStop(1, '#000306');
+        g.fillStyle = fl; g.fillRect(0, GY, W, gh);
+        g.strokeStyle = `rgba(${CYAN},.38)`; g.lineWidth = 1; g.beginPath();
+        for (let i = 1; i < 10; i++) { const y = GY + gh * (i / 10) ** 1.6; g.moveTo(0, y); g.lineTo(W, y); }
+        for (let k = -30; k <= 30; k++) { const xb = vx + k * cell - (travel % cell); g.moveTo(vx + (xb - vx) * .35, GY); g.lineTo(xb, H); }
+        g.stroke();
+        for (const p of st.pulses) { const y = GY + gh * p ** 1.6; g.fillStyle = `rgba(${CYAN},${.9 * (1 - p)})`; g.fillRect(0, y - 1, W, 2); }
+        g.fillStyle = `rgba(${CYAN},.85)`; g.fillRect(0, GY, W, 1.5);
+      } },
+      drawTop(g, E) {
+        update(E);
+        const { GY, H, unit: u } = E, gh = H - GY;
+        for (const b of [...st.bikes].sort((a, c) => a.lane - c.lane)) bike(g, b, GY + gh * b.lane, .9 + 1.1 * b.lane, u);   // nearer lanes are bigger
+      },
     });
   }
 })();

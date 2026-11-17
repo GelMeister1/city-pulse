@@ -478,13 +478,19 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         g.fillStyle = `hsla(${b.hueD},100%,70%,${.35 + .65 * b.flash})`;
         for (let x = x0 + u; x < x0 + w - u * .5; x += u * 2) g.fillRect(x, y - Math.max(1, u * .2), Math.max(1, u * .4), Math.max(1, u * .4));
       });
-      if (b.glass) {
-        const rx = tw * .5, ry = Math.min(tw * .45, 10 * u);
-        glow(g, '60,230,255', cx, ty - ry * .4, rx * 1.3, .2 + .55 * lv);
-        g.fillStyle = 'rgba(80,230,255,.13)'; g.beginPath(); g.ellipse(cx, ty, rx, ry, 0, Math.PI, TAU); g.fill();
-        g.strokeStyle = `rgba(140,250,255,${.45 + .4 * lv})`; g.lineWidth = Math.max(1, u * .2); g.stroke();
-        g.strokeStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.ellipse(cx, ty, rx * .78, ry * .82, 0, Math.PI * 1.15, Math.PI * 1.45); g.stroke();
-        g.strokeStyle = 'rgba(120,240,255,.25)'; g.lineWidth = 1; g.beginPath(); g.moveTo(cx, ty - ry); g.lineTo(cx, ty); g.ellipse(cx, ty, rx * .5, ry, 0, Math.PI, TAU); g.stroke();
+      if (b.glass) {                                     // a glass dome: on the block's 3D top (with 3D detail), its far rim seen through it
+        const d = E.S.detail ? Math.min(1.6 * u, tw * .18) : 0, x = cx + d / 2, by = ty - d / 4, rx = tw * .5, ry = Math.min(tw * .45, 10 * u), rb = Math.max(1, d / 4 || u * .4);
+        glow(g, '60,230,255', x, by - ry * .4, rx * 1.3, .2 + .55 * lv);
+        const gl = g.createRadialGradient(x - rx * .4, by - ry * .7, 0, x, by - ry * .3, Math.max(rx, ry) * 1.2);
+        gl.addColorStop(0, 'rgba(170,250,255,.30)'); gl.addColorStop(.6, 'rgba(70,220,255,.12)'); gl.addColorStop(1, 'rgba(20,120,160,.22)');
+        g.fillStyle = gl; g.beginPath(); g.ellipse(x, by, rx, ry, 0, Math.PI, TAU); g.ellipse(x, by, rx, rb, 0, 0, Math.PI); g.fill();
+        g.strokeStyle = 'rgba(120,240,255,.22)'; g.lineWidth = 1; g.beginPath(); g.ellipse(x, by, rx, rb, 0, Math.PI, TAU); g.stroke();   // far side of the base ring
+        g.beginPath();                                    // meridians, foreshortened by the curve
+        for (const k of [-.55, 0, .55]) g.ellipse(x, by, rx * Math.abs(k) || .5, ry, 0, k < 0 ? Math.PI : Math.PI * 1.5, k < 0 ? Math.PI * 1.5 : TAU);
+        g.moveTo(x, by - ry); g.lineTo(x, by); g.stroke();
+        g.strokeStyle = `rgba(140,250,255,${.45 + .4 * lv})`; g.lineWidth = Math.max(1, u * .2);
+        g.beginPath(); g.ellipse(x, by, rx, ry, 0, Math.PI, TAU); g.ellipse(x, by, rx, rb, 0, 0, Math.PI); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,.45)'; g.beginPath(); g.ellipse(x, by, rx * .78, ry * .82, 0, Math.PI * 1.15, Math.PI * 1.45); g.stroke();
       }
     },
     drawBehind(g, E) {
@@ -588,7 +594,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
 }
 
 // Aurora Harbor: a snowy, low waterfront of warm-lit houses on a frozen bay under rippling auroras.
-// Music: the aurora curtains brighten, grow and ripple faster with the mids and highs, and flare on hits.
+// Music: the aurora drifts slowly on its own clock; the mids and highs gently swell its glow, most at the curtains' base.
 {
   const rib = stops => mk(1, 128, (x, w, h) => { x.fillStyle = lin(x, 0, 0, 0, h, stops); x.fillRect(0, 0, w, h); });
   const RIBS = [
@@ -596,25 +602,26 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     rib([[0, 'rgba(255,80,200,0)'], [.4, 'rgba(200,90,255,.35)'], [.8, 'rgba(90,240,200,.6)'], [1, 'rgba(90,240,200,0)']]),
     rib([[0, 'rgba(60,255,160,0)'], [.5, 'rgba(60,255,160,.35)'], [.9, 'rgba(160,255,220,.6)'], [1, 'rgba(60,255,160,0)']]),
   ];
-  const st = { en: .5, list: [], ik: '', ice: null };
+  const st = { en: .5, ph: 0, list: [], ik: '', ice: null };
   registerTheme('aurora', { name: 'Aurora Harbor',
     kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'pairs'], roofs: [['pyramid', 4], ['pyramid', 5], ['pyramid', 3], null, ['pyramid', 6], ['antenna', 4]], tall: .15, shrink: .8, w0: 6, gaps: [.6, 1.2] },
     minF: .15, maxF: .45, weather: 'snow', widgetSky: true,
     sky: [[0, '#01040f'], [.55, '#061430'], [1, '#14304a']], skyToGround: true,
     drawSky(g, E) {
-      const { W, GY, t, dt, bands } = E;
+      const { W, GY, dt, bands } = E;
       const en = .25 + .55 * avg(bands, 3, 5) + .45 * avg(bands, 6, 7);
-      st.en += (en - st.en) * Math.min(1, dt * 3);
-      const hit = Math.max(bands[5].flash, bands[6].flash), n = E.widget ? 50 : 150, step = W / n, sp = 1 + st.en;
+      st.en += (en - st.en) * Math.min(1, dt * .7);        // a slow follow: the music swells it over a second or two, never jolts it
+      st.ph += dt;
+      const t = st.ph * 1000 / 3, n = E.widget ? 50 : 150, step = W / n;   // its own steady clock, a third of real speed
       const a0 = g.globalAlpha, op = g.globalCompositeOperation;
       g.globalCompositeOperation = 'lighter';
       for (let i = 0; i < 3; i++) {
         const R = RIBS[i], wgt = [1, .65, .5][i];
         for (let j = 0; j <= n; j++) {
           const x = j * step, p = x / W;
-          const yc = GY * (.2 + .1 * i) + Math.sin(p * TAU * 1.3 + t / 4000 * sp + i * 2) * GY * .06 + Math.sin(p * TAU * 3.1 - t / 2300 * sp + i) * GY * .025 * sp;
-          const h = GY * (.14 + .16 * st.en) * (.55 + .45 * Math.sin(p * TAU * 2.2 + t / 1700 + i * 1.7));
-          const a = (.2 + .55 * st.en + .45 * hit) * (.55 + .45 * Math.sin(p * TAU * 4.3 + t / 900 * sp + i)) * Math.min(1, p * 6, (1 - p) * 6 + .3) * wgt;
+          const yc = GY * (.2 + .1 * i) + Math.sin(p * TAU * 1.3 + t / 4000 + i * 2) * GY * .06 + Math.sin(p * TAU * 3.1 - t / 2300 + i) * GY * .03;
+          const h = GY * (.18 + .06 * st.en) * (.55 + .45 * Math.sin(p * TAU * 2.2 + t / 1700 + i * 1.7));
+          const a = (.3 + .5 * st.en) * (.6 + .4 * Math.sin(p * TAU * 4.3 + t / 2600 + i)) * Math.min(1, p * 6, (1 - p) * 6 + .3) * wgt;
           g.globalAlpha = a0 * Math.min(1, Math.max(0, a));
           g.drawImage(R, x, yc - h, step + 1, h);
         }
@@ -669,12 +676,13 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
 }
 
 // Lunar Colony: domes, habitat modules and antenna towers on a grey cratered plain, Earth hanging in a black sky.
-// Music: landing beacons blink with the beat, dishes sweep faster with the mids, and a big bass hit launches a rocket.
+// Music: landing beacons blink with the beat, dishes sweep a little faster with the mids, and every 30-60 s a rocket
+// lifts off a random pad on the next big bass hit: the pad's centre hatch irises open and the rocket climbs out slowly.
 {
   const ROVER = PAL(['.......d....', '.......a....', '..pppppppp..', '.WWWWWWWWWW.', '.WWgWWWWWWWW', '.WWWWWWWWWW.', '.KK..KK..KK.', '.KK..KK..KK.'],
     { d: '#ff4040', a: '#9aa0a8', p: '#2c5aa8', W: '#e8e8ea', g: '#5ad0ff', K: '#2a2a2e' });
   const ROCKET = PAL(['..r..', '.rrr.', '.WWW.', '.WbW.', '.WWW.', '.WWW.', '.WWW.', 'rWWWr', 'r.g.r'], { r: '#e8403a', W: '#f2f2f4', b: '#3fa0ff', g: '#555' });
-  const st = { key: '', ek: '', earth: null, rover: null, rk: null, prevBF: 0, last: -1e9, smoke: [], gk: '', gg: null, list: [] };
+  const st = { key: '', ek: '', earth: null, rovers: null, rk: null, hatch: null, prevBF: 0, next: 0, smoke: [], gk: '', gg: null, list: [], pads: [] };
   function earth(R) {
     const d = dpr(), S = R * 3;
     return mk(S * d, S * d, x => {
@@ -717,8 +725,9 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       if (b.roof && b.roof[0] === 'dome') {
         g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(tip[0] - tw * .15, tip[1] + b.roof[1] * u * .45, tw * .14, b.roof[1] * u * .22, -.5, 0, TAU); g.fill();
       }
-      if (b.dish) {
-        const x = cx + tw * .28, y = ty - u * 1.2, a = Math.sin(E.t / 1800 * (1 + avg(E.bands, 2, 4)) + b.dphase) * .7 - Math.PI / 2;
+      if (b.dish) {                                       // the sweep advances at a smoothed speed, so a loud bar never makes it jump
+        if (b.dt !== E.t) { b.dt = E.t; b.dsp = (b.dsp ?? 1) + (1 + .5 * avg(E.bands, 2, 4) - (b.dsp ?? 1)) * Math.min(1, E.dt); b.dang = (b.dang ?? b.dphase) + E.dt * b.dsp / 1.8; }
+        const x = cx + tw * .28, y = ty - u * 1.2, a = Math.sin(b.dang) * .7 - Math.PI / 2;
         g.fillStyle = '#8e939b'; g.fillRect(x - Math.max(.5, u * .15), y, Math.max(1, u * .3), u * 1.2);
         g.fillStyle = '#e4e6ea'; g.beginPath(); g.ellipse(x, y, u * 1.6, u * .5, a + Math.PI / 2, 0, Math.PI); g.fill();
       }
@@ -745,9 +754,16 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       }
       const ps = 70 * u, py = GY + gh * .35, pads = [];
       for (let i = Math.floor((travel - 10 * u) / ps); i * ps - travel < W + 10 * u; i++) {
-        const x = i * ps - travel + ps * .3, pw = 7 * u; pads.push(x);
+        const x = i * ps - travel + ps * .3, pw = 7 * u, hx = pw * .32, hy = pw * .055, o = st.hatch && st.hatch.pad === i ? st.hatch.o : 0;
+        pads.push({ i, x });
         g.fillStyle = '#5b5e65'; g.beginPath(); g.ellipse(x, py, pw, pw * .18, 0, 0, TAU); g.fill();
         g.strokeStyle = 'rgba(255,220,90,.6)'; g.lineWidth = Math.max(1, u * .2); g.beginPath(); g.ellipse(x, py, pw * .6, pw * .1, 0, 0, TAU); g.stroke();
+        g.fillStyle = '#41444a'; g.beginPath(); g.ellipse(x, py, hx, hy, 0, 0, TAU); g.fill();   // the launch hatch in the middle
+        g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x - hx, py); g.lineTo(x + hx, py); g.moveTo(x, py - hy); g.lineTo(x, py + hy); g.stroke();
+        if (o > 0) {                                     // irising open onto the dark launch shaft, lit from below
+          g.fillStyle = '#07080b'; g.beginPath(); g.ellipse(x, py, hx * o, hy * o, 0, 0, TAU); g.fill();
+          glow(g, '255,170,70', x, py, hx * o * .8, .35 * o);
+        }
         for (let s = 0; s < 4; s++) {                     // beacons round the pad: chasing blink, all flare on the beat
           const bx = x + Math.cos(s * TAU / 4) * pw, by = py + Math.sin(s * TAU / 4) * pw * .18;
           const on = Math.max(((t / 250 + s) % 4) < 1 ? 1 : 0, E.bassFlash), rgb = s % 2 ? '255,60,60' : '80,255,120';
@@ -757,29 +773,60 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       }
       st.pads = pads;
     } },
-    drawTop(g, E) {                                      // the rover and the odd launch stand in front of the ground
+    drawTop(g, E) {                                      // rovers and launches, in front of the ground
       const { W, H, GY, unit: u, t, dt, scrollV } = E, gh = H - GY, py = GY + gh * .35, pads = st.pads || [];
       const px = pxOf(E, .5);
-      if (!st.rover || st.key !== keyOf(E)) { st.key = keyOf(E); st.rover = { sp: ROVER, px, dir: 1, v: u * 1.6, par: 1, m: spW(ROVER, px) + 4 * u, x: W * .2 }; st.rk = null; st.smoke = []; }
-      const rv = st.rover; swim(rv, E);
-      drawPix(g, ROVER, rv.px, rv.x, GY + gh * .55 - spH(ROVER, rv.px) + Math.round(Math.sin(t / 300) * .6), false);
-      if (!st.rk && st.prevBF < .9 && E.bassFlash >= .9 && t - st.last > 18000) {
-        const x = pads.find(x => x > W * .1 && x < W * .9) ?? W * .3;
-        st.rk = { x, y: py, v: 0 }; st.last = t;
+      if (!st.rovers || st.key !== keyOf(E)) {
+        st.key = keyOf(E); st.rk = st.hatch = null; st.smoke = []; st.next = t + 8000 + 10000 * Math.random();   // the first one soon after you arrive
+        st.rovers = [[.15, 1, 1.6, .55], [.55, -1, 1.1, .78], [.82, 1, 2.1, .44]].map(([x, dir, v, lane]) =>
+          ({ sp: ROVER, px, dir, v: u * v, par: 1, m: spW(ROVER, px) + 4 * u, x: W * x, lane, bob: Math.random() * TAU }));
       }
+      for (const rv of [...st.rovers].sort((a, b) => a.lane - b.lane)) {   // nearer rovers drawn last
+        swim(rv, E);
+        drawPix(g, ROVER, rv.px, rv.x, GY + gh * rv.lane - spH(ROVER, rv.px) + Math.round(Math.sin(t / 300 + rv.bob) * .6), rv.dir < 0);
+      }
+      // Launch: once the wait is over, the next big bass hit (or 8 s without one) picks a random pad on screen.
+      const beat = st.prevBF < .9 && E.bassFlash >= .9;
       st.prevBF = E.bassFlash;
+      if (!st.rk && !st.hatch && t >= st.next && (beat || t > st.next + 8000)) {
+        const pick = pads.filter(p => p.x > W * .08 && p.x < W * .92);
+        if (pick.length) {
+          const p = pick[Math.floor(Math.random() * pick.length)];
+          st.hatch = { pad: p.i, o: 0, closing: false };
+          st.rk = { pad: p.i, x: p.x, y: null, v: 0, phase: 'open' };
+        }
+        st.next = t + 30000 + 30000 * Math.random();
+      }
+      const hatch = st.hatch;
+      if (hatch) {
+        hatch.o = Math.max(0, Math.min(1, hatch.o + (hatch.closing ? -1 : 1) * dt / 1.4));
+        if (hatch.closing && hatch.o === 0) st.hatch = null;
+      }
       for (let i = st.smoke.length - 1; i >= 0; i--) { const s = st.smoke[i]; s.r += u * 3 * dt; s.a -= dt * .35; s.x -= scrollV * dt; if (s.a <= 0) st.smoke.splice(i, 1); }
       g.fillStyle = 'rgb(210,210,215)';
       for (const s of st.smoke) withAlpha(g, s.a, () => { g.beginPath(); g.arc(s.x, s.y, s.r, 0, TAU); g.fill(); });
       if (st.rk) {
         const r = st.rk, rp = Math.max(1, Math.round(px * 1.4)), w = spW(ROCKET, rp), h = spH(ROCKET, rp);
-        r.v += GY * .22 * dt; r.y -= r.v * dt; r.x -= scrollV * dt;
-        if (r.y > GY - GY * .3 && Math.random() < .6) st.smoke.push({ x: r.x + (Math.random() - .5) * w, y: r.y + u * .5, r: u, a: .5 });
-        const fl = h * (.5 + .4 * Math.random());
-        g.fillStyle = '#ffd36a'; g.beginPath(); g.moveTo(r.x - w * .3, r.y); g.lineTo(r.x, r.y + fl); g.lineTo(r.x + w * .3, r.y); g.fill();
-        glow(g, '255,170,70', r.x, r.y + fl * .3, u * 4, .8);
-        drawPix(g, ROCKET, rp, r.x - w / 2, r.y - h, false);
-        if (r.y < -h * 2) st.rk = null;
+        const pad = pads.find(p => p.i === r.pad);
+        if (r.phase !== 'fly' && pad) r.x = pad.x; else r.x -= scrollV * dt;
+        r.y ??= py + h;                                   // waiting in the shaft, out of sight
+        if (r.phase === 'open' && hatch && hatch.o >= 1) r.phase = 'rise';
+        else if (r.phase === 'rise') { r.y -= u * 3 * dt; if (r.y <= py) { r.y = py; r.phase = 'fly'; } }   // eases up out of the hatch
+        else if (r.phase === 'fly') {
+          r.v = Math.min(GY * .3, r.v + GY * .04 * dt); r.y -= r.v * dt;   // a slow, heavy climb: several seconds to clear the sky
+          if (hatch && !hatch.closing && r.y < py - h * 1.5) hatch.closing = true;
+          if (r.y > GY - GY * .35 && Math.random() < .5) st.smoke.push({ x: r.x + (Math.random() - .5) * w, y: Math.min(r.y, py) + u * .5, r: u, a: .45 });
+        }
+        if (r.phase !== 'open') {
+          g.save();
+          if (r.phase === 'rise') { g.beginPath(); g.rect(0, 0, W, py); g.clip(); }   // only what has come out of the hatch shows
+          const fl = h * (r.phase === 'fly' ? .5 + .4 * Math.random() : .2 + .15 * Math.random());
+          g.fillStyle = '#ffd36a'; g.beginPath(); g.moveTo(r.x - w * .3, r.y); g.lineTo(r.x, r.y + fl); g.lineTo(r.x + w * .3, r.y); g.fill();
+          glow(g, '255,170,70', r.x, r.y + fl * .3, u * 4, .8);
+          drawPix(g, ROCKET, rp, r.x - w / 2, r.y - h, false);
+          g.restore();
+        }
+        if (r.y < -h * 2 || (!pad && r.phase !== 'fly')) { st.rk = null; if (st.hatch) st.hatch.closing = true; }
       }
     },
   });
