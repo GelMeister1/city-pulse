@@ -230,7 +230,8 @@ const DEF = { city: 'nyc',                             // New York on a first ru
   roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
   search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true,
   tourOff: [],                                            // city menu values left out of the tour
-  ownLights: false };                                     // tour across all screens: this screen uses its own Lights settings
+  ownLights: false,
+  wxAuto: false };                                        // the weather was switched on by the city (e.g. Dark City's rain), not by you                                     // tour across all screens: this screen uses its own Lights settings
 let S;
 // Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
 const SHARED_KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
@@ -343,7 +344,7 @@ const LM = {
       const dd = L.d * .85;                               // side clock seen at an angle, the belfry and the spire's right face
       const side = (x, y0, y1) => { g.beginPath(); g.moveTo(x, -y0); g.lineTo(x + dd, -y0 - dd / 2 * (y0 > 0 ? 1 : 0)); g.lineTo(x + dd, -y1 - dd / 2); g.lineTo(x, -y1); g.fill(); };
       g.fillStyle = L.sideCol; side(3, 0, 36); side(3.7, 36, 44.5); side(3.9, 44.5, 45.3); side(3.2, 45.3, 50);
-      g.beginPath(); g.moveTo(3.6, -50); g.lineTo(3.6 + dd, -50 - dd / 2); g.lineTo(dd / 2, -60.5 - dd / 4); g.fill();
+      g.beginPath(); g.moveTo(3.6, -50); g.lineTo(3.6 + dd, -50 - dd / 2); g.lineTo(0, -60.5); g.fill();   // the spire's side runs up to its own tip
       g.fillStyle = L.topCol; g.beginPath(); g.moveTo(-3.7, -44.5); g.lineTo(-3.7 + dd, -44.5 - dd / 2); g.lineTo(3.7 + dd, -44.5 - dd / 2); g.lineTo(3.7, -44.5); g.fill();
       const a = L.lit(40);
       g.fillStyle = L.win(Math.max(a, .2) * .7); g.beginPath(); g.ellipse(3.7 + dd / 2, -40.2 - dd / 4, dd * .38, 2.5, 0, 0, Math.PI * 2); g.fill();
@@ -1065,8 +1066,8 @@ for (const k of Object.keys(DEF)) {
     S[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value;
     S.preset = ''; $('preset').value = '';             // a hand-made change means you're no longer on a preset
     if (spanScreen && LIGHT.includes(k)) { S.ownLights = true; showSetting('ownLights'); }   // changing a light means this screen has its own
-    const T = k === 'city' && THEMES[themeKey(S.city)];
-    if (T && T.weather && S.weather === 'none') { S.weather = T.weather; showSetting('weather'); }   // e.g. Cyberpunk and Dark City rain by default
+    if (k === 'city') { cityWeather(S); showSetting('weather'); }   // e.g. Cyberpunk and Dark City rain by default
+    if (k === 'weather') S.wxAuto = false;            // your own choice: keep it
     save();
     if (RELAYOUT.includes(k) && W) layout();
     if (k === 'view' && S.view === 'tour') $('tourPick').open = true;
@@ -1077,7 +1078,14 @@ for (const k of Object.keys(DEF)) {
 
 // ---------- presets ----------
 // A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
-const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff', 'ownLights'];
+const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff', 'ownLights', 'wxAuto'];
+// A city with its own weather (Cyberpunk and Dark City rain) brings it when the sky is clear; leaving for a city without one
+// takes it away again. Weather you picked yourself is never touched.
+function cityWeather(s) {
+  const T = THEMES[themeKey(s.city)];
+  if (T && T.weather && ((s.weather || 'none') === 'none' || s.wxAuto)) { s.weather = T.weather; s.wxAuto = true; }
+  else if (s.wxAuto) { s.weather = 'none'; s.wxAuto = false; }
+}
 const lookOf = s => Object.fromEntries(Object.keys(DEF).filter(k => !PLACE.includes(k)).map(k => [k, s[k]]));
 const BUILTIN = Object.assign(Object.create(null), {
   'Lounge': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
@@ -1111,7 +1119,7 @@ $('preset').oninput = () => {
   S.preset = name;
   if (p) {
     const relayout = RELAYOUT.some(k => k in p && p[k] !== S[k]);
-    Object.assign(S, p);
+    Object.assign(S, p); S.wxAuto = false;
     if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // presets saved by older versions
     Object.keys(DEF).forEach(showSetting);
     pick = hexToHS(S.color);
@@ -1963,9 +1971,9 @@ function registerCity(key, def) {
   CITIES[key] = def;
 }
 // A hand-drawn landmark, shaped like the LM entries; a spec refers to it as '@key'.
-// No automatic 3D side for these: open lattices, the slim Space Needle (copies make it look boxy) and Big Ben, which
-// draws its own side (L.d) with the side clock face seen at an angle.
-for (const k of ['eiffel', 'tokyotower', 'needle', 'bigben']) LM[k].flat = true;
+// No automatic 3D side for these: open lattices, spires and see-through shapes (the stepped copies would show as a
+// doubled outline behind them), and Big Ben, which draws its own side (L.d) with the side clock face seen at an angle.
+for (const k of ['eiffel', 'tokyotower', 'needle', 'bigben', 'empire', 'chrysler', 'hancock', 'burjarab']) LM[k].flat = true;
 function registerLandmark(key, def) {
   if (typeof key !== 'string' || !key || !def || !(def.w > 0) || !(def.h > 0) || typeof def.draw !== 'function')
     return console.error(`City Pulse: landmark "${key}" ignored: it needs w, h and draw(g, L).`);
@@ -2045,15 +2053,25 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       g.strokeStyle = `hsla(${b.ring.hue},100%,70%,${.18 * al * a})`; g.lineWidth = Math.max(2, u * .9); g.beginPath(); g.ellipse(cx, y, rx, ry, 0, from, to); g.stroke();
     }
   };
-  // The giant hologram koi: an original design, translucent and scanlined, holding its place among the towers (it moves
-  // with the pan and the tour) while it swims in place: its body ripples, its long tail flows, its fins paddle. It glitches
-  // into offset slices on a bass hit.
+  // The giant hologram koi: an original design, translucent and scanlined. It roams back and forth over a wide stretch of
+  // the city (pinned to the city, so it pans and tours away with the buildings), turning round at each end inside a glitch.
+  // Otherwise it glitches only on a bass hit, and no sooner than 1-10 s after the last time.
   let koiAt = null;
+  const koi = { last: -1, off: 0, dir: 1, glitchTill: 0, next: 0, prevBF: 0 };
+  const koiStep = E => {                                  // once a frame: swim, turn, decide on a glitch
+    if (koi.last === E.t) return; koi.last = E.t;
+    const range = E.W * .7, L = Math.min(E.W * .22, E.GY * .55);
+    koi.off += koi.dir * L * .12 * E.dt;                  // a slow, steady swim
+    if (Math.abs(koi.off) > range / 2) { koi.off = Math.sign(koi.off) * range / 2; koi.dir = -koi.dir; koi.glitchTill = E.t + 350; koi.next = E.t + 1000 + 9000 * Math.random(); }
+    const hit = koi.prevBF < .9 && E.bassFlash >= .9; koi.prevBF = E.bassFlash;
+    if (hit && E.t >= koi.next) { koi.glitchTill = E.t + 260; koi.next = E.t + 1000 + 9000 * Math.random(); }
+  };
   const drawKoi = (g, E) => {
     if (E.widget || !koiAt) return;
-    const { GY, t, bassFlash } = E, L = Math.min(E.W * .22, GY * .55), TAU = Math.PI * 2;
-    const x = E.toScreen(koiAt.cx) + Math.sin(t / 7000) * L * .08, y = GY * .32 + Math.sin(t / 3100) * GY * .025;
-    if (x < -L || x > E.W + L) return;
+    koiStep(E);
+    const { GY, t } = E, L = Math.min(E.W * .22, GY * .55), TAU = Math.PI * 2;
+    const x = E.toScreen(koiAt.cx) + koi.off, y = GY * .32 + Math.sin(t / 3100) * GY * .03 + Math.sin(t / 11000) * GY * .04;
+    if (x < -L * .8 || x > E.W + L * .8) return;
     const w = t / 650, bend = (px) => Math.sin(px / L * 5 - w) * L * .035 * ((L * .45 - px) / L) ** 1.6;   // the ripple, growing toward the tail
     const half = px => {                                  // a koi's profile: a rounded head, a full belly, a long taper to the tail
       const p = Math.min(1, Math.max(0, (L * .5 - px) / (L * .82)));
@@ -2076,11 +2094,11 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
         g.quadraticCurveTo(tx - L * .14, ty + sw * L * .03, tx, ty);
       }
     };
-    const pa = g.globalAlpha, glitch = bassFlash > .6;
+    const pa = g.globalAlpha, glitch = t < koi.glitchTill;
     for (let sl = 0; sl < (glitch ? 4 : 1); sl++) {
       g.save();
       if (glitch) { g.beginPath(); g.rect(0, y - L * .35 + sl * L * .17, E.W, L * .17); g.clip(); g.translate((E.hash(sl, Math.floor(t / 80), 5) - .5) * L * .12, 0); }
-      g.translate(x, y); g.rotate(Math.sin(t / 5000) * .06);
+      g.translate(x, y); g.scale(koi.dir, 1); g.rotate(Math.sin(t / 5000) * .06);
       g.globalAlpha = pa * .14; g.fillStyle = '#7ff4ff'; tail(); g.fill();   // the tail, fins, then the body over them
       g.globalAlpha = pa * .6; g.strokeStyle = 'rgba(120,245,255,.9)'; g.lineWidth = Math.max(1, L * .004); tail(); g.stroke();
       g.globalAlpha = pa * .35; g.lineWidth = Math.max(.6, L * .002); g.beginPath();   // rays in the tail
@@ -2089,6 +2107,8 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       const fin = (fx, fy, len, ang) => { g.beginPath(); g.moveTo(fx, fy); g.quadraticCurveTo(fx + Math.cos(ang - .5) * len, fy + Math.sin(ang - .5) * len, fx + Math.cos(ang) * len, fy + Math.sin(ang) * len); g.quadraticCurveTo(fx + Math.cos(ang + .3) * len * .6, fy + Math.sin(ang + .3) * len * .6, fx, fy); };
       const pad = Math.sin(t / 380) * .35;
       for (const s2 of [-1, 1]) { fin(L * .22, bend(L * .22) + s2 * half(L * .22) * .8, L * .14, s2 * (1.9 + pad) + Math.PI); g.globalAlpha = pa * .2; g.fillStyle = '#ff8ad8'; g.fill(); g.globalAlpha = pa * .55; g.stroke(); }   // pectoral fins
+      fin(-L * .02, bend(-L * .02) + half(-L * .02) * .85, L * .08, 1.9 + pad * .5); g.globalAlpha = pa * .2; g.fillStyle = '#ff8ad8'; g.fill(); g.globalAlpha = pa * .5; g.stroke();   // a pelvic fin
+      fin(-L * .2, bend(-L * .2) + half(-L * .2) * .9, L * .06, 2.2 + pad * .4); g.globalAlpha = pa * .2; g.fill(); g.globalAlpha = pa * .5; g.stroke();   // the anal fin
       g.beginPath();                                    // the dorsal fin, along the back
       for (let k = 0; k <= 10; k++) { const px = L * .14 - L * .34 * k / 10; g.lineTo(px, bend(px) - half(px) - L * .045 * Math.sin(k / 10 * Math.PI) * (1 + .2 * Math.sin(w + k))); }
       g.globalAlpha = pa * .18; g.fillStyle = '#7ff4ff'; g.fill(); g.globalAlpha = pa * .5; g.stroke();
@@ -2101,9 +2121,14 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       g.stroke();
       g.globalAlpha = pa * .12; g.fillStyle = '#ffffff'; for (let ly = -L * .16; ly < L * .16; ly += 3) g.fillRect(-L * .4, ly, L * .95, 1);
       g.restore();
-      g.globalAlpha = pa * .9; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(L * .4, bend(L * .4) - L * .04, Math.max(1.2, L * .012), 0, TAU); g.fill();   // eye
-      g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = Math.max(.8, L * .003); g.beginPath();   // barbels
-      for (const s2 of [-1, 1]) { const mx = L * .49, my = bend(mx) + s2 * L * .02; g.moveTo(mx, my); g.quadraticCurveTo(mx + L * .05, my + s2 * L * .03, mx + L * .03 + Math.sin(w * 1.3) * L * .01, my + s2 * L * .08); }
+      const hx = L * .5, hy = bend(hx);
+      g.globalAlpha = pa * .75; g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = Math.max(1, L * .004);
+      g.beginPath(); g.ellipse(hx - L * .005, hy + L * .012, L * .016, L * .022, 0, -Math.PI / 2, Math.PI / 2); g.stroke();   // the lips, a soft rounded mouth
+      g.beginPath(); g.arc(L * .29, bend(L * .29), half(L * .29) * .95, -1.1, 1.1); g.stroke();   // the gill line
+      g.globalAlpha = pa * .9; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(L * .4, bend(L * .4) - L * .035, Math.max(1.5, L * .016), 0, TAU); g.fill();   // the eye
+      g.fillStyle = '#0a2030'; g.beginPath(); g.arc(L * .403, bend(L * .4) - L * .035, Math.max(.8, L * .008), 0, TAU); g.fill();
+      g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = Math.max(.8, L * .003); g.beginPath();   // barbels, from the corners of the mouth
+      for (const s2 of [0, 1]) { const mx = hx - L * .012, my = hy + L * (.02 + s2 * .012); g.moveTo(mx, my); g.quadraticCurveTo(mx + L * .045, my + L * .03, mx + L * .025 + Math.sin(w * 1.3 + s2) * L * .01, my + L * (.07 + .015 * s2)); }
       g.stroke();
       g.restore();
     }
@@ -2172,7 +2197,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     },
     afterLayout(list, r) {                               // skybridges between neighbouring towers
       flyers = []; drones = [];
-      koiAt = list[Math.floor(list.length * .55)] || null;   // the koi keeps its place by this tower
+      koiAt = list[Math.floor(list.length * .5)] || null; koi.off = 0; koi.dir = 1;   // the koi roams round the middle of the city
       for (let i = 0; i + 1 < list.length; i++) {
         const a = list[i], c = list[i + 1];
         if (!a.lm && !c.lm && r() < .35) a.bridge = { c, y: Math.min(a.hU, c.hU) * (.35 + .4 * r()) };
@@ -2211,7 +2236,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     ['Q', .42, -.02, .2, .2],
     ['L', .14, .32], ['L', .05, .3], ['L', -.03, .34],                        // foot and tail membrane
   ];
-  let batSprite, batAt = null;
+  let batSprite;
   const getBatSprite = () => {                           // drawn once, opaque, so the two halves never show a seam
     if (batSprite) return batSprite;
     const c = document.createElement('canvas'); c.width = 400; c.height = 220;
@@ -2224,9 +2249,12 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     }
     return batSprite = c;
   };
-  const drawBatSignal = (g, tip, { W, H, unit, t }) => {
-    const r = Math.min(W, H) * .09;
-    const tx = Math.min(W * .85, Math.max(W * .2, tip[0] + W * .18)) + Math.sin(t / 5200) * W * .015, ty = H * .17 + Math.sin(t / 4100) * H * .008;
+  // The bat drifts slowly back and forth across the sky (always on screen, wherever you pan), and its beam rises from
+  // just below the skyline beside it, behind the buildings, so you never see where it comes from.
+  const drawBatSignal = (g, { W, H, GY, unit, t, left, right }) => {
+    const r = Math.min(W, H) * .09, span = right - left;
+    const tx = left + span * (.5 + .3 * Math.sin(t / 47000)) + Math.sin(t / 5200) * span * .012, ty = H * .17 + Math.sin(t / 4100) * H * .008;
+    const tip = [tx - span * .1, GY];
     const beam = g.createLinearGradient(tip[0], tip[1], tx, ty);
     beam.addColorStop(0, 'rgba(255,245,215,.42)'); beam.addColorStop(.6, 'rgba(255,245,215,.2)'); beam.addColorStop(1, 'rgba(255,245,215,0)');   // fades out into the pool: no hard end at the bat
     g.fillStyle = beam; g.beginPath();
@@ -2243,14 +2271,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     side: '#0b0b0c', top: '#151515', win: c => ({ h: c.h, s: c.s * .3, m: c.m * .7 }),
     back: { h: 1.1, density: 1, body: '#0d0d0f', win: () => 'rgba(210,170,100,.16)' },
     searchlights: false,                                 // just the one light
-    afterLayout(list, r, E) {                            // the spotlight stands behind a building near the left third
-      const at = (touring(E.S.view) ? list[0].cx : 0) + E.W * .3;
-      const cands = list.filter(b => !b.lm && b.floors > 12 && b.floors < 40);
-      batAt = (cands.length ? cands : list).reduce((a, b) => Math.abs(b.cx - at) < Math.abs(a.cx - at) ? b : a);
-    },
-    // Drawn behind the buildings from partway down that tower, so the beam rises from behind the rooftops and its
-    // source is never seen.
-    drawBehind(g, E) { if (batAt) drawBatSignal(g, [E.toScreen(batAt.cx), E.GY - batAt.hU * E.unit * .6], E); },
+    drawBehind: (g, E) => drawBatSignal(g, E),       // behind the buildings, so they hide the beam's source
   });
 }
 
@@ -2436,9 +2457,9 @@ function ccScreenRows(st) {
   $('ccScreens').innerHTML = '<span></span><b>Full screen</b><b>Wallpaper</b>' + st.screens.map(x =>
     `<span>${esc(name(x))}<small>${x.w}×${x.h}</small></span>${pickCity('full', x.index)}${pickCity('wall', x.index)}<span></span>${more('full', x.index)}${more('wall', x.index)}`).join('');
   for (const el of document.querySelectorAll('#ccScreens select')) el.onchange = () => {
-    const t = el.dataset.t, i = +el.dataset.i, s = screenSettings(t, i), T = THEMES[themeKey(el.value)];
+    const t = el.dataset.t, i = +el.dataset.i, s = screenSettings(t, i);
     s.city = el.value;
-    if (T.weather && (s.weather || 'none') === 'none') s.weather = T.weather;   // as picking it in Settings does
+    cityWeather(s);                                   // as picking it in Settings does
     try { localStorage.setItem(`cityPulse:${t}:${i}`, JSON.stringify(s)); } catch {}
   };
   for (const b of document.querySelectorAll('#ccScreens button')) b.onclick = () => C.openSettings(b.dataset.t, +b.dataset.i);

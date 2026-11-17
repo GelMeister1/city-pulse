@@ -63,7 +63,7 @@
   const cnHw = y => .95 + 5.2 * (1 - y / 64) ** 2.4;
   const CN_POD = mirror([[1, -62.5], [3.4, -64.6], [4.5, -65.8], [4.7, -66.6], [4.7, -69.4], [4.2, -70.2], [3.5, -71.2], [2, -72.6], [.95, -73.2]]);
   const CN_TOP = mirror([[.95, -85.6], [1.75, -86.4], [1.75, -88.2], [.75, -89], [.75, -95], [.5, -95], [.5, -101], [.28, -101], [.07, -108]]);
-  lm('cntower', { w: 14, h: 108, draw(g, L) {
+  lm('cntower', { flat: true, w: 14, h: 108, draw(g, L) {
     g.fillStyle = L.body; g.beginPath(); g.moveTo(cnHw(0), 0);
     for (let y = 1; y <= 64; y++) g.lineTo(cnHw(y), -y);
     g.lineTo(.95, -86); g.lineTo(-.95, -86);
@@ -183,7 +183,7 @@
   // Bank of China Tower: triangular shafts stepping up to a sloped top, two masts, the giant X-bracing outlined in light.
   const BOC = [[-5, 0], [-5, -26], [-1.7, -34], [-1.7, -44], [1.7, -52], [1.7, -60], [5, -66], [5, 0]];
   const bocRoof = x => x < -1.7 ? 26 + (x + 5) / 3.3 * 8 : x < 1.7 ? 44 + (x + 1.7) / 3.4 * 8 : 60 + (x - 1.7) / 3.3 * 6;
-  lm('bochk', { w: 10, h: 74, draw(g, L) {
+  lm('bochk', { flat: true, w: 10, h: 74, draw(g, L) {
     g.fillStyle = L.body; path(g, BOC); g.fill();
     g.fillRect(2.35, -74, .3, 13.5); g.fillRect(4.15, -72, .3, 8);
     for (let y = 1.2; y < 64; y += 1.8) {
@@ -264,7 +264,7 @@
   // Shanghai Tower: a twisting, tapering glass tower; the spiral notch climbs the face to the slanted crown.
   const ST_T = 100, stL = y => 7.3 - 4.2 * (y / ST_T) ** 1.25, stR = y => 7.3 - 4.4 * (y / ST_T) ** .85;
   const stN = y => (stR(y) - stL(y)) / 2 + .85 * Math.cos(y / ST_T * 3.1) * (stR(y) + stL(y)) / 2;   // swings across the face as it twists
-  lm('shtower', { w: 15, h: 107, draw(g, L) {
+  lm('shtower', { flat: true, w: 15, h: 107, draw(g, L) {
     g.fillStyle = L.body; g.beginPath(); g.moveTo(-stL(0), 0);
     for (let y = 0; y <= ST_T; y += 2) g.lineTo(stR(y), -y);
     g.quadraticCurveTo(stR(ST_T) + .2, -104, 2.3, -107); g.lineTo(-stL(ST_T) + .1, -101.6);
@@ -285,7 +285,7 @@
   } });
   // Shanghai World Financial Center: the tapering slab with the trapezoid opening at the top.
   const SW_HOLE = [[-2, -72], [2, -72], [3.3, -81], [-3.3, -81]];
-  lm('swfc', { w: 11, h: 83, draw(g, L) {
+  lm('swfc', { flat: true, w: 11, h: 83, draw(g, L) {
     g.fillStyle = L.body; g.beginPath();
     g.moveTo(-5.5, 0); g.lineTo(-4.5, -83); g.lineTo(4.5, -83); g.lineTo(5.5, 0); g.closePath();
     SW_HOLE.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath();
@@ -308,7 +308,7 @@
   const JM = [];
   for (let i = 0, y = 0, h = 9.5, hw = 4.6; i < 11; i++, y += h, h *= .86, hw -= .2) JM.push([y, y + h, hw]);
   const JM_TOP = JM[JM.length - 1][1], JM_CROWN = [[2.1, 2], [1.7, 1.8], [1.3, 1.6], [.95, 1.4], [.65, 1.2]];
-  lm('jinmao', { w: 10, h: 71, draw(g, L) {
+  lm('jinmao', { flat: true, w: 10, h: 71, draw(g, L) {
     g.fillStyle = L.body;
     for (const [y0, y1, hw] of JM) { g.fillRect(-hw, -y1, 2 * hw, y1 - y0 + .05); g.fillRect(-hw - .4, -y1 - .1, 2 * hw + .8, .45); }
     let y = JM_TOP;

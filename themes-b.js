@@ -95,21 +95,59 @@
       sky: [[0, '#06061f'], [.55, '#151245'], [.85, '#2e1846'], [1, '#4a2238']],
       drawSky(g, E) {
         const { W, H, GY, S, bassFlash } = E, m = Math.min(W, H), L0 = E.left, LW = E.right - E.left;
-        // Mount Fuji, broad and snow-capped, with layered ridges in front fading into the evening haze.
-        const fx = L0 + LW * .32, fw = Math.min(LW * .9, GY * 1.9), fh = GY * .64, fy = GY;
-        const fuji = () => { g.beginPath(); g.moveTo(fx - fw / 2, fy); g.quadraticCurveTo(fx - fw * .17, fy - fh * .55, fx - fw * .045, fy - fh); g.lineTo(fx + fw * .045, fy - fh); g.quadraticCurveTo(fx + fw * .17, fy - fh * .55, fx + fw / 2, fy); g.closePath(); };
-        const mg = g.createLinearGradient(0, fy - fh, 0, fy); mg.addColorStop(0, '#2c2758'); mg.addColorStop(1, '#1a1636');
-        fuji(); g.fillStyle = mg; g.fill();
-        g.save(); fuji(); g.clip();
-        const sn = g.createLinearGradient(fx - fw * .2, 0, fx + fw * .2, 0); sn.addColorStop(0, '#b9bde3'); sn.addColorStop(1, '#6d72a8');   // moonlit snow, not daylight white
-        g.fillStyle = sn; g.beginPath(); g.moveTo(fx - fw / 2, fy - fh * .62);   // the snow cap, its lower edge in ragged streaks
-        for (let k = 0; k <= 24; k++) { const x = fx - fw * .3 + fw * .6 * k / 24, d = E.hash(k, 3, 91); g.lineTo(x, fy - fh * (.6 - .16 * d * (k % 2 ? 1 : .4))); }
-        g.lineTo(fx + fw / 2, fy - fh * .62); g.lineTo(fx + fw / 2, fy - fh * 1.1); g.lineTo(fx - fw / 2, fy - fh * 1.1); g.closePath(); g.fill();
-        g.fillStyle = 'rgba(10,8,40,.28)'; g.fillRect(fx, fy - fh, fw / 2, fh);   // the shaded side, away from the moon
-        g.restore();
-        for (const [base, amp, col, ph] of [[.8, .2, 'rgba(34,24,66,.95)', 1.3], [.9, .14, 'rgba(26,18,52,.97)', 4.1]]) {   // ridges in front
+        // Mount Fuji: concave slopes with a little roughness, an uneven crater rim, the shoulder of the old side crater, rock
+        // ridges running down from the summit, a snow cap breaking into long fingers down the gullies, soft moonlight from
+        // the right and haze at its foot. It drifts at a twelfth of the town's speed and goes fully off screen before it
+        // comes round again; the ridges in front drift a little faster.
+        const fw = Math.min(W * .95, GY * 1.9), fh = GY * .64, fy = GY, travel = E.travel || 0;
+        const fx = L0 + ((W * .32 + fw / 2 - travel / 12) % (W + fw) + W + fw) % (W + fw) - fw / 2;
+        if (fx > L0 - fw / 2 && fx < L0 + LW + fw / 2) {
+          const rough = (k, n) => (E.hash(k, n, 93) - .5) * fh * .012;
+          const slope = (p, side) => {                     // height (0..1) at p = 0 (foot) .. 1 (summit) along one side
+            const h = Math.pow(p, 1.65);
+            return side > 0 && p > .32 && p < .5 ? h + .045 * Math.sin((p - .32) / .18 * Math.PI) : h;   // the shoulder on the right
+          };
+          const outline = () => {
+            g.beginPath(); g.moveTo(fx - fw / 2, fy);
+            for (let k = 0; k <= 40; k++) { const p = k / 40; g.lineTo(fx - fw / 2 + p * fw * .46, fy - fh * slope(p, -1) * .97 + rough(k, 1)); }
+            for (let k = 0; k <= 8; k++) g.lineTo(fx - fw * .04 + k * fw * .01, fy - fh + fh * (k % 3 === 1 ? .012 : k % 4 === 2 ? .02 : 0));   // the crater rim
+            for (let k = 40; k >= 0; k--) { const p = k / 40; g.lineTo(fx + fw / 2 - p * fw * .46, fy - fh * slope(p, 1) * .97 + rough(k, 2)); }
+            g.closePath();
+          };
+          const body = g.createLinearGradient(fx - fw / 2, 0, fx + fw / 2, 0);   // shadowed left, moonlit right, no hard edge
+          body.addColorStop(0, '#191536'); body.addColorStop(.5, '#25204c'); body.addColorStop(1, '#2f2a5c');
+          outline(); g.fillStyle = body; g.fill();
+          g.save(); outline(); g.clip();
+          g.fillStyle = 'rgba(8,6,26,.18)';                // rock ridges fanning down the slopes: soft, tapering shadows
+          for (let k = -9; k <= 9; k++) {
+            if (!k) continue; const ang = k / 9 * 1.05, x1 = fx + Math.sin(ang) * fw * .5, y1 = fy - fh * (.04 + .2 * E.hash(k, 7, 93));
+            g.beginPath(); g.moveTo(fx + k * fw * .004, fy - fh * .7); g.lineTo(x1 - fw * .006, y1); g.lineTo(x1 + fw * .006, y1); g.fill();
+          }
+          const sn = g.createLinearGradient(fx - fw * .2, 0, fx + fw * .2, 0);   // the snow, darker on the shadowed side
+          sn.addColorStop(0, '#7277a8'); sn.addColorStop(.55, '#9ea3cf'); sn.addColorStop(1, '#b3b8e0');
+          // the cap: solid over the top third, its lower edge breaking into rounded fingers of snow down the gullies
+          const n = 42, edge = [];
+          for (let k = 0; k <= n; k++) {                   // every third point runs a long, thin streak down a gully
+            const t2 = k / n, x = fx - fw * .21 + fw * .42 * t2, finger = k % 3 === 1 ? .07 + .2 * E.hash(k, 3, 91) : .012 * E.hash(k, 4, 91);
+            edge.push([x, fy - fh * (.72 - finger) + Math.abs(t2 - .5) * fh * .16]);
+          }
+          g.fillStyle = sn; g.beginPath(); g.moveTo(fx - fw * .3, fy - fh * .62); g.lineTo(...edge[0]);
+          for (let k = 1; k < edge.length; k++) { const [px, py] = edge[k - 1], [qx, qy] = edge[k]; g.quadraticCurveTo(px, py, (px + qx) / 2, (py + qy) / 2); }
+          g.lineTo(...edge[edge.length - 1]); g.lineTo(fx + fw * .3, fy - fh * .62); g.lineTo(fx + fw / 2, fy - fh * 1.1); g.lineTo(fx - fw / 2, fy - fh * 1.1); g.closePath(); g.fill();
+          g.fillStyle = 'rgba(30,28,80,.09)';           // faint shadow gullies in the snow, tapering down from the rim
+          for (let k = -5; k <= 5; k++) {
+            if (!k || E.hash(k, 8, 93) < .35) continue; const x0 = fx + k * fw * .007, x1 = fx + k * fw * .03, y1 = fy - fh * (.5 + .25 * E.hash(k, 9, 93));
+            g.beginPath(); g.moveTo(x0 - fw * .002, fy - fh * .97); g.quadraticCurveTo(x1 * .5 + x0 * .5, fy - fh * .8, x1, y1); g.quadraticCurveTo(x1 * .5 + x0 * .5 + fw * .004, fy - fh * .8, x0 + fw * .002, fy - fh * .97); g.fill();
+          }
+          g.restore();
+          const hz = g.createLinearGradient(0, fy - fh * .35, 0, fy);   // haze at its foot
+          hz.addColorStop(0, 'rgba(70,50,110,0)'); hz.addColorStop(1, 'rgba(70,50,110,.55)');
+          g.fillStyle = hz; g.fillRect(fx - fw / 2, fy - fh * .35, fw, fh * .35);
+        }
+        const rp = travel / 6;                             // ridges in front, drifting a little faster than the mountain
+        for (const [base, amp, col, ph] of [[.8, .2, 'rgba(34,24,66,.95)', 1.3], [.9, .14, 'rgba(26,18,52,.97)', 4.1]]) {
           g.fillStyle = col; g.beginPath(); g.moveTo(L0, GY);
-          for (let x = 0; x <= LW; x += LW / 60) g.lineTo(L0 + x, GY * base - GY * amp * (.5 + .3 * Math.sin(x / LW * 9 + ph) + .2 * Math.sin(x / LW * 23 + ph * 2)));
+          for (let x = 0; x <= LW; x += LW / 60) { const X = (x + rp) / W; g.lineTo(L0 + x, GY * base - GY * amp * (.5 + .3 * Math.sin(X * 9 + ph) + .2 * Math.sin(X * 23 + ph * 2))); }
           g.lineTo(L0 + LW, GY); g.fill();
           g.fillStyle = 'rgba(255,150,120,.07)'; g.fillRect(L0, GY * base - GY * amp * .2, LW, GY * .03);   // a band of mist
         }
@@ -486,33 +524,54 @@
       g.globalAlpha *= .25; g.fillRect(-1.6, -69, 3.2, 66); g.globalAlpha /= .25;
     } });
     // An observation needle: three splayed legs, a slim shaft, a wide pod of stacked rings with a chasing light, and a spire.
-    registerLandmark('skyneedle', { w: 14, h: 92, draw(g, L) {
+    // An observation tower: three curving legs, a tapering shaft with a lift light running up it, and a stack of rounded
+    // saucer decks (glass-banded, shaded underneath, a chasing ring of lights round the biggest), then a slender mast.
+    registerLandmark('skyneedle', { flat: true, w: 16, h: 92, draw(g, L) {
       g.fillStyle = L.body;
-      g.beginPath(); g.moveTo(-5, 0); g.lineTo(-1.6, -14); g.lineTo(1.6, -14); g.lineTo(5, 0); g.lineTo(3.2, 0); g.lineTo(0, -9); g.lineTo(-3.2, 0); g.fill();
-      g.fillRect(-1.6, -72, 3.2, 60);
-      for (const [y, hw, hh] of [[72, 4.2, 1.6], [74, 6.8, 1.8], [76.2, 7, 1.8], [78.4, 6, 1.6], [80.4, 3.6, 1.4]]) g.fillRect(-hw, -y - hh, hw * 2, hh);
-      g.fillRect(-.35, -92, .7, 10.6);
-      for (const [y, hw] of [[75, 6.4], [77.2, 6.6], [79.3, 5.6]]) winRows(g, L, -hw + .4, hw - .4, y, y + 1.1, .9, .5, 2, .7);
-      const T = now(), n = 18;                            // the chasing light round the widest ring
+      for (const s2 of [-1, 0, 1]) {                      // the legs, curving in to the shaft
+        g.beginPath(); g.moveTo(s2 * 6.5 - .7, 0); g.quadraticCurveTo(s2 * 3, -6, s2 * .6 - .6, -16); g.lineTo(s2 * .6 + .6, -16); g.quadraticCurveTo(s2 * 3.6, -6, s2 * 6.5 + .7, 0); g.fill();
+      }
+      g.beginPath(); g.moveTo(-1.5, -12); g.lineTo(-1, -71); g.lineTo(1, -71); g.lineTo(1.5, -12); g.fill();   // the shaft, tapering
+      const lift = (now() * 9) % 60;                      // the lift light, gliding up the shaft
+      g.fillStyle = L.win(Math.max(L.lit(16 + lift), .6)); g.fillRect(-.35, -18 - lift, .7, 1.6);
+      for (let y = 16; y < 70; y += 4) { g.fillStyle = L.win(L.lit(y) * .7); g.fillRect(-.2, -y, .4, 1.2); }
+      const deck = (y, rx, ry, band) => {                 // a saucer: dark underside, a lit glass band, a lighter top
+        const sh = g.createLinearGradient(0, -y - ry, 0, -y + ry);
+        sh.addColorStop(0, L.body); sh.addColorStop(1, 'rgba(0,0,0,.85)');
+        g.fillStyle = L.body; g.beginPath(); g.ellipse(0, -y, rx, ry, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = sh; g.beginPath(); g.ellipse(0, -y + ry * .3, rx * .97, ry * .8, 0, 0, Math.PI); g.fill();
+        if (band) { g.fillStyle = L.win(L.lit(y)); for (let x = -rx * .85; x < rx * .85; x += .9) { const k = 1 - (x / rx) ** 2; g.fillRect(x, -y - ry * .35, .5 * k + .15, ry * .45); } }
+      };
+      deck(72.2, 3.6, .9, false); deck(74.6, 7.6, 1.7, true); deck(77.4, 6.4, 1.4, true); deck(79.8, 4.4, 1.1, true);
+      g.fillStyle = L.body; g.beginPath(); g.ellipse(0, -81, 2.6, 1.6, 0, Math.PI, 0); g.fill();   // a small dome cap
+      const T = now(), n = 16;                            // the chasing lights round the big saucer's front rim
       for (let k = 0; k < n; k++) {
-        const on = ((k - Math.floor(T * 9)) % 6 + 6) % 6 === 0;
-        g.fillStyle = on ? L.win(Math.max(L.lit(76), .8)) : L.win(.12); g.fillRect(-6.8 + k * 13.6 / (n - 1) - .25, -74.4, .5, .5);
+        const ang = Math.PI * (k + .5) / n, on = ((k - Math.floor(T * 9)) % 5 + 5) % 5 === 0;
+        g.fillStyle = on ? L.win(Math.max(L.lit(75), .85)) : L.win(.15); g.fillRect(-Math.cos(ang) * 7.4 - .25, -74.6 + Math.sin(ang) * 1.5 - .25, .5, .5);
       }
-      g.fillStyle = L.win(Math.max(L.lit(88), .5)); g.fillRect(-.2, -92.5, .4, 1);
-      for (let y = 16; y < 70; y += 4) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.3, -y, .6, 1.4); }   // lift lights up the shaft
+      g.fillStyle = L.body; g.beginPath(); g.moveTo(-.45, -82); g.lineTo(0, -92); g.lineTo(.45, -82); g.fill();   // the mast
+      g.fillStyle = L.win(Math.max(L.lit(88), .5)); g.fillRect(-.2, -92.4, .4, .8);
     } });
-    // A dark glass pyramid with lit edges, and a beam of light from its tip up into the sky.
-    registerLandmark('pyramid', { w: 30, h: 34, draw(g, L) {
-      const a = Math.max(L.lit(30), .35), T = now();
-      const beam = g.createLinearGradient(0, -34, 0, -260);
+    // A dark glass pyramid with lit edges and a beam of light from its tip into the sky. Seen from the front right, so its
+    // right face shows (shaded, its own rows of windows) and the tip stands over the middle of its square base.
+    registerLandmark('pyramid', { flat: true, w: 30, h: 34, draw(g, L) {
+      const a = Math.max(L.lit(30), .35), T = now(), dd = L.d ? 6 : 0, ax = dd / 2, ay = -34 - dd / 4;
+      const beam = g.createLinearGradient(0, ay, 0, -260);
       beam.addColorStop(0, `rgba(235,245,255,${.55 * a})`); beam.addColorStop(1, 'rgba(235,245,255,0)');
-      if (!L.side) { g.fillStyle = beam; g.beginPath(); g.moveTo(-.5, -34); g.lineTo(-1.4 - .4 * Math.sin(T), -260); g.lineTo(1.4 + .4 * Math.sin(T), -260); g.lineTo(.5, -34); g.fill(); }   // the beam once, not on the 3D side copies
-      g.fillStyle = L.body; g.beginPath(); g.moveTo(-15, 0); g.lineTo(0, -34); g.lineTo(15, 0); g.fill();
-      for (let y = 2; y < 31; y += 2.2) {                 // floors of slanted windows, narrowing to the tip
-        const hw = 15 * (1 - (y + 1) / 34) - .8; g.fillStyle = L.win(L.lit(y));
-        for (let x = -hw; x < hw - .5; x += 1.4) g.fillRect(x, -y - .7, .7, .7);
+      g.fillStyle = beam; g.beginPath(); g.moveTo(ax - .5, ay); g.lineTo(ax - 1.4 - .4 * Math.sin(T), -260); g.lineTo(ax + 1.4 + .4 * Math.sin(T), -260); g.lineTo(ax + .5, ay); g.fill();
+      if (dd) {                                           // the right face
+        g.fillStyle = L.sideCol; g.beginPath(); g.moveTo(15, 0); g.lineTo(15 + dd, -dd / 2); g.lineTo(ax, ay); g.closePath(); g.fill();
+        for (let y = 2; y < 31; y += 2.2) {               // its windows, a third as many, half as bright
+          const f = (y + 1) / 34, x0 = 15 + (ax - 15) * f, x1 = 15 + dd + (ax - 15 - dd) * f, y0 = -y * (1 + dd / 68);
+          g.fillStyle = L.win(L.lit(y) * .5); for (let k = 1; k < 4; k++) { const t2 = k / 4; g.fillRect(x0 + (x1 - x0) * t2 - .3, y0 - (dd / 2) * t2 * (1 - f) - .35, .6, .6); }
+        }
       }
-      g.strokeStyle = L.win(a); g.lineWidth = .3; g.beginPath(); g.moveTo(-15, 0); g.lineTo(0, -34); g.lineTo(15, 0); g.stroke();
+      g.fillStyle = L.body; g.beginPath(); g.moveTo(-15, 0); g.lineTo(ax, ay); g.lineTo(15, 0); g.fill();
+      for (let y = 2; y < 31; y += 2.2) {                 // floors of windows, narrowing to the tip
+        const f = (y + 1) / 34, l = -15 + (ax + 15) * f + .8, r = 15 + (ax - 15) * f - .8; g.fillStyle = L.win(L.lit(y));
+        for (let x = l; x < r - .5; x += 1.4) g.fillRect(x, -y * (1 + dd / 136) - .7, .7, .7);
+      }
+      g.strokeStyle = L.win(a); g.lineWidth = .3; g.beginPath(); g.moveTo(-15, 0); g.lineTo(ax, ay); g.lineTo(15, 0); if (dd) { g.moveTo(ax, ay); g.lineTo(15 + dd, -dd / 2); g.lineTo(15, 0); } g.stroke();
     } });
     // A giant observation wheel: an LED rim, spokes, turning cabins and an A-frame stand.
     registerLandmark('wheel', { flat: true, w: 36, h: 56, draw(g, L) {
