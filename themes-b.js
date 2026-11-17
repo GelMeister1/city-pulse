@@ -133,7 +133,7 @@
       kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'pairs'], roofs: [null], tall: .18, shrink: .84, w0: 7, gaps: [.6, 2] },
       minF: .2, maxF: .62,
       sky: [[0, '#06061f'], [.55, '#151245'], [.85, '#2e1846'], [1, '#4a2238']],
-      drawSky(g, E) {
+      drawFar(g, E) {                                    // after the stars, so Fuji hides the ones behind it
         const { W, H, GY, S, bassFlash } = E, m = Math.min(W, H), L0 = E.left, LW = E.right - E.left;
         // Mount Fuji: concave slopes with a little roughness, an uneven crater rim, the shoulder of the old side crater, rock
         // ridges running down from the summit, a snow cap breaking into long fingers down the gullies, soft moonlight from

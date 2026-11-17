@@ -350,7 +350,8 @@
   // University of Tampa's Plant Hall (the old Tampa Bay Hotel): a long Moorish hall, horseshoe-arched windows, and slim
   // minarets crowned with onion domes and silver crescents. Palms out front.
   const MINARETS = [[-12, 15], [-7.5, 18.5], [-2.5, 22], [2.5, 20], [7.5, 17], [12, 14]];
-  lm('planthall', { flat: true, w: 30, h: 25, draw(g, L) {
+  lm('planthall', { flat: true, noBlink: true,   // a university hall: no aircraft warning light
+    w: 30, h: 25, draw(g, L) {
     g.fillStyle = L.body; g.fillRect(-14, -8, 28, 8); g.fillRect(-15, -8.6, 30, .6);
     for (const [x, h] of MINARETS) {
       g.fillRect(x - .9, -h + 3, 1.8, h - 11);            // the shaft

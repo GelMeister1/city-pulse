@@ -873,7 +873,7 @@ function layout() {
         hue: r() * 360, rhue: r() * 360,
         level: 0, pk: 0, hold: 0, prev: 0, flash: 0 };
       if (style[0] === '@') {
-        b.lm = LM[style.slice(1)]; b.floors = Math.round(b.lm.h / 2); b.blink = true; b.hU = b.lm.h;
+        b.lm = LM[style.slice(1)]; b.floors = Math.round(b.lm.h / 2); b.blink = !b.lm.noBlink; b.hU = b.lm.h;
       } else {
         const st = STY[style]; let floors = 0;
         b.tiers = tiers.map(([w, h, noWin]) => {
@@ -1551,6 +1551,7 @@ function drawSky(g, t, dt) {
     g.fillStyle = '#060716'; g.beginPath(); g.arc(W * .82 + m * .018, H * .16 - m * .008, m * .04, 0, 7); g.fill();
     g.globalAlpha = 1;
   }
+  perStretch(g, (g, T) => T.drawFar(g, E), T => T.drawFar);   // far scenery in front of the stars (Lantern District's Fuji)
   // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Dark City.
   const over = theme.overcast || ['rain', 'storm'].includes(wxNow), key = `${over},${W},${H}`;
   if (key !== cloudKey) {
@@ -1685,7 +1686,7 @@ function drawWeather(g, t, dt) {
     for (const p of wx) {
       const sp = H * (1.1 + p.s * .6), len = 10 + p.s * 14;
       p.y += sp * dt; p.x -= sp * .15 * dt;
-      if (p.y > H) { p.y = -20; p.x = Math.random() * W * 1.2; }
+      if (p.y > H) { p.y = -20 - Math.random() * H * .4; p.x = Math.random() * W * 1.2; p.s = Math.random(); }   // a random restart: drops never line up into sheets
       g.moveTo(p.x, p.y); g.lineTo(p.x + len * .15, p.y - len);
     }
     g.stroke();
@@ -1693,7 +1694,7 @@ function drawWeather(g, t, dt) {
     g.fillStyle = 'rgba(235,240,255,.8)';
     for (const p of wx) {
       p.y += (18 + p.s * 30) * dt; p.x += Math.sin(t / 1300 + p.rot) * 12 * dt;
-      if (p.y > H) { p.y = -5; p.x = Math.random() * W; }
+      if (p.y > H) { p.y = -5 - Math.random() * H * .3; p.x = Math.random() * W; p.s = Math.random(); }
       const r = 1 + p.s * 1.8; g.fillRect(p.x, p.y, r, r);
     }
   } else if (type === 'petals' || type === 'leaves') {
@@ -1701,7 +1702,7 @@ function drawWeather(g, t, dt) {
     g.globalAlpha = .85;
     for (const p of wx) {
       p.y += (22 + p.s * 25) * dt; p.x += (Math.sin(t / 900 + p.rot) * 25 + 10) * dt; p.rot += p.spin * dt;
-      if (p.y > H || p.x > W + 20) { p.y = -10; p.x = Math.random() * W - 40; }
+      if (p.y > H || p.x > W + 20) { p.y = -10 - Math.random() * H * .3; p.x = Math.random() * W - 40; p.s = Math.random(); }
       const sz = 2.5 + p.s * 2.5;
       g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.fillStyle = cols[Math.floor(p.s * cols.length)];
       if (type === 'petals') { g.beginPath(); g.ellipse(0, 0, sz, sz * .55, 0, 0, 7); g.fill(); } else g.fillRect(-sz, -sz * .5, sz * 2, sz);
@@ -1941,7 +1942,7 @@ const newKey = k => typeof k === 'string' && !!k && k !== 'none' && k !== 'gener
 //   kit {styles, roofs, tall, shrink, w0, gaps?, setbacks?, landmarks?: [registered landmark keys], lmChance?, lmScale?} (like KITS),
 //   minF/maxF: building heights as shares of the sky
 //   weather: picked when the city is chosen and the weather is Clear · noWeather: ignore the weather setting entirely
-//   sky: [[0..1, colour]…] over 0..H (0..GY with skyToGround) · drawSky(g, E): art after the gradient, before stars and clouds
+//   sky: [[0..1, colour]…] over 0..H (0..GY with skyToGround) · drawSky(g, E): art after the gradient, before stars and clouds · drawFar(g, E): after the stars and moon, before the clouds (mountains)
 //   widgetSky: also paint the sky (gradient + drawSky) in the otherwise see-through widget
 //   stars, moon: allow stars and shooting stars / the moon · planes: false = no passing plane · overcast: always a low cloud deck
 //   cloud, rain, fogRGB ('r,g,b') · body, side, top: building faces · outline(b) → colour or null
@@ -1959,7 +1960,7 @@ function registerTheme(key, def) {
   const T = { ...THEMES.none, ...def, back: { ...THEMES.none.back, ...def.back }, ground: def.ground && { ...def.ground } };
   try { const gr = ctx.createLinearGradient(0, 0, 0, 1); for (const [p, c] of T.sky) gr.addColorStop(p, c); }
   catch { return console.error(`City Pulse: theme "${key}" ignored: its sky isn't a list of [0..1, colour] stops.`); }
-  for (const k of ['drawSky', 'outline', 'win', 'decorate', 'afterLayout', 'drawBehind', 'drawExtras', 'drawFront', 'drawTop']) guard(`theme "${key}"`, T, k);
+  for (const k of ['drawSky', 'drawFar', 'outline', 'win', 'decorate', 'afterLayout', 'drawBehind', 'drawExtras', 'drawFront', 'drawTop']) guard(`theme "${key}"`, T, k);
   guard(`theme "${key}"`, T.back, 'win');
   if (T.ground) guard(`theme "${key}"`, T.ground, 'draw');
   THEMES[key] = T;
