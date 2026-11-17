@@ -12,9 +12,9 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 
 ![Chicago skyline with some buildings lit and others dark on the beat](docs/beat.png)
 
-| Shanghai: Floors with random colors, during a loud song | Noir City in the rain: one solid color |
+| Shanghai: Floors with random colors, during a loud song | Dark City in the rain: one solid color |
 | --- | --- |
-| ![Shanghai skyline with buildings filled almost to the top in random colors](docs/shanghai.png) | ![Noir City in grey rain with every window in one dark teal](docs/noir.png) |
+| ![Shanghai skyline with buildings filled almost to the top in random colors](docs/shanghai.png) | ![Dark City in grey rain with every window in one dark teal](docs/noir.png) |
 
 **Pan view:** the city keeps going past the screen edges. Drag or scroll to choose your part of it.
 
@@ -33,7 +33,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Loudness meter:** on Windows, tops out at your Windows volume, so at 50% volume it peaks halfway.
 - **Skylines:**
   - **12 real cities** with hand-drawn landmarks: New York, Chicago, Seattle, San Francisco, Toronto, Dubai, Paris, London, Tokyo, Sydney, Hong Kong and Shanghai.
-  - **14 themed cities**: Abyssal City, Aero, Atlantis, Aurora Harbor, Brasshaven, Cyberpunk, Desert Mirage, The Grid, Lantern District, Lunar Colony, Neon City, Neon Strip, Noir City and Synthwave. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
+  - **14 themed cities**: Abyssal City, Aero, Atlantis, Aurora Harbor, Brasshaven, Cyberpunk, Dark City, Desert Mirage, The Grid, Lantern District, Lunar Colony, Neon City, Neon Strip and Synthwave. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
 - **Light styles:**
   - **Floors:** an equalizer that climbs each building, with a falling peak marker.
   - **Pulse:** each building's windows follow the volume.

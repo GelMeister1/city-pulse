@@ -1030,7 +1030,7 @@ for (const k of Object.keys(DEF)) {
     S.preset = ''; $('preset').value = '';             // a hand-made change means you're no longer on a preset
     if (spanScreen && LIGHT.includes(k)) { S.ownLights = true; showSetting('ownLights'); }   // changing a light means this screen has its own
     const T = k === 'city' && THEMES[themeKey(S.city)];
-    if (T && T.weather && S.weather === 'none') { S.weather = T.weather; showSetting('weather'); }   // e.g. Cyberpunk and Noir City rain by default
+    if (T && T.weather && S.weather === 'none') { S.weather = T.weather; showSetting('weather'); }   // e.g. Cyberpunk and Dark City rain by default
     save();
     if (RELAYOUT.includes(k) && W) layout();
     if (k === 'view' && S.view === 'tour') $('tourPick').open = true;
@@ -1278,9 +1278,11 @@ function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for th
 // Where a dome sits on a top tier tw wide whose front top edge is at y. With 3D detail it covers the whole roof, from the
 // front-left corner across the 3D top to the back-right edge, and stands on a short collar, so it reads as built on, not
 // set on a box. Without 3D detail it's a flat half-oval on the front. Plugins use this too (CityPulse.domeBase / collar).
+// The 3D depth of a block tw px wide: how far its side face reaches back (0 without 3D detail). The top face rises half that.
+const depthOf = tw => S.detail ? Math.min(1.6 * unit, tw * .18) : 0;
 function domeBase(cx, y, tw) {
   if (!S.detail) return { x: cx, by: y, rx: tw / 2, rb: 0, c: 0 };
-  const d = Math.min(1.6 * unit, tw * .18);
+  const d = depthOf(tw);
   return { x: cx + d / 2, by: y - d / 4, rx: (tw + d) / 2, rb: d / 4, c: Math.max(1.5, unit * .7) };
 }
 // The collar: a short drum, shaded left to right like the faces below ([lit, mid, shadow]), its top edge catching the light.
@@ -1313,7 +1315,7 @@ function dome(g, T, hU, cx, y, tw, b) {
 function drawBuilding(g, b, cx, t) {
   const T = THEMES[b.theme], u = unit, body = T.body;
   let c = colorOf(b, phase, t);
-  if (T.win) c = T.win(c, b) || c;                          // e.g. Noir City: washed-out, dimmer window colours
+  if (T.win) c = T.win(c, b) || c;                          // e.g. Dark City: washed-out, dimmer window colours
   const edge = S.detail ? '#2c2e3a' : null;
   let tip;
   if (b.lm) {
@@ -1325,9 +1327,14 @@ function drawBuilding(g, b, cx, t) {
     const st = b.st, side = T.side, topc = T.top, outline = T.outline && T.outline(b);
     let y = GY;
     for (const tr of b.tiers) {
-      const tw = tr.w * u, th = tr.h * u, x0 = cx - tw / 2;
-      if (S.detail) {                                   // side and top faces so it reads as a block, not a flat box
-        const d = Math.min(1.6 * u, tw * .18), rise = d * .5;
+      const tw = tr.w * u, th = tr.h * u, x0 = cx - tw / 2, x1 = x0 + tw;
+      const d = depthOf(tw), rise = d * .5;
+      // A point on the 3D side face: s = 0 at the front edge .. 1 at the back, for front height yv. The side's top edge rises
+      // toward the back, so a floor's line slants up a little more the higher up the tier it is: windows stay on their floor.
+      const sideY = (s, yv) => yv - s * rise * (y - yv) / th;
+      const sideQuad = (s0, s1, ya, yb) => { g.beginPath(); g.moveTo(x1 + s0 * d, sideY(s0, ya)); g.lineTo(x1 + s1 * d, sideY(s1, ya)); g.lineTo(x1 + s1 * d, sideY(s1, yb)); g.lineTo(x1 + s0 * d, sideY(s0, yb)); g.fill(); };
+      const sideWins = d >= 3 ? (d >= 6 ? 2 : 1) : 0;    // windows per floor on the side: two where there's room
+      if (d) {                                          // side and top faces so it reads as a block, not a flat box
         g.fillStyle = side; g.beginPath();
         g.moveTo(x0 + tw, y); g.lineTo(x0 + tw + d, y); g.lineTo(x0 + tw + d, y - th - rise); g.lineTo(x0 + tw, y - th); g.fill();
         g.fillStyle = topc; g.beginPath();
@@ -1342,6 +1349,11 @@ function drawBuilding(g, b, cx, t) {
           const gf = tr.base + f, a = alphaFor(b, gf), style = winStyle(c, a);
           const wy = y - (f + 1) * fh + fh * (1 - st.wh) / 2, wh = Math.max(1, fh * st.wh);
           g.fillStyle = style;
+          if (sideWins) {                               // the same floor round the side, half as bright: the shaded face
+            const a0 = g.globalAlpha; g.globalAlpha = a0 * .5;
+            for (let k = 0; k < sideWins; k++) sideQuad((k + .22) / sideWins, (k + .78) / sideWins, wy, wy + wh);
+            g.globalAlpha = a0;
+          }
           if (!cols) { g.fillRect(x0 + u * .6, wy, tw - u * 1.2, wh); continue; }
           const fl = S.flicker && a < .05 + .22 * calm;   // "dark" includes calm mode's faint resting glow
           for (let k = 0; k < cols; k++) {
@@ -1353,11 +1365,20 @@ function drawBuilding(g, b, cx, t) {
         }
         if (edge && !widget) {                          // ledge every 6 floors (full screen only; too busy at widget size)
           g.fillStyle = edge;
-          for (let f = 5; f < tr.f - 1; f += 6) g.fillRect(x0, y - (f + 1) * fh - .5, tw, Math.max(1, u * .15));
+          for (let f = 5; f < tr.f - 1; f += 6) {
+            const ly = y - (f + 1) * fh - .5, lh = Math.max(1, u * .15);
+            g.fillRect(x0, ly, tw, lh); if (d) sideQuad(0, 1, ly, ly + lh);   // and on round the side
+          }
         }
       }
-      if (outline) { g.strokeStyle = outline; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }   // e.g. Synthwave's neon outlines
-      else if (edge && !widget) { g.strokeStyle = edge; g.lineWidth = 1; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); }
+      const edges3d = () => {                           // the block's 3D edges: top face and the back of the side
+        if (!d) return;
+        const a0 = g.globalAlpha; g.globalAlpha = a0 * .65; g.beginPath();
+        g.moveTo(x0 + .5, y - th + .5); g.lineTo(x0 + d, y - th - rise); g.lineTo(x1 + d, y - th - rise); g.lineTo(x1 + d, y);
+        g.moveTo(x1 - .5, y - th + .5); g.lineTo(x1 + d, y - th - rise); g.stroke(); g.globalAlpha = a0;
+      };
+      if (outline) { g.strokeStyle = outline; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); edges3d(); }   // e.g. Synthwave's neon outlines
+      else if (edge && !widget) { g.strokeStyle = edge; g.lineWidth = 1; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); edges3d(); }
       if (weatherNow() === 'snow') { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }
       y -= th;
     }
@@ -1445,7 +1466,7 @@ function drawSky(g, t, dt) {
     g.fillStyle = '#060716'; g.beginPath(); g.arc(W * .82 + m * .018, H * .16 - m * .008, m * .04, 0, 7); g.fill();
     g.globalAlpha = 1;
   }
-  // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Noir City.
+  // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Dark City.
   const over = theme.overcast || ['rain', 'storm'].includes(wxNow), key = `${over},${W},${H}`;
   if (key !== cloudKey) {
     cloudKey = key;
@@ -1870,7 +1891,7 @@ function registerLandmark(key, def) {
   LM[key] = { ...def };
   guard(`landmark "${key}"`, LM[key], 'draw');
 }
-window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt, domeBase, collar, FAR });
+window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt, domeBase, collar, depthOf, FAR });
 
 // Cyberpunk: neon signs, hologram billboards, skybridges and flying cars in a rainy magenta haze.
 {
@@ -1966,7 +1987,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
   });
 }
 
-// Noir City: Art Deco towers under a low overcast, washed-out windows, and one rooftop spotlight with the shadow
+// Dark City: Art Deco towers under a low overcast, washed-out windows, and one rooftop spotlight with the shadow
 // of a real-looking bat caught in its soft, round pool of light. An original, naturalistic silhouette (raised wings,
 // finger-tip points along the membrane), not any brand's emblem.
 {
@@ -1998,7 +2019,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     const r = Math.min(W, H) * .09;
     const tx = Math.min(W * .85, Math.max(W * .2, tip[0] + W * .18)) + Math.sin(t / 5200) * W * .015, ty = H * .17 + Math.sin(t / 4100) * H * .008;
     const beam = g.createLinearGradient(tip[0], tip[1], tx, ty);
-    beam.addColorStop(0, 'rgba(255,245,215,.26)'); beam.addColorStop(1, 'rgba(255,245,215,.06)');
+    beam.addColorStop(0, 'rgba(255,245,215,.26)'); beam.addColorStop(.55, 'rgba(255,245,215,.12)'); beam.addColorStop(1, 'rgba(255,245,215,0)');   // fades out into the pool: no hard end at the bat
     g.fillStyle = beam; g.beginPath();
     g.moveTo(tip[0] - unit * .4, tip[1]); g.lineTo(tx - r * .8, ty + r * .5); g.lineTo(tx + r * .8, ty - r * .5); g.lineTo(tip[0] + unit * .4, tip[1]); g.fill();
     const pool = g.createRadialGradient(tx, ty, 0, tx, ty, r * 1.15);   // soft round pool of light on the clouds, no hard rim
@@ -2008,7 +2029,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     g.save(); g.translate(tx, ty); g.rotate(-.12 + Math.sin(t / 3700) * .04);   // tilted and drifting, like a real bat crossing the beam
     g.globalAlpha *= .8; g.drawImage(getBatSprite(), -bw / 2, -bh / 2, bw, bh); g.restore();
   };
-  registerTheme('noir', { name: 'Noir City', kit: KITS.noir, minF: .4, maxF: .9, weather: 'rain',
+  registerTheme('noir', { name: 'Dark City', kit: KITS.noir, minF: .4, maxF: .9, weather: 'rain',
     sky: [[0, '#040405'], [1, '#1c1a16']], stars: false, moon: false, overcast: true, cloud: 'rgba(30,30,33,.72)',
     side: '#0b0b0c', top: '#151515', win: c => ({ h: c.h, s: c.s * .3, m: c.m * .7 }),
     back: { h: 1.1, density: 1, body: '#0d0d0f', win: () => 'rgba(210,170,100,.16)' },

@@ -5,7 +5,7 @@
 (() => {
   const CP = window.CityPulse;
   if (!CP) return;
-  const { registerTheme, sprite, pixelArt, hash } = CP;
+  const { registerTheme, sprite, pixelArt, hash, depthOf } = CP;
   const once = () => { let last = -1; return E => last !== E.t && (last = E.t, true); };   // true on the first call of each frame
   const topT = b => b.tiers[b.tiers.length - 1];
 
@@ -603,6 +603,12 @@
         update(E);
         const u = E.unit, tw = topT(b).w * u, ty = E.GY - b.hU * u, rgb = b.orange ? ORANGE : CYAN, lv = b.level;
         g.fillStyle = `rgba(${rgb},${.55 + .45 * lv})`; g.fillRect(cx - tw / 2, ty - 1, tw, Math.max(1.5, u * .25));   // the lit roofline
+        const d = depthOf(tw), x1 = cx + tw / 2, lw = Math.max(1.5, u * .25);
+        if (d) {                                          // round the 3D top: up the side edge and along the back
+          g.globalAlpha *= .7; g.beginPath();
+          g.moveTo(x1, ty - 1); g.lineTo(x1 + d, ty - 1 - d / 2); g.lineTo(x1 + d, ty - 1 - d / 2 + lw); g.lineTo(x1, ty - 1 + lw); g.fill();
+          g.fillRect(cx - tw / 2 + d, ty - 1 - d / 2, tw, lw * .7); g.globalAlpha /= .7;
+        }
         glow(g, rgb, cx, ty, tw * .6, .12 + .3 * lv);
         if (!b.stream || E.widget) return;
         const hi = (E.bands[6].level + E.bands[7].level) / 2, n = 6, rise = ty * .95;   // packets of light climbing from the roof
