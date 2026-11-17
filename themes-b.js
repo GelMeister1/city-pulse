@@ -5,7 +5,7 @@
 (() => {
   const CP = window.CityPulse;
   if (!CP) return;
-  const { registerTheme, sprite, pixelArt, hash, depthOf } = CP;
+  const { registerTheme, registerLandmark, sprite, pixelArt, hash, depthOf } = CP;
   const once = () => { let last = -1; return E => last !== E.t && (last = E.t, true); };   // true on the first call of each frame
   const topT = b => b.tiers[b.tiers.length - 1];
 
@@ -445,8 +445,84 @@
       neon(g, sg.hue, a, lw);
       if (sg.shape === 2 || sg.shape === 3) { g.fillStyle = `hsl(${sg.hue2},100%,${55 + 25 * a}%)`; g.beginPath(); g.arc(cx, cy, Math.max(1.5, E.unit * .6), 0, 7); g.fill(); }
     };
+    // Resort landmarks, mixed into the row (original designs in the spirit of a desert resort strip). Units from the ground,
+    // x = 0 at the centre; L.win(a) is the building's own light colour, L.lit(y) how lit it is at height y with the music.
+    const now = () => performance.now() / 1000;
+    const winRows = (g, L, x0, x1, y0, y1, dx, ww, dy, wh) => {
+      for (let y = y0; y < y1 - wh; y += dy) { g.fillStyle = L.win(L.lit(y)); for (let x = x0; x <= x1 - ww + 1e-6; x += dx) g.fillRect(x, -y - wh, ww, wh); }
+    };
+    // A three-winged hotel tower: a tall centre and two curving wings stepping down, a neon stripe up the middle, a lit crown.
+    registerLandmark('resort', { w: 26, h: 74, draw(g, L) {
+      g.fillStyle = L.body;
+      for (const sx of [-1, 1]) {                         // the wings, each in three steps with rounded outer corners
+        for (const [x0, x1, h] of [[4, 8.5, 62], [8.5, 11.5, 54], [11.5, 13, 44]]) {
+          g.beginPath(); g.moveTo(sx * x0, 0); g.lineTo(sx * x0, -h); g.lineTo(sx * (x1 - 1.2), -h); g.quadraticCurveTo(sx * x1, -h, sx * x1, -h + 1.2); g.lineTo(sx * x1, 0); g.fill();
+        }
+      }
+      g.fillRect(-4, -70, 8, 70); g.beginPath(); g.moveTo(-4.6, -70); g.lineTo(-3, -74); g.lineTo(3, -74); g.lineTo(4.6, -70); g.fill();
+      for (const sx of [-1, 1]) for (const [x0, x1, h] of [[4.6, 8, 61], [9, 11, 53], [12, 12.6, 43]]) winRows(g, L, sx > 0 ? x0 : -x1, sx > 0 ? x1 : -x0, 1.5, h - .5, 1.15, .6, 1.5, .7);
+      winRows(g, L, -3.4, -1.2, 1.5, 68, 1.1, .55, 1.5, .7); winRows(g, L, 1.2, 3.4, 1.5, 68, 1.1, .55, 1.5, .7);
+      const glow = L.win(Math.max(L.lit(40), .45));
+      g.fillStyle = glow; g.fillRect(-.45, -69, .9, 66);    // the neon stripe up the centre
+      g.fillRect(-4.3, -71.2, 8.6, .7);                       // and the crown band
+      g.globalAlpha *= .25; g.fillRect(-1.6, -69, 3.2, 66); g.globalAlpha /= .25;
+    } });
+    // An observation needle: three splayed legs, a slim shaft, a wide pod of stacked rings with a chasing light, and a spire.
+    registerLandmark('needle', { w: 14, h: 92, draw(g, L) {
+      g.fillStyle = L.body;
+      g.beginPath(); g.moveTo(-5, 0); g.lineTo(-1.6, -14); g.lineTo(1.6, -14); g.lineTo(5, 0); g.lineTo(3.2, 0); g.lineTo(0, -9); g.lineTo(-3.2, 0); g.fill();
+      g.fillRect(-1.6, -72, 3.2, 60);
+      for (const [y, hw, hh] of [[72, 4.2, 1.6], [74, 6.8, 1.8], [76.2, 7, 1.8], [78.4, 6, 1.6], [80.4, 3.6, 1.4]]) g.fillRect(-hw, -y - hh, hw * 2, hh);
+      g.fillRect(-.35, -92, .7, 10.6);
+      for (const [y, hw] of [[75, 6.4], [77.2, 6.6], [79.3, 5.6]]) winRows(g, L, -hw + .4, hw - .4, y, y + 1.1, .9, .5, 2, .7);
+      const T = now(), n = 18;                            // the chasing light round the widest ring
+      for (let k = 0; k < n; k++) {
+        const on = ((k - Math.floor(T * 9)) % 6 + 6) % 6 === 0;
+        g.fillStyle = on ? L.win(Math.max(L.lit(76), .8)) : L.win(.12); g.fillRect(-6.8 + k * 13.6 / (n - 1) - .25, -74.4, .5, .5);
+      }
+      g.fillStyle = L.win(Math.max(L.lit(88), .5)); g.fillRect(-.2, -92.5, .4, 1);
+      for (let y = 16; y < 70; y += 4) { g.fillStyle = L.win(L.lit(y)); g.fillRect(-.3, -y, .6, 1.4); }   // lift lights up the shaft
+    } });
+    // A dark glass pyramid with lit edges, and a beam of light from its tip up into the sky.
+    registerLandmark('pyramid', { w: 30, h: 34, draw(g, L) {
+      const a = Math.max(L.lit(30), .35), T = now();
+      const beam = g.createLinearGradient(0, -34, 0, -260);
+      beam.addColorStop(0, `rgba(235,245,255,${.55 * a})`); beam.addColorStop(1, 'rgba(235,245,255,0)');
+      g.fillStyle = beam; g.beginPath(); g.moveTo(-.5, -34); g.lineTo(-1.4 - .4 * Math.sin(T), -260); g.lineTo(1.4 + .4 * Math.sin(T), -260); g.lineTo(.5, -34); g.fill();
+      g.fillStyle = L.body; g.beginPath(); g.moveTo(-15, 0); g.lineTo(0, -34); g.lineTo(15, 0); g.fill();
+      for (let y = 2; y < 31; y += 2.2) {                 // floors of slanted windows, narrowing to the tip
+        const hw = 15 * (1 - (y + 1) / 34) - .8; g.fillStyle = L.win(L.lit(y));
+        for (let x = -hw; x < hw - .5; x += 1.4) g.fillRect(x, -y - .7, .7, .7);
+      }
+      g.strokeStyle = L.win(a); g.lineWidth = .3; g.beginPath(); g.moveTo(-15, 0); g.lineTo(0, -34); g.lineTo(15, 0); g.stroke();
+    } });
+    // A giant observation wheel: an LED rim, spokes, turning cabins and an A-frame stand.
+    registerLandmark('wheel', { w: 36, h: 56, draw(g, L) {
+      const R = 24, cy = 31, T = now() * .05, a = Math.max(L.lit(cy), .35);
+      g.strokeStyle = L.body; g.lineWidth = 1.1; g.beginPath(); g.moveTo(-9, 0); g.lineTo(0, -cy); g.lineTo(9, 0); g.stroke();
+      g.lineWidth = .18; g.beginPath(); for (let k = 0; k < 24; k++) { const an = T + k * Math.PI / 12; g.moveTo(0, -cy); g.lineTo(Math.cos(an) * R, -cy + Math.sin(an) * R); } g.stroke();
+      g.strokeStyle = L.win(a); g.lineWidth = .55; g.beginPath(); g.arc(0, -cy, R, 0, Math.PI * 2); g.stroke();
+      g.globalAlpha *= .3; g.lineWidth = 1.6; g.stroke(); g.globalAlpha /= .3;
+      for (let k = 0; k < 16; k++) {                      // the cabins: little glass pods, lit by the music
+        const an = T + k * Math.PI / 8, x = Math.cos(an) * R, y = -cy + Math.sin(an) * R;
+        g.fillStyle = L.body; g.beginPath(); g.ellipse(x, y, 1.3, .9, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = L.win(L.lit(cy - Math.sin(an) * R)); g.beginPath(); g.ellipse(x, y, .9, .55, 0, 0, Math.PI * 2); g.fill();
+      }
+      g.fillStyle = L.body; g.beginPath(); g.arc(0, -cy, 1.4, 0, Math.PI * 2); g.fill();
+    } });
+    // A golden tower with a curving face, its glass banded in warm light.
+    registerLandmark('goldcurve', { w: 18, h: 66, draw(g, L) {
+      g.fillStyle = L.body; g.beginPath(); g.moveTo(-9, 0); g.lineTo(-9, -60); g.quadraticCurveTo(-2, -68, 8, -63); g.quadraticCurveTo(5, -32, 9, 0); g.fill();
+      for (let y = 1.5; y < 59; y += 1.4) {
+        const r = y < 32 ? 9 - 4 * Math.sin(y / 64 * Math.PI) : 8 - 3 * Math.sin(y / 64 * Math.PI);
+        g.fillStyle = L.win(L.lit(y)); g.fillRect(-8.2, -y - .6, r + 7.4, .6);
+      }
+      const sh = g.createLinearGradient(-9, 0, 9, 0); sh.addColorStop(0, 'rgba(255,215,120,.22)'); sh.addColorStop(.5, 'rgba(255,240,200,.05)'); sh.addColorStop(1, 'rgba(255,190,80,.18)');
+      g.fillStyle = sh; g.beginPath(); g.moveTo(-9, 0); g.lineTo(-9, -60); g.quadraticCurveTo(-2, -68, 8, -63); g.quadraticCurveTo(5, -32, 9, 0); g.fill();
+    } });
     registerTheme('strip', { name: 'Neon Strip',
-      kit: { styles: ['wide', 'grid', 'ribbon', 'wide'], roofs: [null], tall: .12, shrink: .85, w0: 9, gaps: [.8, 2] },
+      kit: { styles: ['wide', 'grid', 'ribbon', 'wide'], roofs: [null], tall: .12, shrink: .85, w0: 9, gaps: [.8, 2],
+        landmarks: ['resort', 'needle', 'pyramid', 'wheel', 'goldcurve'], lmChance: .22, lmScale: 2 },   // the big resorts tower over the low signs
       minF: .2, maxF: .5,
       sky: [[0, '#05030f'], [.55, '#140a2a'], [1, '#3a0f3c']],
       drawSky(g, { W, GY, bands }) {
@@ -465,6 +541,7 @@
         if (kind !== 'marquee' && r() < .6 || r() < .2) b.burst = { hue: hue2, h: 3 + 3 * r(), fx: (r() - .5) * .6 };
       },
       drawExtras(g, b, cx, tip, E) {
+        if (b.lm) return;                                  // the resorts are lit by their own drawing
         if (tick(E)) chase += E.dt * (3 + 16 * E.bands[1].level + 10 * E.bassFlash);   // the bulbs chase faster on a strong beat
         const u = E.unit, sg = b.sg, top = topT(b), tw = top.w * u, ty = E.GY - b.hU * u, sp = Math.max(3, u * 1.15);
         const a = (.55 + .45 * b.level) * (hash(b.id, Math.floor(E.t / 90), 3) < .012 ? .15 : 1);   // the odd tube flicker
@@ -518,16 +595,34 @@
         g.fillStyle = 'rgba(255,220,120,.45)';
         const dash = 3 * u;
         for (const ly of [.42, .72]) for (let x = -(travel % (dash * 2)) - dash * 2; x < W; x += dash * 2) g.fillRect(x, GY + gh * ly, dash, Math.max(1, gh * .025));
-        const streak = (lane, dir, col, n) => {
-          g.fillStyle = col;
+        // Cars cruising the strip: a body with a cabin and neon catching its roof, wheels, headlight beams ahead,
+        // taillights behind, and their lights smeared on the wet road. Nearer lanes are bigger.
+        const car = (x, y, s, dir, hue) => {
+          const L = 6.4 * s, h = 1.5 * s, r = .55 * s, fx = x + dir * L / 2, bx = x - dir * L / 2;
+          const beam = g.createLinearGradient(fx, 0, fx + dir * 9 * s, 0);
+          beam.addColorStop(0, 'rgba(255,245,210,.35)'); beam.addColorStop(1, 'rgba(255,245,210,0)');
+          g.fillStyle = beam; g.beginPath(); g.moveTo(fx, y - h * .75); g.lineTo(fx + dir * 9 * s, y - h * 1.1); g.lineTo(fx + dir * 9 * s, y + h * .1); g.lineTo(fx, y - h * .45); g.fill();
+          g.fillStyle = 'rgba(255,90,170,.18)'; g.fillRect(x - L / 2, y + s * .15, L, s * .55);   // its glow on the wet road
+          g.fillStyle = `hsl(${hue},45%,26%)`; g.beginPath();
+          g.moveTo(bx, y - r); g.lineTo(bx, y - h * .95); g.lineTo(x - dir * L * .22, y - h); g.lineTo(x - dir * L * .1, y - h * 1.65);
+          g.lineTo(x + dir * L * .18, y - h * 1.65); g.lineTo(x + dir * L * .32, y - h * 1.02); g.lineTo(fx, y - h * .82); g.lineTo(fx, y - r); g.closePath(); g.fill();
+          g.fillStyle = 'rgba(150,220,255,.55)'; g.beginPath();   // the windows, catching the neon
+          g.moveTo(x - dir * L * .17, y - h * 1.02); g.lineTo(x - dir * L * .07, y - h * 1.52); g.lineTo(x + dir * L * .15, y - h * 1.52); g.lineTo(x + dir * L * .26, y - h * 1.02); g.closePath(); g.fill();
+          g.fillStyle = `hsla(${hue + 160},100%,75%,.55)`; g.fillRect(Math.min(x - dir * L * .1, x + dir * L * .18), y - h * 1.66, L * .28, Math.max(1, s * .12));
+          g.fillStyle = '#050309'; for (const wx of [x - dir * L * .3, x + dir * L * .3]) { g.beginPath(); g.arc(wx, y - r, r, 0, Math.PI * 2); g.fill(); }
+          g.fillStyle = '#fff6d8'; g.fillRect(dir > 0 ? fx - s * .5 : fx, y - h * .78, s * .5, s * .32);
+          g.fillStyle = '#ff2a3a'; g.fillRect(dir > 0 ? bx : bx - s * .45, y - h * .8, s * .45, s * .3);
+          const sp = sprite('255,60,70'), R = s * 1.4; g.drawImage(sp, bx - R, y - h * .65 - R, R * 2, R * 2);
+        };
+        const lane = (ly, dir, n) => {
+          const s = u * (.45 + .55 * ly), span = W + 24 * u;
           for (let k = 0; k < n; k++) {
-            const span = W + 20 * u, x = ((hash(k, lane, 7) * span + dir * t / 1000 * u * (6 + 4 * hash(k, lane, 8)) - travel) % span + span) % span - 10 * u;
-            g.fillRect(x, GY + gh * lane, u * 2.5, Math.max(1, gh * .035));
+            const x = ((hash(k, ly * 100, 7) * span + dir * t / 1000 * u * (6 + 4 * hash(k, ly * 100, 8)) - travel) % span + span) % span - 12 * u;
+            car(x, GY + gh * ly, s, dir, Math.floor(hash(k, ly * 100, 9) * 360));
           }
         };
-        const n = Math.max(2, Math.round(W / (u * 22)));
-        streak(.3, -1, 'rgba(255,60,60,.75)', n); streak(.56, -1, 'rgba(255,60,60,.6)', n);
-        streak(.84, 1, 'rgba(255,245,210,.8)', n); streak(.62, 1, 'rgba(255,245,210,.6)', n);
+        const n = Math.round(W / (u * 28) * E.S.traffic / 35);   // the Traffic slider: 35 (the default) is a steady cruise
+        if (n) { lane(.36, -1, n); lane(.56, -1, n); lane(.7, 1, n); lane(.9, 1, n); }   // far lanes first
         const spc = 26 * u, ph = 13 * u;
         g.strokeStyle = g.fillStyle = '#050309';
         for (let k = Math.floor((travel - spc) / spc); k * spc - travel < W + spc; k++) {

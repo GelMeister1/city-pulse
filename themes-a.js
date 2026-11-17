@@ -98,10 +98,11 @@ const hitNow = (st, k, f) => { const was = st[k] || 0; st[k] = f; return f > .95
 function eachTier(b, cx, E, fn) { let y = E.GY; for (const tr of b.tiers) { const tw = tr.w * E.unit, th = tr.h * E.unit; fn(cx - tw / 2, y - th, tw, th, tr); y -= th; } }
 const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += bands[k].level; return s / (z - a + 1); };
 
-// Aero: glossy glass towers in a bright aqua sky, a green park, wind turbines on the hills and soap bubbles.
-// Music: turbines spin up on the bass, the sun swells with the kick, glass glints on each building's hits.
+// Aero: glossy glass towers in a bright aqua sky, a green park with all kinds of trees, a fountain, wind turbines on the
+// hills, soap bubbles, butterflies, rooftop gardens and glossy ribbons flowing across the sky.
+// Music: turbines spin up on the bass and the fountain leaps with it, the sun swells with the kick, glass glints on hits.
 {
-  const st = { key: '', bub: { list: [] }, rot: 0, hills: null, hk: '', tree: null, tk: 0, gk: '', gg: null };
+  const st = { key: '', bub: { list: [] }, rot: 0, hills: null, hk: '', trees: {}, tk: 0, gk: '', gg: null, rph: 0, flies: [] };
   const sheen = mk(64, 2, (x, w) => { x.fillStyle = lin(x, 0, 0, w, 0, [[0, 'rgba(255,255,255,.6)'], [.16, 'rgba(255,255,255,.14)'], [.42, 'rgba(255,255,255,0)'],
     [.62, 'rgba(255,255,255,.22)'], [.7, 'rgba(255,255,255,0)'], [1, 'rgba(0,70,110,.16)']]); x.fillRect(0, 0, w, 2); });
   const gloss = mk(2, 64, (x, w, h) => { x.fillStyle = lin(x, 0, 0, 0, h, [[0, 'rgba(255,255,255,.4)'], [.48, 'rgba(255,255,255,.1)'], [.5, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0)']]); x.fillRect(0, 0, w, h); });
@@ -131,21 +132,39 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     for (let k = 0; k < 3; k++) { g.save(); g.translate(x, hy); g.rotate(rot + k * TAU / 3); g.beginPath(); g.ellipse(0, -L / 2, Math.max(.8, L * .045), L / 2, 0, 0, TAU); g.fill(); g.restore(); }
     g.fillStyle = '#d7e9f2'; g.beginPath(); g.arc(x, hy, Math.max(1, ht * .022), 0, TAU); g.fill();
   }
-  function treeSprite(u) {
-    if (st.tk === u) return st.tree; st.tk = u;
-    const d = dpr(), r = 2.3 * u, w = r * 2.6, h = r * 3.2;
-    return st.tree = mk(w * d, h * d, x => {
+  // Glossy trees: round, a tall cypress and a pink blossom tree; and a low bush. Each lit from the upper left with a shine.
+  const KINDS = { round: ['#c6f78a', '#5ccf3e', '#2f8f2a'], cypress: ['#a8f0a0', '#3fb855', '#1f7a3a'], blossom: ['#fff0f6', '#ffaad0', '#e9709f'], bush: ['#b8f27e', '#4cc23a', '#2c8a2a'] };
+  function treeSprite(u, kind = 'round') {
+    if (st.tk !== u) { st.tk = u; st.trees = {}; }
+    if (st.trees[kind]) return st.trees[kind];
+    const d = dpr(), r = 2.3 * u, tall = kind === 'cypress', bush = kind === 'bush', w = r * 2.6, h = bush ? r * 1.6 : r * (tall ? 4.4 : 3.2), [c0, c1, c2] = KINDS[kind];
+    return st.trees[kind] = mk(w * d, h * d, x => {
       x.scale(d, d);
-      x.fillStyle = '#8a5a34'; x.fillRect(w / 2 - u * .3, h - r * 1.2, u * .6, r * 1.2);
-      const cy = h - r * 1.15 - r * .9;
-      const rg = x.createRadialGradient(w / 2 - r * .35, cy - r * .4, r * .1, w / 2, cy, r * 1.15);
-      rg.addColorStop(0, '#c6f78a'); rg.addColorStop(.5, '#5ccf3e'); rg.addColorStop(1, '#2f8f2a');
-      x.fillStyle = rg; x.beginPath(); x.arc(w / 2, cy, r, 0, TAU); x.arc(w / 2 - r * .55, cy + r * .35, r * .65, 0, TAU); x.arc(w / 2 + r * .55, cy + r * .35, r * .65, 0, TAU); x.fill();
-      x.fillStyle = 'rgba(255,255,255,.55)'; x.beginPath(); x.ellipse(w / 2 - r * .35, cy - r * .5, r * .38, r * .2, -.5, 0, TAU); x.fill();
+      if (!bush) { x.fillStyle = '#8a5a34'; x.fillRect(w / 2 - u * .3, h - r * 1.2, u * .6, r * 1.2); }
+      const cy = bush ? h - r * .6 : tall ? h - r * 2.6 : h - r * 1.15 - r * .9, ry = tall ? r * 1.9 : r;
+      const rg = x.createRadialGradient(w / 2 - r * .35, cy - ry * .4, r * .1, w / 2, cy, Math.max(r, ry) * 1.15);
+      rg.addColorStop(0, c0); rg.addColorStop(.5, c1); rg.addColorStop(1, c2);
+      x.fillStyle = rg; x.beginPath();
+      if (tall) x.ellipse(w / 2, cy, r * .62, ry, 0, 0, TAU);
+      else if (bush) { x.ellipse(w / 2, cy, r * 1.2, r * .6, 0, 0, TAU); x.arc(w / 2 - r * .5, cy - r * .2, r * .5, 0, TAU); x.arc(w / 2 + r * .45, cy - r * .25, r * .55, 0, TAU); }
+      else { x.arc(w / 2, cy, r, 0, TAU); x.arc(w / 2 - r * .55, cy + r * .35, r * .65, 0, TAU); x.arc(w / 2 + r * .55, cy + r * .35, r * .65, 0, TAU); }
+      x.fill();
+      x.fillStyle = 'rgba(255,255,255,.55)'; x.beginPath(); x.ellipse(w / 2 - r * .3, cy - ry * .5, r * (tall ? .2 : .38), ry * (tall ? .35 : .2), -.5, 0, TAU); x.fill();
+      if (kind === 'blossom') { x.fillStyle = '#ffffff'; for (let k = 0; k < 14; k++) { const a = k * 2.4, rr = r * .8 * ((k * 37 % 10) / 10); x.fillRect(w / 2 + Math.cos(a) * rr, cy + Math.sin(a) * rr * .8, Math.max(1, u * .25), Math.max(1, u * .25)); } }
     });
   }
+  // A glossy butterfly: two pairs of wings that flap (k = 0..1 open), a dark body, a white shine.
+  function butterfly(g, x, y, s, k, col) {
+    for (const sx of [-1, 1]) {
+      g.fillStyle = col; g.beginPath(); g.ellipse(x + sx * s * .7 * k, y - s * .35, s * .75 * k + .3, s * .6, sx * .5, 0, TAU); g.fill();
+      g.beginPath(); g.ellipse(x + sx * s * .5 * k, y + s * .35, s * .5 * k + .25, s * .4, -sx * .4, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.ellipse(x + sx * s * .6 * k, y - s * .5, s * .25 * k + .1, s * .15, sx * .5, 0, TAU); g.fill();
+    }
+    g.fillStyle = '#20303a'; g.fillRect(x - s * .08, y - s * .6, s * .16, s * 1.2);
+  }
   const sync = E => { const k = keyOf(E); if (st.key === k) return; st.key = k;
-    st.bub.list = Array.from({ length: E.widget ? 4 : 9 }, () => ({ x: Math.random() * E.W, y: Math.random() * E.GY, r: E.unit * (1 + 1.6 * Math.random()) * (E.widget ? 1.4 : 1.2), v: E.unit * (1.6 + Math.random() * 1.6), ph: Math.random() * TAU })); };
+    st.bub.list = Array.from({ length: E.widget ? 4 : 9 }, () => ({ x: Math.random() * E.W, y: Math.random() * E.GY, r: E.unit * (1 + 1.6 * Math.random()) * (E.widget ? 1.4 : 1.2), v: E.unit * (1.6 + Math.random() * 1.6), ph: Math.random() * TAU }));
+    st.flies = ['#4fd8ff', '#9cf25a', '#ffb347', '#ff7ad9', '#ffe45c'].slice(0, E.widget ? 2 : 5).map(col => ({ col, x: Math.random() * E.W, ph: Math.random() * TAU, sp: .6 + Math.random() * .6, hy: .4 + Math.random() * .6 })); };
   const glint = (g, x, y, s, a) => withAlpha(g, a, () => {
     g.drawImage(sprite('255,255,255'), x - s, y - s, 2 * s, 2 * s);
     g.fillStyle = '#fff'; g.fillRect(x - s * 1.7, y - .6, s * 3.4, 1.2); g.fillRect(x - .6, y - s * 1.7, 1.2, s * 3.4);
@@ -161,12 +180,27 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       const dx = W * .55 - sx, dy = GY * .55 - sy;
       for (const [k, r, c, a] of [[.45, .05, '190,255,230', .3], [.75, .022, '170,225,255', .4], [1.2, .085, '210,255,215', .14], [1.45, .035, '255,255,255', .22]])
         glow(g, c, sx + dx * k, sy + dy * k, m * r, a);
+      st.rph += E.dt * .06;                               // glossy ribbons sweeping across the sky, flowing slowly
+      for (let i = 0; i < 3; i++) {
+        const yb = GY * (.3 + .13 * i), amp = GY * (.07 - .015 * i), th = GY * (.035 + .012 * i), ph = st.rph * (1 + .3 * i) + i * 2.1, n = 48;
+        const yAt = (x, o) => yb + Math.sin(x / W * TAU * (.7 + .2 * i) + ph) * amp + o * th * (.55 + .45 * Math.sin(x / W * TAU * 1.3 + ph * 1.7));
+        const rb = g.createLinearGradient(0, yb - amp, 0, yb + amp + th);
+        rb.addColorStop(0, `rgba(255,255,255,${.3 - .06 * i})`); rb.addColorStop(1, `rgba(150,235,255,${.06})`);
+        g.fillStyle = rb; g.beginPath();
+        for (let j = 0; j <= n; j++) { const x = W * j / n; j ? g.lineTo(x, yAt(x, 0)) : g.moveTo(x, yAt(x, 0)); }
+        for (let j = n; j >= 0; j--) { const x = W * j / n; g.lineTo(x, yAt(x, 1)); }
+        g.fill();
+        g.strokeStyle = `rgba(255,255,255,${.55 - .1 * i})`; g.lineWidth = Math.max(1, E.unit * .2); g.beginPath();
+        for (let j = 0; j <= n; j++) { const x = W * j / n; j ? g.lineTo(x, yAt(x, 0)) : g.moveTo(x, yAt(x, 0)); }
+        g.stroke();
+      }
     },
     stars: false, moon: false, cloud: 'rgba(255,255,255,.82)', rain: 'rgba(255,255,255,.45)', fogRGB: '235,250,255',
     body: '#c9eef6', side: '#7fc3d8', top: '#f4feff', outline: () => 'rgba(255,255,255,.85)',
     win: c => ({ h: 165 + c.h / 360 * 55, s: Math.min(100, c.s), m: c.m }),
     back: { h: .75, density: .6, body: '#9cd6ea', win: () => 'rgba(255,255,255,.4)' },
     searchlights: false,
+    decorate(b, r) { b.garden = !b.roof && r() < .5; b.ivy = r() < .35; b.ivyH = .3 + .35 * r(); },
     drawBehind(g, E) {
       sync(E);
       const H = hills(E), { W, GY } = E, ox = ((E.travel * .25) % W + W) % W, top = GY - H.hh;
@@ -181,6 +215,21 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     drawExtras(g, b, cx, tip, E) {
       if (b.lm) return;
       eachTier(b, cx, E, (x0, y, w, h) => { g.drawImage(sheen, x0, y, w, h); g.drawImage(gloss, x0, y, w, Math.min(h, w * 1.6)); });
+      const u = E.unit, top = b.tiers[b.tiers.length - 1], tw = top.w * u, ty = E.GY - b.hU * u, x0 = cx - tw / 2;
+      if (b.ivy) {                                        // ivy climbing down from the top of the tower's left edge
+        const len = b.hU * u * b.ivyH;
+        for (let k = 0; k < len / (u * .55); k++) {
+          const y = ty + k * u * .55, w = u * (1.6 - 1.2 * k * u * .55 / len) * (.6 + .4 * hash(b.id, k, 21));
+          g.fillStyle = hash(b.id, k, 22) < .5 ? '#5ccf3e' : '#3da42e'; g.beginPath(); g.ellipse(x0 + w * .5, y, w * .6, u * .45, 0, 0, TAU); g.fill();
+        }
+      }
+      if (b.garden) {                                     // a roof garden: a lawn on top and a few little trees
+        const d = depthOf(tw);
+        g.fillStyle = '#6fd84a'; g.beginPath(); g.moveTo(x0, ty); g.lineTo(x0 + d, ty - d / 2); g.lineTo(x0 + tw + d, ty - d / 2); g.lineTo(x0 + tw, ty); g.closePath(); g.fill();
+        g.fillRect(x0, ty - Math.max(1, u * .35), tw, Math.max(1, u * .35));
+        const tr = treeSprite(u, 'round'), dp = dpr(), sw = tr.width / dp * .42, sh = tr.height / dp * .42;
+        for (const fx of [.22, .55, .82]) if (hash(b.id, fx * 10, 23) < .8) g.drawImage(tr, x0 + tw * fx + d * .4 - sw / 2, ty - d * .2 - sh + u * .2, sw, sh);
+      }
       if (b.flash > .25) glint(g, cx - b.wpx * (.1 + .25 * hash(b.id, 4, 4)), E.GY - b.hU * E.unit * (.35 + .55 * hash(b.id, 5, 5)), (1 + 1.8 * b.flash) * E.unit, b.flash);
     },
     drawFront(g, E) {
@@ -192,6 +241,12 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
         if (b.x < -b.r * 2) b.x += W + b.r * 4; else if (b.x > W + b.r * 2) b.x -= W + b.r * 4;
       }
       bubbleDraw(g, st.bub.list);
+      for (const f of st.flies) {                         // butterflies wandering over the park
+        f.x += (Math.sin(t / 2300 * f.sp + f.ph) * u * 3 - E.scrollV * .9) * dt;
+        if (f.x < -u * 4) f.x += W + u * 8; else if (f.x > W + u * 4) f.x -= W + u * 8;
+        const y = GY - u * (3 + 7 * f.hy) + Math.sin(t / 700 * f.sp + f.ph * 2) * u * 1.5;
+        butterfly(g, f.x, y, u * (E.widget ? 1.3 : 1), .35 + .65 * Math.abs(Math.sin(t / 90 * f.sp + f.ph)), f.col);
+      }
     },
     ground: { h: .1, draw(g, E) {
       const { W, H, GY, unit: u, travel } = E, gh = H - GY, k = `${GY},${H}`;
@@ -199,11 +254,38 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       g.fillStyle = st.gg; g.fillRect(0, GY, W, gh);
       g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(0, GY, W, Math.max(1, gh * .07));
       g.fillStyle = 'rgba(255,250,222,.8)'; g.fillRect(0, GY + gh * .64, W, Math.max(1, gh * .12));
-      const tr = treeSprite(u), d = dpr(), tw = tr.width / d, th = tr.height / d, sp = 12 * u;
-      for (let i = Math.floor((travel - 8 * u) / sp); i * sp - travel < W + 8 * u; i++) {
-        if (hash(i, 7, 3) < .3) continue;
-        const x = i * sp - travel + hash(i, 1, 2) * sp * .5, s = .75 + .5 * hash(i, 3, 4);
-        g.drawImage(tr, x - tw * s / 2, GY + gh * .5 - th * s, tw * s, th * s);
+      const d = dpr(), pondSp = 170 * u, pondAt = i => i * pondSp - travel + pondSp * .4;   // one fountain pond every so often
+      const nearPond = x => { const i = Math.round((x + travel - pondSp * .4) / pondSp); return Math.abs(x - pondAt(i)) < 10 * u; };
+      const kindOf = (i, row) => { const h = hash(i, row, 31); return h < .5 ? 'round' : h < .78 ? 'cypress' : 'blossom'; };
+      const row = (sp, fy, s0, rowId) => {                 // a row of mixed trees, skipping the pond
+        for (let i = Math.floor((travel - 10 * u) / sp); i * sp - travel < W + 10 * u; i++) {
+          if (hash(i, rowId, 3) < .18) continue;
+          const x = i * sp - travel + hash(i, rowId + 1, 2) * sp * .45; if (nearPond(x)) continue;
+          const tr = treeSprite(u, kindOf(i, rowId)), tw = tr.width / d, th = tr.height / d, s = s0 * (.8 + .4 * hash(i, rowId + 2, 4));
+          g.drawImage(tr, x - tw * s / 2, GY + gh * fy - th * s, tw * s, th * s);
+        }
+      };
+      row(7 * u, .32, .62, 10);                            // the far row, smaller
+      for (let i = Math.floor((travel - 20 * u) / pondSp); pondAt(i) < W + 20 * u; i++) {   // the fountain pond
+        const x = pondAt(i), y = GY + gh * .55, rx = 8 * u, ry = Math.max(2, gh * .14);
+        const pg = g.createLinearGradient(0, y - ry, 0, y + ry); pg.addColorStop(0, '#bff4ff'); pg.addColorStop(1, '#2aa6e0');
+        g.fillStyle = '#e9f7ff'; g.beginPath(); g.ellipse(x, y, rx + u * .5, ry + u * .3, 0, 0, TAU); g.fill();
+        g.fillStyle = pg; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.ellipse(x - rx * .35, y - ry * .35, rx * .35, ry * .2, 0, 0, TAU); g.fill();
+        const jet = u * (5 + 9 * E.bassFlash), n = 16;    // the jet leaps on the bass and falls back in arcs of droplets
+        g.fillStyle = 'rgba(235,252,255,.85)';
+        for (let k = 0; k < n; k++) {
+          const p = ((E.t / 900 + k / n) % 1), side = k % 2 ? 1 : -1, dx = side * p * rx * .55, dy = -jet * 4 * p * (1 - p);
+          const r = Math.max(1, u * (.45 - .25 * p)); g.beginPath(); g.arc(x + dx, y - ry * .2 + dy, r, 0, TAU); g.fill();
+        }
+        g.fillRect(x - Math.max(.5, u * .15), y - ry * .2 - jet, Math.max(1, u * .3), jet);
+      }
+      row(9 * u, .66, .95, 20);                            // the near row
+      const bush = treeSprite(u, 'bush'), bw = bush.width / d, bh = bush.height / d, bs = 5.5 * u;   // bushes along the path
+      for (let i = Math.floor((travel - bs) / bs); i * bs - travel < W + bs; i++) {
+        if (hash(i, 40, 3) < .45) continue;
+        const x = i * bs - travel + hash(i, 41, 2) * bs * .5; if (nearPond(x)) continue;
+        g.drawImage(bush, x - bw * .3, GY + gh * .95 - bh * .6, bw * .6, bh * .6);
       }
     } },
   });

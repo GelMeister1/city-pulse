@@ -613,7 +613,17 @@ const KITS = {
 function gen(r, widthU, maxHU, minFrac, kit = KITS.generic) {
   const out = [];
   let lastShort = false;
+  // A kit may list landmarks to mix in (kit.landmarks: keys, kit.lmChance: share of the row, kit.lmScale: how much taller
+  // than the row they may be): each appears before any repeats, never two side by side, only where it fits the sky.
+  const lms = (kit.landmarks || []).filter(k => LM[k] && LM[k].h <= maxHU * (kit.lmScale || 1) + 8);
+  let li = lms.length ? Math.floor(r() * lms.length) : 0, lastLm = true;
   for (let acc = 0; acc < widthU;) {
+    if (lms.length && !lastLm && r() < (kit.lmChance || .2)) {
+      const key = lms[li++ % lms.length], gap = kit.gaps ? kit.gaps[1] : 1.5;
+      out.push([gap, '@' + key]); acc += gap + LM[key].w; lastLm = true; lastShort = false;
+      continue;
+    }
+    lastLm = false;
     // Height rhythm: a mix of tall, mid and short, but never two short buildings side by side.
     const roll = r(), kind = roll < kit.tall ? 2 : roll < .8 || lastShort ? 1 : 0;
     const band = [[minFrac, .45], [.45, .75], [.75, 1]][kind];
@@ -746,7 +756,7 @@ const touring = view => view === 'tour' || view === 'scroll';
 const tourMaxH = (s = S) => s.view === 'scroll' ? (CITIES[s.city] ? specH(CITIES[s.city].b) : 93.5) : Math.max(...Object.values(CITIES).map(c => specH(c.b)));
 // Pixels per unit for a w x h window. A pure function, so span mode can work out every screen's scale, not just its own.
 function unitFor(w, h, s) {
-  const tour = touring(s.view), city = !tour && CITIES[s.city], { GY } = geom(h, THEMES[tour ? 'none' : themeKey(s.city)], s);
+  const tour = touring(s.view), city = !tour && CITIES[s.city], { GY } = geom(h, THEMES[s.view === 'tour' ? 'none' : themeKey(s.city)], s);
   if (tour) return Math.max(1.8, GY * .85 / tourMaxH(s));
   if (city) return Math.max(1.8, Math.min(w * .95 / specW(city.b), GY * .85 / specH(city.b)));
   return Math.max(2.5, Math.min(w, GY) / 110);
@@ -780,7 +790,7 @@ function layout() {
 
   const r = rng(7), city = !tour && CITIES[S.city], key = tour ? 'none' : themeKey(S.city);
   theme = THEMES[key]; skies.clear();
-  ({ GH, WY, GY } = geom(H, theme, S));                  // the tour keeps the street everywhere, so every city stands on one line
+  ({ GH, WY, GY } = geom(H, THEMES[S.view === 'scroll' ? themeKey(S.city) : key], S));   // the tour keeps the street everywhere, so every city stands on one line; Scroll keeps its city's own ground
   unit = unitFor(W, H, S);
   env(last, 0, 0);
   let startU = 0;
@@ -1857,7 +1867,8 @@ const okSpec = s => Array.isArray(s) && typeof s[1] === 'string' && (s[1][0] ===
 const newKey = k => typeof k === 'string' && !!k && k !== 'none' && k !== 'generic';
 // A made-up themed city; it appears in the City menu under Themed and as a stop on the tour. Only name and kit are required;
 // every other field defaults to the plain night look (THEMES.none). Colours are CSS colours.
-//   kit {styles, roofs, tall, shrink, w0, gaps?, setbacks?} (like KITS), minF/maxF: building heights as shares of the sky
+//   kit {styles, roofs, tall, shrink, w0, gaps?, setbacks?, landmarks?: [registered landmark keys], lmChance?, lmScale?} (like KITS),
+//   minF/maxF: building heights as shares of the sky
 //   weather: picked when the city is chosen and the weather is Clear · noWeather: ignore the weather setting entirely
 //   sky: [[0..1, colour]…] over 0..H (0..GY with skyToGround) · drawSky(g, E): art after the gradient, before stars and clouds
 //   widgetSky: also paint the sky (gradient + drawSky) in the otherwise see-through widget
@@ -2047,42 +2058,155 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
   });
 }
 
-// Synthwave: neon-edged blocks, a big striped sun sinking behind neon mountains, and a glowing grid for a floor.
+// Synthwave: you ride behind a retro sports car down a neon highway, straight at a striped sun setting behind the city.
+// Palms line the road and frame the view, the grid floor rushes toward you, wireframe mountains glow on the horizon,
+// and a faint VHS sheen sits over it all. Music: the car (and everything rushing past) speeds up with the bass, the
+// taillights flare and the floor sends a laser pulse toward you on each hit, the sun's stripes and the horizon pulse.
 {
-  let gridT = 0;
+  const TAU = Math.PI * 2;
+  const st = { z: 0, sp: 1, pulses: [], prevBF: 0, last: -1, mk: '', mts: null, scan: null };
+  const roadX = E => (E.left + E.right) / 2;              // the road runs to the middle of this stretch (the screen outside the tour)
+  const step = E => {                                     // once a frame: speed, distance, laser pulses
+    if (st.last === E.t) return; st.last = E.t;
+    const want = 1 + 1.6 * (E.bands[0].level + E.bands[1].level) / 2;
+    st.sp += (want - st.sp) * Math.min(1, E.dt * 1.2);    // smoothed: the car surges, it doesn't jerk
+    st.z = (st.z + E.dt * .45 * st.sp) % 1000;
+    if (st.prevBF < .9 && E.bassFlash >= .9) st.pulses.push(0);
+    st.prevBF = E.bassFlash;
+    st.pulses = st.pulses.map(p => p + E.dt / 1.1).filter(p => p < 1);
+  };
+  const glowStroke = (g, col, w) => { const a0 = g.globalAlpha; g.strokeStyle = col; g.globalAlpha = a0 * .3; g.lineWidth = w * 4; g.stroke(); g.globalAlpha = a0; g.lineWidth = w; g.stroke(); };
+  // A palm with a neon rim: trunk from (x, y) leaning by lean, crown at height h; s scales the strokes.
+  function palm(g, x, y, h, lean, rim, s, sway = 0) {
+    const tx = x + lean, ty = y - h;
+    g.strokeStyle = '#05010c'; g.lineCap = 'round';
+    g.lineWidth = 10 * s; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + lean * .2, y - h * .55, tx, ty); g.stroke();
+    if (s > .35) for (let k = 1; k < h / (14 * s); k++) {                    // the trunk's rings catch a little neon
+      const p = k * 14 * s / h, px = x + lean * (p * p * .8 + p * .2), py = y - h * p;
+      g.strokeStyle = 'rgba(255,90,200,.3)'; g.lineWidth = 1.4 * s; g.beginPath(); g.moveTo(px - 5 * s, py); g.lineTo(px + 5 * s, py - 2 * s); g.stroke();
+    }
+    for (const a0 of [-2.9, -2.4, -1.9, -1.35, -.9, -.4, .1]) {
+      const a = a0 + sway * (a0 < -1.4 ? -1 : 1), L = (70 + 18 * Math.sin(a0 * 3)) * s, ex = tx + Math.cos(a) * L, ey = ty + Math.sin(a) * L * .35 + L * .35;
+      g.beginPath(); g.moveTo(tx, ty); g.quadraticCurveTo((tx + ex) / 2, ty - 26 * s, ex, ey);
+      g.strokeStyle = '#05010c'; g.lineWidth = 6 * s; g.stroke();
+      g.beginPath(); g.moveTo(tx, ty - 2 * s); g.quadraticCurveTo((tx + ex) / 2, ty - 28 * s, ex, ey - 2 * s);
+      g.globalAlpha *= .55; glowStroke(g, rim, Math.max(.6, 1.1 * s)); g.globalAlpha /= .55;
+    }
+    g.lineCap = 'butt';
+  }
+  // The car, seen from behind: a low wedge, louvred rear glass catching the sun, a spoiler, a full-width taillight bar,
+  // a blank plate, twin exhausts and fat tyres. bf = bass flash (the lights flare, the exhausts spit flame).
+  function car(g, cx, cy, cw, bf) {
+    const ch = cw * .32, rw = (x, y, w, h, r) => { g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); };
+    g.fillStyle = 'rgba(255,40,90,' + (.22 + .25 * bf) + ')'; g.beginPath(); g.ellipse(cx, cy + ch * .35, cw * .72, ch * .22, 0, 0, TAU); g.fill();
+    g.fillStyle = '#07070d'; for (const sx of [-1, 1]) rw(cx + sx * cw * .42 - cw * .09, cy - ch * .08, cw * .18, ch * .5, cw * .025);
+    g.fillStyle = '#2a2a38'; for (const sx of [-1, 1]) rw(cx + sx * cw * .42 - cw * .06, cy + ch * .02, cw * .12, ch * .06, 2);   // rim glints
+    const body = g.createLinearGradient(0, cy - ch, 0, cy + ch * .25);
+    body.addColorStop(0, '#34195a'); body.addColorStop(.45, '#1d0c32'); body.addColorStop(1, '#0b0515');
+    g.fillStyle = body; g.beginPath();
+    g.moveTo(cx - cw * .5, cy + ch * .2); g.lineTo(cx - cw * .5, cy - ch * .25); g.quadraticCurveTo(cx - cw * .48, cy - ch * .5, cx - cw * .36, cy - ch * .55);
+    g.lineTo(cx - cw * .25, cy - ch); g.lineTo(cx + cw * .25, cy - ch); g.lineTo(cx + cw * .36, cy - ch * .55);
+    g.quadraticCurveTo(cx + cw * .48, cy - ch * .5, cx + cw * .5, cy - ch * .25); g.lineTo(cx + cw * .5, cy + ch * .2); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,120,220,.75)'; g.lineWidth = Math.max(1, cw * .004); g.stroke();
+    g.fillStyle = 'rgba(255,170,240,.25)'; g.fillRect(cx - cw * .46, cy - ch * .5, cw * .92, Math.max(1, ch * .02));   // a highlight along the shoulder
+    for (const sx of [-1, 1]) { g.fillStyle = '#12081f'; rw(cx + sx * cw * .43 - cw * .035, cy - ch * .78, cw * .07, ch * .12, 3); }   // mirrors
+    const glass = g.createLinearGradient(0, cy - ch, 0, cy - ch * .55);
+    glass.addColorStop(0, '#ff8ad9'); glass.addColorStop(.45, '#3a1060'); glass.addColorStop(1, '#120624');
+    g.fillStyle = glass; g.beginPath(); g.moveTo(cx - cw * .23, cy - ch * .96); g.lineTo(cx + cw * .23, cy - ch * .96); g.lineTo(cx + cw * .32, cy - ch * .58); g.lineTo(cx - cw * .32, cy - ch * .58); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = Math.max(1, ch * .025); g.beginPath();
+    for (let k = 1; k < 6; k++) { const y = cy - ch * (.96 - k * .065); g.moveTo(cx - cw * (.23 + k * .016), y); g.lineTo(cx + cw * (.23 + k * .016), y); }
+    g.stroke();
+    g.fillStyle = '#0c0614'; g.fillRect(cx - cw * .47, cy - ch * .62, cw * .94, ch * .06); g.fillRect(cx - cw * .44, cy - ch * .62, cw * .02, ch * .15); g.fillRect(cx + cw * .42, cy - ch * .62, cw * .02, ch * .15);
+    const lb = cy - ch * .32, lh = Math.max(2, ch * .12);  // the taillight bar
+    g.fillStyle = 'rgba(255,40,70,' + (.25 + .35 * bf) + ')'; g.fillRect(cx - cw * .5, lb - lh, cw, lh * 3);
+    g.fillStyle = '#ff2a4a'; g.fillRect(cx - cw * .46, lb, cw * .92, lh);
+    g.fillStyle = 'rgba(255,215,225,' + (.6 + .4 * bf) + ')'; for (let x = cx - cw * .44; x < cx + cw * .44; x += cw * .058) g.fillRect(x, lb + lh * .3, cw * .03, lh * .25);
+    g.fillStyle = '#d8d8e8'; g.fillRect(cx - cw * .1, cy - ch * .12, cw * .2, ch * .17);
+    for (const sx of [-1, 1]) {                           // twin exhausts, spitting flame on a hit
+      const ex = cx + sx * cw * .22, ey = cy + ch * .14;
+      if (bf > .3) { g.fillStyle = 'rgba(255,170,60,' + bf * .8 + ')'; g.beginPath(); g.ellipse(ex, ey + ch * .05 * bf, cw * .02, ch * (.05 + .12 * bf), 0, 0, TAU); g.fill(); }
+      g.fillStyle = '#9aa0b8'; g.beginPath(); g.ellipse(ex, ey, cw * .03, ch * .055, 0, 0, TAU); g.fill();
+      g.fillStyle = '#1a1a24'; g.beginPath(); g.ellipse(ex, ey, cw * .018, ch * .033, 0, 0, TAU); g.fill();
+    }
+  }
+  // Two ranges of wireframe mountains, low in the middle where the road meets the sun. Built once per size.
+  function mountains(E) {
+    const k = E.W + 'x' + E.GY; if (st.mk === k) return st.mts; st.mk = k;
+    const { W, GY, hash } = E, ranges = [];
+    for (const [amp, kk] of [[.2, 1], [.13, 2]]) {
+      const pts = []; let x = -40, i = 0;
+      while (x < W + 40) { const mid = Math.abs(x - W / 2) < W * .14 ? .25 : 1; pts.push([x, GY * amp * (.25 + .75 * hash(i, kk, 71)) * mid]); x += W * (.035 + .05 * hash(i++, kk, 72)); }
+      ranges.push(pts);
+    }
+    return st.mts = ranges;
+  }
   registerTheme('synth', { name: 'Synthwave', kit: KITS.synth, minF: .25, maxF: .55,
-    sky: [[0, '#0b0020'], [.45, '#2b0a4a'], [.8, '#7a1a6a'], [1, '#ff5f7e']], skyToGround: true,
-    drawSky(g, { W, H, GY, sky, hash }) {
-      const r = Math.min(W, H) * .19, cx = W / 2, cy = GY * .42;   // high enough to clear the towers
+    sky: [[0, '#07001a'], [.45, '#2a0a4a'], [.8, '#7a1a6a'], [1, '#ff5f7e']], skyToGround: true,
+    drawSky(g, E) {
+      const { W, H, GY, sky, bands } = E, r = Math.min(W, H) * .19, cx = roadX(E), cy = GY * .45, bass = bands[0].level;
       const sun = g.createLinearGradient(0, cy - r, 0, cy + r);
       sun.addColorStop(0, '#ffe66d'); sun.addColorStop(.55, '#ff8a5c'); sun.addColorStop(1, '#ff3d8b');
-      g.fillStyle = 'rgba(255,90,150,.18)'; g.beginPath(); g.arc(cx, cy, r * 1.25, 0, 7); g.fill();
-      g.fillStyle = sun; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill();
-      g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 7); g.clip();
-      g.fillStyle = sky;
-      for (let i = 0; i < 8; i++) g.fillRect(cx - r, cy - r * .05 + i * r * .15, r * 2, 1 + i * r * .02);
+      g.fillStyle = 'rgba(255,90,150,' + (.16 + .1 * bass) + ')'; g.beginPath(); g.arc(cx, cy, r * 1.3, 0, TAU); g.fill();
+      g.fillStyle = sun; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
+      g.save(); g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.clip();
+      g.fillStyle = sky;                                  // the stripes: they thicken with the bass
+      for (let i = 0; i < 8; i++) g.fillRect(cx - r, cy - r * .05 + i * r * .15, r * 2, 1 + i * r * (.018 + .012 * bass));
       g.restore();
-      g.fillStyle = '#1a0634'; g.beginPath(); g.moveTo(0, GY);
-      const pts = [];
-      for (let x = 0; x <= W + 40; x += 40) pts.push([x, GY - (hash(x, 9, 9) * .5 + .2 * Math.abs(Math.sin(x / 210))) * GY * .2]);
-      pts.forEach(([x, y]) => g.lineTo(x, y)); g.lineTo(W, GY); g.fill();
-      g.strokeStyle = 'rgba(255,61,240,.6)'; g.lineWidth = 1.5; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+      const [back, front] = mountains(E), shift = cx - W / 2;
+      for (const [pts, fill, col, w] of [[back, '#1a0630', 'rgba(0,240,255,.9)', 1.4], [front, '#12041f', 'rgba(255,60,220,.95)', 1.6]]) {
+        g.beginPath(); g.moveTo(-40 + shift, GY); for (const [x, h] of pts) g.lineTo(x + shift, GY - h); g.lineTo(W + 40 + shift, GY); g.closePath();
+        g.fillStyle = fill; g.fill();
+        g.beginPath(); pts.forEach(([x, h], i) => i ? g.lineTo(x + shift, GY - h) : g.moveTo(x + shift, GY - h)); glowStroke(g, col, w);
+        g.globalAlpha *= .3; g.beginPath(); for (const [x, h] of pts) { g.moveTo(x + shift, GY - h); g.lineTo(x + shift + (x - W / 2) * .08, GY); } glowStroke(g, col, .8); g.globalAlpha /= .3;
+      }
     },
     moon: false, cloud: 'rgba(255,90,170,.16)', fogRGB: '255,110,200',
     side: '#12062a', top: '#1e0a3c', outline: b => b.id % 2 ? 'rgba(255,79,216,.8)' : 'rgba(62,240,255,.8)',
     back: { h: .6, density: .6, body: '#170a2c', win: c => c < .5 ? 'rgba(255,80,200,.28)' : 'rgba(80,230,255,.28)' },
-    ground: { h: .14, draw(g, { W, H, GY, dt, travel }) {
-      const gh = H - GY, vx = W / 2, step = W * .08;
-      gridT = (gridT + dt * .35) % 1;
-      const fl = g.createLinearGradient(0, GY, 0, H);
-      fl.addColorStop(0, '#1a0033'); fl.addColorStop(1, '#05000c');
+    ground: { h: .36, draw(g, E) {                         // the floor, the grid rushing at you, the highway and its palms
+      step(E);
+      const { W, H, GY, bassFlash } = E, gh = H - GY, vx = roadX(E), z = st.z;
+      const fl = g.createLinearGradient(0, GY, 0, H); fl.addColorStop(0, '#1a0033'); fl.addColorStop(1, '#05000c');
       g.fillStyle = fl; g.fillRect(0, GY, W, gh);
-      g.strokeStyle = 'rgba(255,60,220,.65)'; g.lineWidth = 1; g.beginPath();
-      for (let i = 0; i < 12; i++) { const y = GY + gh * ((i + gridT) / 12) ** 2; g.moveTo(0, y); g.lineTo(W, y); }
-      for (let k = -24; k <= 24; k++) { const xb = vx + k * step - (travel % step); g.moveTo(vx + (xb - vx) * .08, GY); g.lineTo(xb, H); }
-      g.stroke();
-      g.fillStyle = 'rgba(255,79,216,.9)'; g.fillRect(0, GY, W, 1.5);
+      const N = 14, P = p => GY + gh * p ** 2.2;          // depth 0 (horizon) .. 1 (at your feet) to screen y
+      g.beginPath();
+      for (let i = 0; i < N; i++) { const y = P(((i + z * 2) % N) / N); g.moveTo(0, y); g.lineTo(W, y); }
+      for (let k = -26; k <= 26; k++) { g.moveTo(vx + k * W * .005, GY); g.lineTo(vx + k * W * .12, H); }
+      g.globalAlpha *= .75; glowStroke(g, 'rgba(255,60,220,.7)', 1); g.globalAlpha /= .75;
+      for (const p of st.pulses) { g.fillStyle = 'rgba(255,170,250,' + .85 * (1 - p) + ')'; g.fillRect(0, P(p) - 1, W, 2.5); }   // laser pulses on the bass
+      const rw = Math.min(W * .36, gh * 1.3);              // the highway
+      g.fillStyle = '#0b0614'; g.beginPath(); g.moveTo(vx - 4, GY); g.lineTo(vx + 4, GY); g.lineTo(vx + rw, H); g.lineTo(vx - rw, H); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(vx - 4, GY); g.lineTo(vx - rw, H); g.moveTo(vx + 4, GY); g.lineTo(vx + rw, H); glowStroke(g, 'rgba(0,240,255,.95)', 2);
+      g.fillStyle = 'rgba(255,230,120,.9)';               // the centre dashes, streaming toward you
+      for (let i = 0; i < 12; i++) {
+        const p0 = ((i + z * 3) % 12) / 12, p1 = Math.min(1, p0 + .035), y0 = P(p0), y1 = P(p1), w0 = 1 + p0 * p0 * gh * .025, w1 = 1 + p1 * p1 * gh * .025;
+        g.beginPath(); g.moveTo(vx - w0, y0); g.lineTo(vx + w0, y0); g.lineTo(vx + w1, y1); g.lineTo(vx - w1, y1); g.fill();
+      }
+      g.fillStyle = 'rgba(255,79,216,' + (.7 + .3 * bassFlash) + ')'; g.fillRect(0, GY - 1, W, 2 + 2 * bassFlash);   // the horizon flares on a hit
+      if (E.widget) return;
+      const M = 9;                                        // palms lining both sides, flowing past, far ones first
+      const list = [];
+      for (let i = 0; i < M; i++) list.push(((i + z * 1.2) % M) / M);
+      list.sort((a, b) => a - b);
+      for (const p of list) {
+        if (p < .04) continue;
+        // in perspective a palm's height is a fixed multiple of how far below the horizon its foot is: near ones tower
+        const d = p ** 2.2, y = GY + gh * d, off = 6 + rw * 1.25 * d, h = 1.8 * gh * d + gh * .04, s = h / 300;
+        palm(g, vx - off, y, h, 14 * s, 'rgba(255,90,200,1)', s); palm(g, vx + off, y, h, -14 * s, 'rgba(0,240,255,1)', s);
+      }
     } },
+    drawTop(g, E) {                                       // the car, the big framing palms, and the VHS sheen
+      step(E);
+      const { W, H, GY, t, bassFlash, unit: u } = E, gh = H - GY, vx = roadX(E);
+      const cw = Math.min(W * .26, gh * 1.15), bob = Math.sin(t / 260) * cw * .004 + bassFlash * cw * .006;
+      if (gh > H * .2) car(g, vx + Math.sin(t / 1900) * cw * .05, H - gh * .2 - bob, cw, bassFlash);
+      if (E.widget) return;
+      const sway = Math.sin(t / 1300) * .05 + .05 * E.bands[3].level, ph = H * .85;
+      palm(g, E.left - 30, H + 40, ph, ph * .1, 'rgba(255,90,200,1)', ph / 640, sway);
+      palm(g, E.right + 30, H + 40, ph * .95, -ph * .11, 'rgba(0,240,255,1)', ph / 660, -sway);
+      if (!st.scan) { const c = document.createElement('canvas'); c.width = 1; c.height = 3; const x = c.getContext('2d'); x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(0, 0, 1, 1); st.scan = c; }
+      const a0 = g.globalAlpha; g.globalAlpha = a0 * .16; g.fillStyle = g.createPattern(st.scan, 'repeat'); g.fillRect(E.left, 0, E.right - E.left, H); g.globalAlpha = a0;   // faint scanlines
+    },
   });
 }
 
