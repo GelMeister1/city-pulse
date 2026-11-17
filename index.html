@@ -1983,8 +1983,8 @@ function registerLandmark(key, def) {
 }
 window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt, domeBase, collar, depthOf, FAR });
 
-// Cyberpunk: neon signs, hologram billboards, rings of projected light round the towers, a giant hologram koi swimming
-// between them, ad drones, skybridges and flying cars in a rainy magenta haze.
+// Cyberpunk: neon signs, hologram billboards, rings of projected light round the towers, ad drones, skybridges and
+// flying cars in a rainy magenta haze.
 {
   // A neon sign with made-up glyphs, brightening with the building's music.
   const drawSign = (g, b, s, cx, E) => {
@@ -2053,87 +2053,6 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       g.strokeStyle = `hsla(${b.ring.hue},100%,70%,${.18 * al * a})`; g.lineWidth = Math.max(2, u * .9); g.beginPath(); g.ellipse(cx, y, rx, ry, 0, from, to); g.stroke();
     }
   };
-  // The giant hologram koi: an original design, translucent and scanlined. It roams back and forth over a wide stretch of
-  // the city (pinned to the city, so it pans and tours away with the buildings), turning round at each end inside a glitch.
-  // Otherwise it glitches only on a bass hit, and no sooner than 1-10 s after the last time.
-  let koiAt = null;
-  const koi = { last: -1, off: 0, dir: 1, glitchTill: 0, next: 0, prevBF: 0 };
-  const koiStep = E => {                                  // once a frame: swim, turn, decide on a glitch
-    if (koi.last === E.t) return; koi.last = E.t;
-    const range = E.W * .7, L = Math.min(E.W * .22, E.GY * .55);
-    koi.off += koi.dir * L * .12 * E.dt;                  // a slow, steady swim
-    if (Math.abs(koi.off) > range / 2) { koi.off = Math.sign(koi.off) * range / 2; koi.dir = -koi.dir; koi.glitchTill = E.t + 350; koi.next = E.t + 1000 + 9000 * Math.random(); }
-    const hit = koi.prevBF < .9 && E.bassFlash >= .9; koi.prevBF = E.bassFlash;
-    if (hit && E.t >= koi.next) { koi.glitchTill = E.t + 260; koi.next = E.t + 1000 + 9000 * Math.random(); }
-  };
-  const drawKoi = (g, E) => {
-    if (E.widget || !koiAt) return;
-    koiStep(E);
-    const { GY, t } = E, L = Math.min(E.W * .22, GY * .55), TAU = Math.PI * 2;
-    const x = E.toScreen(koiAt.cx) + koi.off, y = GY * .32 + Math.sin(t / 3100) * GY * .03 + Math.sin(t / 11000) * GY * .04;
-    if (x < -L * .8 || x > E.W + L * .8) return;
-    const w = t / 650, bend = (px) => Math.sin(px / L * 5 - w) * L * .035 * ((L * .45 - px) / L) ** 1.6;   // the ripple, growing toward the tail
-    const half = px => {                                  // a koi's profile: a rounded head, a full belly, a long taper to the tail
-      const p = Math.min(1, Math.max(0, (L * .5 - px) / (L * .82)));
-      const r = L * .135 * Math.sin(Math.PI * Math.min(.98, Math.pow(p, .62) * .92 + .04));
-      return p > .5 ? Math.max(L * .028, r) : p < .22 ? r * (.18 + .82 * Math.sin(p / .22 * Math.PI / 2) ** .8) : r;   // a tapered, rounded snout
-    };
-    const body = () => {                                  // the outline: along the back to the tail, back along the belly
-      g.beginPath();
-      for (let k = 0; k <= 60; k++) { const px = L * .5 - L * .82 * (k / 60) ** 1.4; g.lineTo(px, bend(px) - half(px)); }   // denser at the head
-      for (let k = 60; k >= 0; k--) { const px = L * .5 - L * .82 * (k / 60) ** 1.4; g.lineTo(px, bend(px) + half(px)); }
-      g.closePath();
-    };
-    const tx = -L * .32, ty = bend(tx), sw = Math.sin(w - 1.4);
-    const tail = () => {                                  // two long, flowing lobes with soft wavy edges
-      g.beginPath();
-      for (const s2 of [-1, 1]) {
-        g.moveTo(tx, ty);
-        g.bezierCurveTo(tx - L * .08, ty + s2 * L * .03 + sw * L * .03, tx - L * .18, ty + s2 * L * .12 + sw * L * .06, tx - L * .3, ty + s2 * L * .11 + sw * L * .09);
-        g.quadraticCurveTo(tx - L * .22, ty + s2 * L * .04 + sw * L * .06, tx - L * .27, ty + sw * L * .07);
-        g.quadraticCurveTo(tx - L * .14, ty + sw * L * .03, tx, ty);
-      }
-    };
-    const pa = g.globalAlpha, glitch = t < koi.glitchTill;
-    for (let sl = 0; sl < (glitch ? 4 : 1); sl++) {
-      g.save();
-      if (glitch) { g.beginPath(); g.rect(0, y - L * .35 + sl * L * .17, E.W, L * .17); g.clip(); g.translate((E.hash(sl, Math.floor(t / 80), 5) - .5) * L * .12, 0); }
-      g.translate(x, y); g.scale(koi.dir, 1); g.rotate(Math.sin(t / 5000) * .06);
-      g.globalAlpha = pa * .14; g.fillStyle = '#7ff4ff'; tail(); g.fill();   // the tail, fins, then the body over them
-      g.globalAlpha = pa * .6; g.strokeStyle = 'rgba(120,245,255,.9)'; g.lineWidth = Math.max(1, L * .004); tail(); g.stroke();
-      g.globalAlpha = pa * .35; g.lineWidth = Math.max(.6, L * .002); g.beginPath();   // rays in the tail
-      for (let k = -3; k <= 3; k++) { g.moveTo(tx, ty); g.quadraticCurveTo(tx - L * .13, ty + k * L * .025 + sw * L * .03, tx - L * .26, ty + k * L * .034 + sw * L * .08); }
-      g.stroke();
-      const fin = (fx, fy, len, ang) => { g.beginPath(); g.moveTo(fx, fy); g.quadraticCurveTo(fx + Math.cos(ang - .5) * len, fy + Math.sin(ang - .5) * len, fx + Math.cos(ang) * len, fy + Math.sin(ang) * len); g.quadraticCurveTo(fx + Math.cos(ang + .3) * len * .6, fy + Math.sin(ang + .3) * len * .6, fx, fy); };
-      const pad = Math.sin(t / 380) * .35;
-      for (const s2 of [-1, 1]) { fin(L * .22, bend(L * .22) + s2 * half(L * .22) * .8, L * .14, s2 * (1.9 + pad) + Math.PI); g.globalAlpha = pa * .2; g.fillStyle = '#ff8ad8'; g.fill(); g.globalAlpha = pa * .55; g.stroke(); }   // pectoral fins
-      fin(-L * .02, bend(-L * .02) + half(-L * .02) * .85, L * .08, 1.9 + pad * .5); g.globalAlpha = pa * .2; g.fillStyle = '#ff8ad8'; g.fill(); g.globalAlpha = pa * .5; g.stroke();   // a pelvic fin
-      fin(-L * .2, bend(-L * .2) + half(-L * .2) * .9, L * .06, 2.2 + pad * .4); g.globalAlpha = pa * .2; g.fill(); g.globalAlpha = pa * .5; g.stroke();   // the anal fin
-      g.beginPath();                                    // the dorsal fin, along the back
-      for (let k = 0; k <= 10; k++) { const px = L * .14 - L * .34 * k / 10; g.lineTo(px, bend(px) - half(px) - L * .045 * Math.sin(k / 10 * Math.PI) * (1 + .2 * Math.sin(w + k))); }
-      g.globalAlpha = pa * .18; g.fillStyle = '#7ff4ff'; g.fill(); g.globalAlpha = pa * .5; g.stroke();
-      body(); g.globalAlpha = pa * .18; g.fillStyle = '#e6fdff'; g.fill(); g.globalAlpha = pa * .85; g.strokeStyle = 'rgba(140,250,255,1)'; g.lineWidth = Math.max(1, L * .005); g.stroke();
-      g.save(); body(); g.clip();                      // inside the body: kohaku patches, scales and scanlines
-      g.globalAlpha = pa * .4; g.fillStyle = '#ff5a8a';
-      for (const [px, py, rx, ry] of [[L * .3, -L * .05, L * .1, L * .07], [L * .05, -L * .03, L * .12, L * .08], [-L * .18, L * .01, L * .07, L * .05]]) { g.beginPath(); g.ellipse(px, bend(px) + py, rx, ry, .2, 0, TAU); g.fill(); }
-      g.globalAlpha = pa * .25; g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = 1; g.beginPath();
-      for (let px = L * .32; px > -L * .3; px -= L * .045) for (let py = -L * .12; py < L * .13; py += L * .045) { const yy = bend(px) + py + (Math.round(px / (L * .045)) % 2 ? L * .022 : 0); g.moveTo(px + L * .02, yy - L * .02); g.arc(px, yy, L * .022, -.8, .8); }
-      g.stroke();
-      g.globalAlpha = pa * .12; g.fillStyle = '#ffffff'; for (let ly = -L * .16; ly < L * .16; ly += 3) g.fillRect(-L * .4, ly, L * .95, 1);
-      g.restore();
-      const hx = L * .5, hy = bend(hx);
-      g.globalAlpha = pa * .75; g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = Math.max(1, L * .004);
-      g.beginPath(); g.ellipse(hx - L * .005, hy + L * .012, L * .016, L * .022, 0, -Math.PI / 2, Math.PI / 2); g.stroke();   // the lips, a soft rounded mouth
-      g.beginPath(); g.arc(L * .29, bend(L * .29), half(L * .29) * .95, -1.1, 1.1); g.stroke();   // the gill line
-      g.globalAlpha = pa * .9; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(L * .4, bend(L * .4) - L * .035, Math.max(1.5, L * .016), 0, TAU); g.fill();   // the eye
-      g.fillStyle = '#0a2030'; g.beginPath(); g.arc(L * .403, bend(L * .4) - L * .035, Math.max(.8, L * .008), 0, TAU); g.fill();
-      g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = Math.max(.8, L * .003); g.beginPath();   // barbels, from the corners of the mouth
-      for (const s2 of [0, 1]) { const mx = hx - L * .012, my = hy + L * (.02 + s2 * .012); g.moveTo(mx, my); g.quadraticCurveTo(mx + L * .045, my + L * .03, mx + L * .025 + Math.sin(w * 1.3 + s2) * L * .01, my + L * (.07 + .015 * s2)); }
-      g.stroke();
-      g.restore();
-    }
-    g.globalAlpha = pa;
-  };
   // Ad drones: little hovering craft projecting a cone of coloured light with a floating glyph panel in it.
   let drones = [];
   const drawDrones = (g, E) => {
@@ -2197,7 +2116,6 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     },
     afterLayout(list, r) {                               // skybridges between neighbouring towers
       flyers = []; drones = [];
-      koiAt = list[Math.floor(list.length * .5)] || null; koi.off = 0; koi.dir = 1;   // the koi roams round the middle of the city
       for (let i = 0; i + 1 < list.length; i++) {
         const a = list[i], c = list[i + 1];
         if (!a.lm && !c.lm && r() < .35) a.bridge = { c, y: Math.min(a.hU, c.hU) * (.35 + .4 * r()) };
@@ -2217,7 +2135,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
         for (let x = x0 + u * .6; x < x1 - u * .6; x += u * 1.4) g.fillRect(x, by - u * .55, u * .7, u * .3);
       }
     },
-    drawFront(g, E) { drawKoi(g, E); drawDrones(g, E); drawFlyers(g, E, 1); },
+    drawFront(g, E) { drawDrones(g, E); drawFlyers(g, E, 1); },
   });
 }
 
@@ -2249,12 +2167,15 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     }
     return batSprite = c;
   };
-  // The bat drifts slowly back and forth across the sky (always on screen, wherever you pan), and its beam rises from
-  // just below the skyline beside it, behind the buildings, so you never see where it comes from.
-  const drawBatSignal = (g, { W, H, GY, unit, t, left, right }) => {
-    const r = Math.min(W, H) * .09, span = right - left;
-    const tx = left + span * (.5 + .3 * Math.sin(t / 47000)) + Math.sin(t / 5200) * span * .012, ty = H * .17 + Math.sin(t / 4100) * H * .008;
-    const tip = [tx - span * .1, GY];
+  // The searchlight stands at a fixed spot in the middle of the city, hidden behind the buildings. Its beam sweeps slowly a
+  // little left and right, so the bat drifts gently across the sky; when you pan, it all moves with the city, so the bat
+  // leaves the screen and comes back.
+  let batBase = null;
+  const drawBatSignal = (g, E) => {
+    if (batBase === null) return;
+    const { W, H, GY, unit, t } = E, r = Math.min(W, H) * .09;
+    const tip = [E.toScreen(batBase), GY], ty = H * .17 + Math.sin(t / 4100) * H * .008;
+    const lean = .32 + .14 * Math.sin(t / 11000) + .03 * Math.sin(t / 3700), tx = tip[0] + (GY - ty) * Math.tan(lean);
     const beam = g.createLinearGradient(tip[0], tip[1], tx, ty);
     beam.addColorStop(0, 'rgba(255,245,215,.42)'); beam.addColorStop(.6, 'rgba(255,245,215,.2)'); beam.addColorStop(1, 'rgba(255,245,215,0)');   // fades out into the pool: no hard end at the bat
     g.fillStyle = beam; g.beginPath();
@@ -2271,6 +2192,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     side: '#0b0b0c', top: '#151515', win: c => ({ h: c.h, s: c.s * .3, m: c.m * .7 }),
     back: { h: 1.1, density: 1, body: '#0d0d0f', win: () => 'rgba(210,170,100,.16)' },
     searchlights: false,                                 // just the one light
+    afterLayout(list) { batBase = (list[0].cx + list[list.length - 1].cx) / 2; },   // the middle of the city
     drawBehind: (g, E) => drawBatSignal(g, E),       // behind the buildings, so they hide the beam's source
   });
 }

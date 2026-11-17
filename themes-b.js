@@ -89,6 +89,46 @@
       }
       g.fill();
     };
+    // Street lanterns along the sidewalk: standing stone lanterns with a glowing window, and red lanterns hanging from
+    // curved poles, scrolling with the town and brightening with the bass.
+    const streetLanterns = (g, E) => {
+      const { W, GY, travel, bassFlash } = E, u = E.unit * (E.widget ? 1.2 : 1.6), sp = 13 * u, glow = .45 + .55 * bassFlash, pa = g.globalAlpha;   // a little larger than life, so they read
+      for (let k = Math.floor((travel - sp) / sp); k * sp - travel < W + sp; k++) {
+        const x = k * sp - travel + sp * .5, y = GY + u * .2;
+        if (k % 2) {                                      // a stone lantern
+          g.fillStyle = '#46332c';
+          g.fillRect(x - u * .9, y - u * .5, u * 1.8, u * .5); g.fillRect(x - u * .3, y - u * 2.4, u * .6, u * 1.9);
+          g.fillRect(x - u * .8, y - u * 2.7, u * 1.6, u * .3); g.fillRect(x - u * .65, y - u * 3.8, u * 1.3, u * 1.1);
+          g.beginPath(); g.moveTo(x - u * 1.2, y - u * 3.8); g.quadraticCurveTo(x, y - u * 4.9, x + u * 1.2, y - u * 3.8); g.fill();
+          g.fillStyle = `hsl(36,95%,${38 + 30 * glow}%)`; g.fillRect(x - u * .4, y - u * 3.6, u * .8, u * .7);
+          g.globalAlpha = pa * (.25 + .35 * glow); g.drawImage(sprite('255,170,70'), x - u * 3, y - u * 6.2, u * 6, u * 6); g.globalAlpha = pa;
+        } else {                                          // a red lantern hanging from a curved pole
+          g.strokeStyle = '#46332c'; g.lineWidth = Math.max(1, u * .3); g.beginPath();
+          g.moveTo(x, y); g.lineTo(x, y - u * 5.5); g.quadraticCurveTo(x, y - u * 6.3, x + u * 1.4, y - u * 6.1); g.stroke();
+          g.lineWidth = 1; g.beginPath(); g.moveTo(x + u * 1.4, y - u * 6.1); g.lineTo(x + u * 1.4, y - u * 5.4); g.stroke();
+          g.globalAlpha = pa * (.3 + .4 * glow); g.drawImage(sprite('255,90,50'), x + u * 1.4 - u * 2.6, y - u * 4.6 - u * 2.6, u * 5.2, u * 5.2); g.globalAlpha = pa;
+          g.fillStyle = `hsl(6,90%,${32 + 28 * glow}%)`; g.beginPath(); g.ellipse(x + u * 1.4, y - u * 4.6, u * .65, u * .85, 0, 0, Math.PI * 2); g.fill();
+          g.fillStyle = '#2a0c06'; g.fillRect(x + u * .85, y - u * 5.5, u * 1.1, u * .22); g.fillRect(x + u * .85, y - u * 3.85, u * 1.1, u * .22);
+        }
+        g.fillStyle = 'rgba(255,140,60,' + .08 * glow + ')'; g.fillRect(x - u * 3, y, u * 6, u * .9);   // their glow on the street
+      }
+    };
+    // Sky lanterns: paper lanterns rising slowly from behind the rooftops, swaying as they go; more on loud parts.
+    let sky = [];
+    const skyLanterns = (g, E) => {
+      const { W, GY, unit: u, dt, t, scrollV } = E, loud = (E.bands[0].level + E.bands[3].level) / 2, want = Math.round((E.widget ? 2 : 4) + (E.widget ? 3 : 8) * loud);
+      if (sky.length < want && Math.random() < dt * 1.5) sky.push({ x: Math.random() * W, y: GY * (.55 + .2 * Math.random()), v: u * (1.2 + Math.random()), ph: Math.random() * 7, s: .8 + .5 * Math.random() });
+      const pa = g.globalAlpha;
+      for (let i = sky.length - 1; i >= 0; i--) {
+        const L = sky[i]; L.y -= L.v * dt; L.x += (Math.sin(t / 1800 + L.ph) * u * .5 - scrollV * .5) * dt;
+        if (L.y < -u * 4 || L.x < -u * 6 || L.x > W + u * 6) { sky.splice(i, 1); continue; }
+        const fade = Math.min(1, L.y / (GY * .25)), x = L.x + Math.sin(t / 900 + L.ph) * u * .3, w = u * .9 * L.s, h = u * 1.2 * L.s;
+        g.globalAlpha = pa * .5 * fade; g.drawImage(sprite('255,150,60'), x - u * 3, L.y - u * 3, u * 6, u * 6);
+        g.globalAlpha = pa * fade; g.fillStyle = '#ffb35a'; g.beginPath(); g.moveTo(x - w * .7, L.y - h); g.lineTo(x + w * .7, L.y - h); g.lineTo(x + w, L.y); g.lineTo(x - w, L.y); g.closePath(); g.fill();
+        g.fillStyle = '#ffe2a8'; g.fillRect(x - w * .35, L.y - h * .25, w * .7, h * .22);   // the flame showing through the paper
+      }
+      g.globalAlpha = pa;
+    };
     registerTheme('lantern', { name: 'Lantern District',
       kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'pairs'], roofs: [null], tall: .18, shrink: .84, w0: 7, gaps: [.6, 2] },
       minF: .2, maxF: .62,
@@ -118,27 +158,31 @@
           body.addColorStop(0, '#191536'); body.addColorStop(.5, '#25204c'); body.addColorStop(1, '#2f2a5c');
           outline(); g.fillStyle = body; g.fill();
           g.save(); outline(); g.clip();
-          g.fillStyle = 'rgba(8,6,26,.18)';                // rock ridges fanning down the slopes: soft, tapering shadows
-          for (let k = -9; k <= 9; k++) {
-            if (!k) continue; const ang = k / 9 * 1.05, x1 = fx + Math.sin(ang) * fw * .5, y1 = fy - fh * (.04 + .2 * E.hash(k, 7, 93));
-            g.beginPath(); g.moveTo(fx + k * fw * .004, fy - fh * .7); g.lineTo(x1 - fw * .006, y1); g.lineTo(x1 + fw * .006, y1); g.fill();
+          // rock ridges that follow the mountain's own slopes: each runs parallel to the left or right side, from just below
+          // the snowline down toward the foot, at a different length
+          g.strokeStyle = 'rgba(8,6,26,.22)'; g.lineWidth = Math.max(1, fw * .0016); g.lineCap = 'round';
+          for (const side of [-1, 1]) for (let j = 1; j <= 6; j++) {
+            const dx = fw * .045 * j, p0 = .08 + .3 * E.hash(j, side + 5, 94), p1 = .58 - .06 * E.hash(j, side + 7, 94);
+            g.beginPath();
+            for (let k = 0; k <= 20; k++) {
+              const p = p0 + (p1 - p0) * k / 20, x = side < 0 ? fx - fw / 2 + p * fw * .46 + dx : fx + fw / 2 - p * fw * .46 - dx;
+              const y = fy - fh * slope(p, side) * .97 + fh * .012 * j;
+              k ? g.lineTo(x, y) : g.moveTo(x, y);
+            }
+            g.stroke();
           }
+          g.lineCap = 'butt';
           const sn = g.createLinearGradient(fx - fw * .2, 0, fx + fw * .2, 0);   // the snow, darker on the shadowed side
           sn.addColorStop(0, '#7277a8'); sn.addColorStop(.55, '#9ea3cf'); sn.addColorStop(1, '#b3b8e0');
-          // the cap: solid over the top third, its lower edge breaking into rounded fingers of snow down the gullies
-          const n = 42, edge = [];
-          for (let k = 0; k <= n; k++) {                   // every third point runs a long, thin streak down a gully
-            const t2 = k / n, x = fx - fw * .21 + fw * .42 * t2, finger = k % 3 === 1 ? .07 + .2 * E.hash(k, 3, 91) : .012 * E.hash(k, 4, 91);
-            edge.push([x, fy - fh * (.72 - finger) + Math.abs(t2 - .5) * fh * .16]);
+          // the cap: a jagged, nearly level snowline, short sharp teeth with now and then a deeper notch, the way snow ends on
+          // a real peak; it sits a little lower toward the flanks.
+          g.fillStyle = sn; g.beginPath(); g.moveTo(fx - fw / 2, fy - fh * .6);
+          for (let k = 0, n = 70; k <= n; k++) {
+            const t2 = k / n, x = fx - fw * .35 + fw * .7 * t2, h1 = E.hash(k, 3, 91), h2 = E.hash(k, 4, 91);
+            const y = fy - fh * (.63 - Math.abs(t2 - .5) * .06) + fh * ((k % 2 ? .018 : -.008) * h1 + (h2 > .86 ? .05 * h2 : 0));
+            g.lineTo(x, y);
           }
-          g.fillStyle = sn; g.beginPath(); g.moveTo(fx - fw * .3, fy - fh * .62); g.lineTo(...edge[0]);
-          for (let k = 1; k < edge.length; k++) { const [px, py] = edge[k - 1], [qx, qy] = edge[k]; g.quadraticCurveTo(px, py, (px + qx) / 2, (py + qy) / 2); }
-          g.lineTo(...edge[edge.length - 1]); g.lineTo(fx + fw * .3, fy - fh * .62); g.lineTo(fx + fw / 2, fy - fh * 1.1); g.lineTo(fx - fw / 2, fy - fh * 1.1); g.closePath(); g.fill();
-          g.fillStyle = 'rgba(30,28,80,.09)';           // faint shadow gullies in the snow, tapering down from the rim
-          for (let k = -5; k <= 5; k++) {
-            if (!k || E.hash(k, 8, 93) < .35) continue; const x0 = fx + k * fw * .007, x1 = fx + k * fw * .03, y1 = fy - fh * (.5 + .25 * E.hash(k, 9, 93));
-            g.beginPath(); g.moveTo(x0 - fw * .002, fy - fh * .97); g.quadraticCurveTo(x1 * .5 + x0 * .5, fy - fh * .8, x1, y1); g.quadraticCurveTo(x1 * .5 + x0 * .5 + fw * .004, fy - fh * .8, x0 + fw * .002, fy - fh * .97); g.fill();
-          }
+          g.lineTo(fx + fw / 2, fy - fh * .6); g.lineTo(fx + fw / 2, fy - fh * 1.1); g.lineTo(fx - fw / 2, fy - fh * 1.1); g.closePath(); g.fill();
           g.restore();
           const hz = g.createLinearGradient(0, fy - fh * .35, 0, fy);   // haze at its foot
           hz.addColorStop(0, 'rgba(70,50,110,0)'); hz.addColorStop(1, 'rgba(70,50,110,.55)');
@@ -168,6 +212,8 @@
       win: c => ({ h: 8 + (c.h % 360) / 360 * 40, s: Math.max(70, c.s * .9), m: c.m }),   // warm reds to gold
       back: { h: .7, density: .9, body: '#160b1f', win: c => c < .6 ? 'rgba(255,120,60,.26)' : 'rgba(255,200,90,.22)' },
       decorate(b) { b.blink = false; },                    // the roofs replace the warning lights
+      drawBehind: (g, E) => skyLanterns(g, E),           // behind the rooftops, so they rise from among them
+      drawTop: (g, E) => streetLanterns(g, E),
       afterLayout(list, r) {
         const maxH = Math.max(...list.map(b => b.hU));
         for (const b of list) {                            // the tallest become tiered towers: 3-5 storeys of eaves
@@ -177,7 +223,8 @@
           b.tiers = fr.map((f, i) => { const h = b.hU * f / sum, fl = Math.max(1, Math.floor(h / b.st.ch + 1e-6)), t = { w: b.tiers[0].w * Math.pow(.84, i), h, f: fl, base: floors }; floors += fl; return t; });
           b.floors = floors; b.tower = true;
         }
-        for (let i = 1; i < list.length; i++) if (r() < .85) list[i].str = { a: list[i - 1], sag: .8 + 1.6 * r(), seed: r() * 9, low: r() < .35 };
+        // strings of lanterns between every pair of neighbours, most with a second lower one, some with a third
+        for (let i = 1; i < list.length; i++) list[i].str = { a: list[i - 1], sag: .8 + 1.6 * r(), seed: r() * 9, low: r() < .7, mid: r() < .4 };
       },
       drawExtras(g, b, cx, tip, E) {
         drawRoofs(g, b, cx, E);
@@ -185,9 +232,10 @@
         const { a, sag, seed, low } = b.str, u = E.unit, acx = cx + a.cx - b.cx;
         const [x0, y0] = tie(a, acx, 1, b.hU, u, E.GY), [x1, y1] = tie(b, cx, -1, a.hU, u, E.GY);
         if (x1 - x0 > u * 2) drawString(g, x0, y0, x1, y1, sag * u, seed, E);
-        if (low) {
-          const h = Math.min(a.hU, b.hU) * .55, lx0 = acx + halfAt(a, h) * u, lx1 = cx - halfAt(b, h) * u;
-          if (lx1 - lx0 > u * 3) drawString(g, lx0, E.GY - h * u, lx1, E.GY - h * u, (sag * .7 + .5) * u, seed + 3, E);
+        for (const [on, f, k] of [[low, .55, 3], [b.str.mid, .3, 6]]) {   // the lower strings
+          if (!on) continue;
+          const h = Math.min(a.hU, b.hU) * f, lx0 = acx + halfAt(a, h) * u, lx1 = cx - halfAt(b, h) * u;
+          if (lx1 - lx0 > u * 3) drawString(g, lx0, E.GY - h * u, lx1, E.GY - h * u, (sag * .7 + .5) * u, seed + k, E);
         }
       },
     });
