@@ -805,17 +805,21 @@ function layout() {
     const cw = specW(city.b), ch = specH(city.b);
     const span = W / unit - 2, fh = ch * .7;             // -2 leaves room for the 3D side faces; fillers up to 70% of the landmarks
     let spec;
-    if (S.view === 'fit') {
-      const side = Math.max(0, (span - cw) / 2);
-      const L = fitRow(gen(r, side + 30, fh, .3), side), R = fitRow(gen(r, side + 30, fh, .3), side);
+    if (S.view === 'fit') {                           // whole buildings only in the widget; on big screens the row runs off both edges
+      const side = Math.max(0, (span - cw) / 2), trim = list => widget ? fitRow(list, side) : list;
+      const L = trim(gen(r, side + 30, fh, .3)), R = trim(gen(r, side + 30, fh, .3));
       spec = [...L.reverse(), ...city.b, ...R];
-      startU = (W / unit - specW(spec) - 1.6) / 2;   // centre the row including the last building's 3D side face
+      startU = widget ? (W / unit - specW(spec) - 1.6) / 2   // centre the row including the last building's 3D side face
+        : (W / unit - cw - 1.6) / 2 - specW(L);           // centre the landmarks; the fillers spill past the edges
     } else spec = [...gen(r, span * 1.5, fh, .3).reverse(), ...city.b, ...gen(r, span * 1.5, fh, .3)];
     segs.push({ theme: 'none', spec });
   } else {                                               // made-up cities: Neon City and the themed ones
     const span = W / unit - 2, mh = GY * theme.maxF / unit - 8;
     let spec;
-    if (S.view === 'fit') { spec = fitRow(gen(r, span + 40, mh, theme.minF, theme.kit), span); startU = (W / unit - specW(spec) - 1.6) / 2; }
+    if (S.view === 'fit') {                           // as above: whole buildings in the widget, running off the edges elsewhere
+      const row = gen(r, span + 40, mh, theme.minF, theme.kit);
+      spec = widget ? fitRow(row, span) : row; startU = (W / unit - specW(spec) - 1.6) / 2;
+    }
     else spec = gen(r, span * 4, mh, theme.minF, theme.kit);
     segs.push({ theme: key, spec });
   }
@@ -866,7 +870,7 @@ function layout() {
   const lms = buildings.filter(b => b.lm);
   lms.forEach((b, i) => { b.band = lms.length > 1 ? Math.round(i * (NB - 1) / (lms.length - 1)) : 0; });
   buildings.filter(b => !b.lm).forEach((b, i) => { b.band = i * 3 % NB; });
-  if (S.view === 'fit') console.assert(buildings.every(b => b.cx - b.wpx / 2 >= -1 && b.cx + b.half <= W + 1) || !!city || buildings.length === 1, 'building cut off');   // side face only sticks out on the right
+  if (S.view === 'fit') console.assert(buildings.every(b => b.cx - b.wpx / 2 >= -1 && b.cx + b.half <= W + 1) || !!city || !widget || buildings.length === 1, 'building cut off');   // the widget's Fit; its side face only sticks out on the right
   console.assert(buildings.every(b => b.band >= 0 && b.band < NB && isFinite(b.cx) && b.floors > 0), 'bad layout');
 
   stars = Array.from({ length: Math.round(W * H / 9000) }, () => ({ x: r() * W, y: r() * H * .6, s: r() < .85 ? 1 : 2, sp: .5 + r(), ph: r() * 7 }));

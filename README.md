@@ -46,8 +46,9 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Weather:** rain, snow, thunderstorms (lightning on the bass), fog, cherry blossoms and autumn leaves.
 - **Ambient motion:** each item can be switched on or off: blinking roof lights, windows switching on and off, searchlights, stars, shooting stars, moon, clouds, planes and flying cars.
 - **Views:**
-  - **Fit:** shows whole buildings only.
-  - **Pan:** drag or scroll to choose your part of the city.
+  - **Fit:** the whole city on one screen. In the widget it shows whole buildings only; on full screen and the wallpaper the skyline runs off the edges.
+  - **Pan:** drag or scroll to choose your part of the city, or use the **Position** slider (handy for the wallpaper, which can't be dragged).
+  - **Scroll:** the city you picked scrolls past endlessly.
   - **Tour:** slowly scrolls through every city, real and themed, with name captions. Made for a TV. Choose the speed, the direction (right to left or left to right) and which cities it visits.
 - **Presets:** four built in (Lounge, Chill Night, Party, Neon Tour). Your own presets are shared between the widget and full screen.
 - **TV-friendly:**
