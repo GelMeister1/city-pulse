@@ -41,11 +41,12 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - **Fill by loudness:** buildings rise with how loud the song really is, so a quiet song gives a low city and a loud chorus a tall one.
   - **City line:** one flat height for the whole city. Buildings light up to the same real height and the peaks line up level. Drag the dotted line on screen, or use the slider in Settings.
   - A **Reactivity** slider runs from calm (smooth swells, for background viewing) to wild (instant and punchy, for parties). Every building keeps reacting at any setting.
-- **Color effects:** Spectrum, Wave, Fade, Solid, Breathing, Random and Smooth random, plus a brightness slider.
+- **Color effects:** Spectrum, Wave, Fade, Solid, Breathing, Random and Smooth random, plus a brightness slider. Solid and Breathing use **Pick color**, which keeps your last 8 colors as swatches.
 - **Scene:**
   - a street with traffic, a park, or a thin river with reflections
   - a hazy back skyline and 3D building detail
 - **Weather:** rain, snow, thunderstorms (lightning on the bass), fog, cherry blossoms and autumn leaves.
+- **Live weather (optional):** mirror the real current weather of the skyline's city, or of any city you type, refreshed every 15 minutes from [Open-Meteo](https://open-meteo.com) (free, no account). City Pulse never looks up where you are: only the name you search for, and then that place's rounded coordinates, are sent. It's always night in City Pulse, so a sunny day shows as a clear night.
 - **Ambient motion:** each item can be switched on or off: blinking roof lights, windows switching on and off, searchlights, stars, shooting stars, moon, clouds, planes and flying cars.
 - **Views:**
   - **Fit:** the whole city on one screen. In the widget it shows whole buildings only; on full screen and the wallpaper the skyline runs off the edges.

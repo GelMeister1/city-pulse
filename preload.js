@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('cityPulse', {
     open: () => ipcRenderer.send('open-control'),
     state: () => ipcRenderer.invoke('control-state'),    // { fullMode, wallMode, wallScreen, widgetShown, screens: [{ index, label, w, h }] }
     onState: cb => listen('control-state', cb),
-    onGoto: cb => listen('control-goto', cb),            // { target: 'widget'|'full'|'wall', screen: index|null }: open Customize there
+    onGoto: cb => listen('control-goto', cb),            // { target: 'widget'|'full'|'wall' }: open Customize there
     setFull: mode => ipcRenderer.send('control-full', mode),            // 'off' | 'one' | 'per' | 'span'
     setWall: (mode, screen) => ipcRenderer.send('control-wall', mode, screen),
     setWidget: shown => ipcRenderer.send('control-widget', !!shown),

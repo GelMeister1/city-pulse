@@ -93,16 +93,15 @@ function openFull(mode = prefs.fullMode || 'one') {
 function closeFull() {
   globalShortcut.unregister('Escape');
   alive(fulls).forEach(w => w.close()); fulls = [];
-  [control].forEach(w => { if (w && !w.isDestroyed()) w.setAlwaysOnTop(false); });
+  if (control && !control.isDestroyed()) control.setAlwaysOnTop(false);
   updateTray();
 }
 
 // Every way into settings (the widget's gear, the tray) opens the Control Center at its Customize step for that target.
-function openSettings(target = 'widget', screenIdx = null) {
-  const fresh = !(control && !control.isDestroyed());
+function openSettings(target = 'widget') {
   openControl();
-  const go = () => control.webContents.send('control-goto', { target, screen: screenIdx });
-  fresh || control.webContents.isLoading() ? control.webContents.once('did-finish-load', go) : go();
+  const go = () => control.webContents.send('control-goto', { target });
+  control.webContents.isLoading() ? control.webContents.once('did-finish-load', go) : go();   // a new window is still loading
   raise(control);
 }
 // Settings must sit above full screen, which otherwise covers it and swallows the clicks.
@@ -199,16 +198,15 @@ function updateTray() {
   const list = screensLR(), shown = widget && !widget.isDestroyed() && widget.isVisible();
   const wall = prefs.wall || { mode: 'off' }, fullOpen = alive(fulls).length > 0, fm = prefs.fullMode || 'one';
   const screenName = (d, i) => `Screen ${i + 1}: ${d.label || 'display'} (${d.bounds.width}×${d.bounds.height})`;
-  const perScreen = target => list.map((d, i) => ({ label: `${screenName(d, i)}…`, click: () => openSettings(target, i) }));
   if (control && !control.isDestroyed()) control.webContents.send('control-state', controlState());
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Control Center…', click: openControl },
     { label: shown ? 'Hide widget' : 'Show widget', click: () => { shown ? widget.hide() : widget.show(); updateTray(); } },
     { label: 'Full screen', submenu: [
-      ...(fullOpen ? [{ label: 'Close full screen', click: closeFull }, { type: 'separator' }] : []),
-      { label: 'On the widget’s screen', type: 'radio', checked: fm === 'one', click: () => { closeFull(); openFull('one'); } },
-      { label: 'All screens: own city each', type: 'radio', checked: fm === 'per', click: () => { closeFull(); openFull('per'); } },
-      { label: 'All screens: one tour across', type: 'radio', checked: fm === 'span', click: () => { closeFull(); openFull('span'); } },
+      { label: 'Off', type: 'radio', checked: !fullOpen, click: closeFull },   // exactly one of these is ticked
+      { label: 'On the widget’s screen', type: 'radio', checked: fullOpen && fm === 'one', click: () => { closeFull(); openFull('one'); } },
+      { label: 'All screens: own city each', type: 'radio', checked: fullOpen && fm === 'per', click: () => { closeFull(); openFull('per'); } },
+      { label: 'All screens: one tour across', type: 'radio', checked: fullOpen && fm === 'span', click: () => { closeFull(); openFull('span'); } },
     ] },
     { label: 'Live wallpaper (experimental)', submenu: [
       { label: 'Off', type: 'radio', checked: wall.mode === 'off', click: () => setWallpaper({ mode: 'off' }) },
@@ -219,11 +217,8 @@ function updateTray() {
     ] },
     { label: 'Settings', submenu: [
       { label: 'Widget…', click: () => openSettings('widget') },
-      { label: 'Full screen (one screen or tour across)…', click: () => openSettings('full') },
-      { label: 'Wallpaper (one screen or tour across)…', click: () => openSettings('wall') },
-      { type: 'separator' },
-      { label: 'Full screen, each screen', submenu: perScreen('full') },
-      { label: 'Wallpaper, each screen', submenu: perScreen('wall') },
+      { label: 'Full screen…', click: () => openSettings('full') },     // the Control Center offers the screens the running mode has
+      { label: 'Wallpaper…', click: () => openSettings('wall') },
     ] },
     { type: 'separator' },
     { label: MAC ? 'Open at login' : 'Start with Windows', type: 'checkbox', enabled: app.isPackaged, checked: app.getLoginItemSettings(LOGIN).openAtLogin,
@@ -275,8 +270,10 @@ async function setSource(id) {
   return true;
 }
 // Read once here for every window: the meter's volume and the default output to follow.
+let watching = false;                                      // one read at a time: a stalled helper mustn't pile up reads
 async function watchDefault() {
-  const v = await win32.volume();
+  if (watching) return; watching = true;
+  const v = await win32.volume().finally(() => { watching = false; });
   sysVol = v;
   if (v && v.id !== defaultOut) { defaultOut = v.id; if (!currentSource().id) startCapture(); broadcastSources(); }
 }
@@ -348,13 +345,16 @@ app.whenReady().then(() => {
   updateTray();
   if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall);
   setupUpdates();
-  const rearranged = () => { updateTray(); if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall); };
+  // Screens added, removed, resized or rescaled, or the taskbar moved: rebuild the wallpaper and full screen to fit.
+  // Waits a moment, since Windows sends a burst of these while it rearranges.
+  let rearrangeTimer;
+  const rearranged = () => { clearTimeout(rearrangeTimer); rearrangeTimer = setTimeout(() => {
+    if (prefs.wall && prefs.wall.mode !== 'off') setWallpaper(prefs.wall);
+    if (alive(fulls).length) { const mode = prefs.fullMode; closeFull(); openFull(mode); }   // the tour needs the new list of screens
+    updateTray();
+  }, 800); };
   screen.on('display-added', rearranged); screen.on('display-removed', rearranged);
-  let insetTimer;                                         // taskbar shown, hidden or resized: re-place the wallpaper above it
-  screen.on('display-metrics-changed', (_, d, changed) => {
-    if (!changed.includes('workArea') || !prefs.wall || prefs.wall.mode === 'off') return;
-    clearTimeout(insetTimer); insetTimer = setTimeout(() => setWallpaper(prefs.wall), 800);
-  });
+  screen.on('display-metrics-changed', (_, d, changed) => { if (changed.some(c => ['bounds', 'workArea', 'scaleFactor'].includes(c))) rearranged(); });
 });
 
 app.on('before-quit', e => {

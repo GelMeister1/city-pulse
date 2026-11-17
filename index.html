@@ -32,6 +32,11 @@
   #panel .body{display:grid;gap:8px;padding:8px 4px 4px}
   #panel .presets{display:grid;gap:6px;padding-bottom:4px}
   #panel .row2{display:flex;gap:4px}
+  #panel .swatches{display:flex;flex-wrap:wrap;gap:5px}
+  #panel .swatches:empty{display:none}
+  #panel .swatches button{width:22px;height:22px;padding:0;border:1px solid #333a58;border-radius:50%;cursor:pointer}
+  #panel .swatches button.on{outline:2px solid #cfe6ff;outline-offset:1px}
+  #panel .wxStatus{color:#8fa6c8;font-size:11px}
   #panel .row2 input{flex:1;min-width:0;font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:3px 5px}
   #panel .presets button{padding:3px 8px;font-size:inherit}
   html.widget #panel .body{gap:5px;padding-top:5px}
@@ -158,7 +163,7 @@
       <option value="random">Random</option>
       <option value="drift">Smooth random</option>
     </select></label>
-    <label>Pick color <input type="color" id="color"></label>
+    <label>Pick color <input type="color" id="color"><span id="recentColors" class="swatches" aria-label="Recent colors"></span></label>
     <label>Color speed <input type="range" id="speed" min="1" max="100"></label>
     <label>Reactivity <input type="range" id="react" min="0" max="100"></label>
     <label class="row"><input type="checkbox" id="loudFill"> Fill by loudness</label>
@@ -191,6 +196,14 @@
       <option value="leaves">Autumn leaves</option>
     </select></label>
     <label>Amount <input type="range" id="wxAmt" min="5" max="100"></label>
+    <label>Live weather <select id="liveWx">
+      <option value="off">Off</option>
+      <option value="city">This skyline's city</option>
+      <option value="place">A city I type</option>
+    </select></label>
+    <div class="row2"><input id="wxPlaceIn" placeholder="City name…" maxlength="60"><button id="wxFind">Find</button></div>
+    <select id="wxPick" aria-label="Which place" hidden></select>
+    <span id="wxStatus" class="wxStatus"></span>
   </div></details>
   <details name="sect"><summary>Ambient</summary><div class="body">
     <label class="row"><input type="checkbox" id="roofLights"> Roof lights</label>
@@ -232,7 +245,8 @@ const spanMode = !settingsMode && qs.get('mode') === 'span';
 // The wallpaper sits behind the taskbar, so it keeps the city above it: the strip underneath is just dark.
 const INSET = wallMode ? Math.min(300, Math.max(0, parseInt(qs.get('inset'), 10) || 0)) : 0;
 const perScreen = qs.has('screen') && (qs.get('mode') === 'per' || (settingsMode && qs.get('mode') !== 'span'));
-const spanScreen = settingsMode && qs.get('mode') === 'span' && qs.has('screen');   // a settings window for one screen's lights in the tour
+const spanScreen = settingsMode && qs.get('mode') === 'span' && qs.has('screen');
+const spanTour = settingsMode && qs.get('mode') === 'span' && !qs.has('screen');   // a settings page for the tour across all screens   // a settings window for one screen's lights in the tour
 
 // ---------- settings (remembered between launches) ----------
 const DEF = { city: 'nyc',                             // New York on a first run; saved settings keep their own city
@@ -244,7 +258,8 @@ const DEF = { city: 'nyc',                             // New York on a first ru
   search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true,
   tourOff: [],                                            // city menu values left out of the tour
   ownLights: false,
-  wxAuto: false };                                        // the weather was switched on by the city (e.g. Dark City's rain), not by you                                     // tour across all screens: this screen uses its own Lights settings
+  wxAuto: false,
+  liveWx: 'off', wxName: '', wxLat: null, wxLon: null };   // live weather: off, this skyline's city, or a place you chose                                        // the weather was switched on by the city (e.g. Dark City's rain), not by you                                     // tour across all screens: this screen uses its own Lights settings
 let S;
 // Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
 const SHARED_KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
@@ -262,7 +277,7 @@ function loadSettings(json) {
   if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
   if (S.preset === 'Background') S.preset = 'Lounge';
   if (!Array.isArray(S.tourOff)) S.tourOff = [];
-  savedView = S.view; if (spanMode) S.view = 'tour';
+  savedView = S.view; if (spanMode || spanTour) S.view = 'tour';
   tourLights = null;
   let own = null;
   if (spanMode) try { own = JSON.parse(localStorage.getItem(OWN_KEY) || 'null'); } catch {}
@@ -270,7 +285,7 @@ function loadSettings(json) {
 }
 try { loadSettings(stored()); } catch { loadSettings('{}'); }
 const save = () => { try {
-  const out = spanMode ? { ...S, view: savedView } : { ...S };
+  const out = spanMode || spanTour ? { ...S, view: savedView } : { ...S };
   if (tourLights) {                                      // this screen's lights go to its own key, the tour's stay as they were
     let own = {}; try { own = JSON.parse(localStorage.getItem(OWN_KEY) || '{}') || {}; } catch {}
     for (const k of LIGHT) { own[k] = S[k]; out[k] = tourLights[k]; }
@@ -1052,7 +1067,7 @@ function refreshPanel() {
   hide('cityLine', S.mode !== 'floors');                // heights only mean something in the Floors style
   hide('lineH', S.mode !== 'floors' || !S.cityLine);
   $('city').disabled = S.view === 'tour';
-  $('view').disabled = spanMode;                         // one tour across all screens
+  $('view').disabled = spanMode || spanTour;              // one tour across all screens
   for (const id of ['blinkSpeed', 'blinkSync', 'blinkBeat', 'blinkColor']) hide(id, !S.roofLights);
   hide('blinkSpeed', !S.roofLights || S.blinkBeat); hide('blinkSync', !S.roofLights || S.blinkBeat);
   hide('flickAmt', !S.flicker);
@@ -1063,7 +1078,9 @@ function refreshPanel() {
   for (const el of boxes) el.checked = !S.tourOff.includes(el.value);
   $('tourCount').textContent = boxes.length ? `${boxes.filter(el => el.checked).length} of ${boxes.length}` : '';
   hide('traffic', !S.ground.startsWith('street'));
-  hide('wxAmt', S.weather === 'none');
+  hide('wxAmt', S.weather === 'none' || S.liveWx !== 'off');
+  hide('wxPlaceIn', S.liveWx !== 'place'); if ($('wxPick').options.length) $('wxPick').hidden = S.liveWx !== 'place';
+  $('weather').disabled = S.liveWx !== 'off'; showLive();
   hide('flyers', S.city !== 'cyber' && S.view !== 'tour');
   const forWidget = TARGET === 'widget';
   hide('drift', forWidget);
@@ -1082,15 +1099,30 @@ for (const k of Object.keys(DEF)) {
     if (k === 'weather') S.wxAuto = false;            // your own choice: keep it
     save();
     if (RELAYOUT.includes(k) && W) layout();
+    if (k === 'liveWx' || k === 'city') pollLive(true);
     if (k === 'view' && S.view === 'tour') $('tourPick').open = true;
-    if (k === 'color') pick = hexToHS(S.color);
+    if (k === 'color') { pick = hexToHS(S.color); showRecentColors(); }
     refreshPanel();
   };
 }
 
+// Recent colors: the last colors you picked, shared by every window, as swatches under Pick color.
+const RECENT_KEY = 'cityPulse:colors';
+const recentColors = () => { try { const a = JSON.parse(localStorage.getItem(RECENT_KEY)); return Array.isArray(a) ? a.filter(c => /^#[0-9a-f]{6}$/i.test(c)) : []; } catch { return []; } };
+function showRecentColors() {
+  $('recentColors').innerHTML = recentColors().map(c => `<button type="button" data-c="${c}" title="${c}" style="background:${c}"${c === S.color ? ' class="on"' : ''}></button>`).join('');
+}
+function rememberColor(c) {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify([c, ...recentColors().filter(x => x !== c)].slice(0, 8))); } catch {}
+  showRecentColors();
+}
+$('color').addEventListener('change', () => rememberColor(S.color));   // when the picker closes, not on every drag
+$('recentColors').onclick = e => { const c = e.target.dataset && e.target.dataset.c; if (c) { $('color').value = c; $('color').oninput(); rememberColor(c); } };
+showRecentColors();
+
 // ---------- presets ----------
 // A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
-const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff', 'ownLights', 'wxAuto'];
+const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff', 'ownLights', 'wxAuto', 'liveWx', 'wxName', 'wxLat', 'wxLon'];
 // A city with its own weather (Cyberpunk and Dark City rain) brings it when the sky is clear; leaving for a city without one
 // takes it away again. Weather you picked yourself is never touched.
 function cityWeather(s) {
@@ -1165,12 +1197,15 @@ addEventListener('storage', e => {
   if (macAudio && e.key === INPUT_KEY) {                // the input was changed in another window
     if (!noCity) useInput(e.newValue || '').catch(() => {});
     macSources().catch(() => {});
+  } else if (e.key === RECENT_KEY) {
+    showRecentColors();
   } else if (e.key === 'cityPulsePresets') {                  // presets saved in any window appear everywhere right away
     mine = readMine(e.newValue);
     fillPresets();
   } else if (e.key === KEY || (spanMode && e.key === OWN_KEY)) {   // another window changed these settings: apply them live
     const before = RELAYOUT.map(k => S[k]).join('|');
     try { loadSettings(stored()); } catch { return; }
+    if (!controlMode) pollLive();                     // the Control Center draws no weather
     Object.keys(DEF).forEach(showSetting); pick = hexToHS(S.color); refreshPanel();
     if (!noCity && RELAYOUT.map(k => S[k]).join('|') !== before) layout();   // a rebuild re-rolls clouds and cars, so only when the scene changed
   }
@@ -1514,7 +1549,45 @@ function paintSky(g, T) {                                // a theme's gradient, 
   g.fillStyle = sky; g.fillRect(0, 0, W, H);
   if (T.drawSky) { E.sky = sky; T.drawSky(g, E); }
 }
-const weatherNow = () => theme.noWeather ? 'none' : S.weather;
+// Live weather: the real current weather of this skyline's city, or of a place you typed, from Open-Meteo (free, no key).
+// Only the name you search for, and then that place's coordinates (rounded), are sent. It wins over the Weather menu
+// and the themed cities' own rain, refreshes every 15 minutes, and keeps the last reading if the service can't be reached.
+const CITY_LL = { nyc: [40.71, -74.01], chicago: [41.88, -87.63], seattle: [47.61, -122.33], sf: [37.77, -122.42], dubai: [25.2, 55.27],
+  paris: [48.86, 2.35], tokyo: [35.68, 139.69], london: [51.51, -.13], toronto: [43.65, -79.38], sydney: [-33.87, 151.21],
+  hongkong: [22.32, 114.17], shanghai: [31.23, 121.47], tampa: [27.95, -82.46], charlotte: [35.23, -80.84] };
+let live = null, liveKey = '', liveAt = 0;
+// WMO weather codes to City Pulse weather and amount. No sun: clear and cloudy days stay a clear night.
+const wmo = c => c >= 95 ? ['storm', 80]
+  : (c >= 71 && c <= 77) || c === 85 || c === 86 ? ['snow', c === 75 || c === 86 ? 90 : c === 73 ? 60 : 35]
+  : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? ['rain', c <= 57 ? 25 : c === 61 || c === 80 ? 40 : c === 63 || c === 66 || c === 81 ? 65 : 90]
+  : c === 45 || c === 48 ? ['fog', 60] : ['none', 0];
+const WX_WORDS = { none: 'clear', rain: 'rain', snow: 'snow', storm: 'thunderstorm', fog: 'fog' };
+function liveWhere() {
+  if (S.liveWx === 'city') { const ll = CITY_LL[S.city]; return ll && CITIES[S.city] && { lat: ll[0], lon: ll[1], name: CITIES[S.city].name }; }
+  if (S.liveWx === 'place' && Number.isFinite(S.wxLat) && Number.isFinite(S.wxLon)) return { lat: S.wxLat, lon: S.wxLon, name: String(S.wxName || '') };
+  return null;
+}
+async function pollLive(force) {
+  const w = liveWhere(), key = w ? `${w.lat.toFixed(2)},${w.lon.toFixed(2)}` : '';
+  if (!w) { live = null; liveKey = ''; return showLive(); }
+  if (!force && key === liveKey && Date.now() - liveAt < 15 * 60e3) return;
+  if (key !== liveKey) live = null;
+  liveKey = key; liveAt = Date.now(); showLive();
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${w.lat.toFixed(2)}&longitude=${w.lon.toFixed(2)}&current=weather_code`);
+    const code = (await r.json()).current.weather_code, [type, amt] = wmo(code);
+    if (liveKey === key) live = { type, amt, name: w.name };
+  } catch { liveAt = Date.now() - 13 * 60e3; }          // offline: keep what we had, try again in ~2 minutes
+  showLive();
+}
+function showLive() {
+  const el = $('wxStatus'); if (!el) return;
+  el.textContent = S.liveWx === 'off' ? '' : live ? `Live: ${live.name} · ${WX_WORDS[live.type]}`
+    : S.liveWx === 'city' && !CITY_LL[S.city] ? 'Live weather follows real cities only'
+    : S.liveWx === 'place' && !Number.isFinite(S.wxLat) ? 'Type a city and press Find' : 'Checking the weather…';
+}
+const weatherNow = () => theme.noWeather ? 'none' : live ? live.type : S.weather;
+const wxAmtNow = () => live ? live.amt : S.wxAmt;
 // How much of the sky at screen x belongs to themes that pass test (blended where tour stretches meet).
 function skyShare(x, test) {
   if (!tourRuns.length) return test(theme) ? 1 : 0;
@@ -1682,9 +1755,9 @@ function drawWater(g, t) {
 // Weather particles, in screen space.
 let wx = [], wxKey = '', fogs = [];
 function drawWeather(g, t, dt) {
-  const wxNow = weatherNow(), type = wxNow === 'storm' ? 'rain' : wxNow, amt = S.wxAmt / 100;
+  const wxNow = weatherNow(), type = wxNow === 'storm' ? 'rain' : wxNow, amt = wxAmtNow() / 100;
   if (type === 'none') return;
-  const key = wxNow + S.wxAmt + W + H;
+  const key = wxNow + wxAmtNow() + W + H;
   if (key !== wxKey) {
     wxKey = key;
     const per = { rain: 1100, snow: 3200, petals: 13000, leaves: 13000 }[type];   // pixels of screen per particle
@@ -1768,9 +1841,12 @@ function perStretch(g, layer, has = () => true, own = false) {   // own: the lay
     const x0 = run.x0 - off + k * worldW, x1 = run.x1 - off + k * worldW;
     if (x1 > -h && x0 < W + h) ps.push({ T: run.T, a: snap(x0 - h), b: snap(x0 + h), c: snap(x1 - h), d: snap(x1 + h) });
   }
-  const bands = ps.filter(p => p.b > 0 && p.a < W);      // each stretch's fade-in band, shared with the one before it
-  if (!bands.length) {                                   // one stretch fills the screen
-    const p = ps.find(p => p.b <= 0 && p.c >= W);
+  // The same city in every stretch on screen (Scroll view repeats it): its scenery is drawn once, as in Fit, so the sun,
+  // the Synthwave car and Mt. Fuji don't appear once per copy.
+  const same = ps.length > 0 && ps.every(p => p.T === ps[0].T);
+  const bands = same ? [] : ps.filter(p => p.b > 0 && p.a < W);   // each stretch's fade-in band, shared with the one before it
+  if (!bands.length) {                                   // one stretch (or one city) fills the screen
+    const p = same ? ps[0] : ps.find(p => p.b <= 0 && p.c >= W);
     if (!p || !has(p.T)) return;
     if (!own) return layer(g, p.T);
     layG.save(); layG.clearRect(0, 0, W, H); layer(layG, p.T); layG.restore(); blit(g, lay, 0, W);
@@ -2362,7 +2438,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
 // settings page itself, embedded, so it saves and updates the city windows exactly as before). The app (cityPulse.control)
 // owns the windows, pushes its state, and can open it at a given step (Settings in the tray or the widget's gear).
 let ccState = null;
-const cc = { what: 'widget', which: 'all' };             // what you're customising, and which screen ('all' or its index)
+const cc = { what: 'widget', which: null };              // what you're customising, and which screen: its index, 'tour', or null
 function ccSeg(el, items) {                              // a row of buttons: [label, current?, action]
   el.innerHTML = items.map(([label, on], i) => `<button data-i="${i}"${on ? ' class="on"' : ''}>${esc(label)}</button>`).join('');
   el.onclick = e => { const b = e.target.closest('button'); if (b) items[+b.dataset.i][2](); };
@@ -2379,28 +2455,36 @@ function ccRender(st) {
   $('ccWidget').classList.toggle('on', !!st.widgetShown);
   ccCustomize();
 }
-// Step 3: what to change, which screen (when it matters), a line saying exactly what you're changing, then its settings.
+// Step 3: what to change, which screen (only where the running mode gives screens their own settings), a line saying
+// exactly what you're changing, then its settings. The screen choices follow the mode, so they never contradict it:
+//   off / one screen: the one look, no screen choice
+//   own city each:    one screen at a time (each screen keeps its own settings, so there is no "all screens")
+//   one tour across:  the tour itself, or one screen's own lights in it
 function ccCustomize() {
   const st = ccState; if (!st) return;
-  const name = i => { const x = st.screens[i]; return x ? `Screen ${i + 1}${x.label ? ` (${x.label})` : ''}` : 'that screen'; };
   ccSeg($('ccWhat'), [['Widget', 'widget'], ['Full screen', 'full'], ['Wallpaper', 'wall']].map(([label, k]) =>
-    [label, cc.what === k, () => { cc.what = k; cc.which = 'all'; ccCustomize(); }]));
-  const mode = cc.what === 'full' ? st.fullMode : cc.what === 'wall' ? st.wallMode : null, span = mode === 'span';
-  const multi = cc.what !== 'widget' && st.screens.length > 1;
-  if (!multi || (cc.which !== 'all' && !st.screens[cc.which])) cc.which = 'all';
-  $('ccWhichWrap').hidden = !multi;
-  if (multi) {
-    ccSeg($('ccWhich'), [['All screens', cc.which === 'all', () => { cc.which = 'all'; ccCustomize(); }],
-      ...st.screens.map(x => [`Screen ${x.index + 1}`, cc.which === x.index, () => { cc.which = x.index; ccCustomize(); }])]);
-    $('ccWhichNote').textContent = span ? 'Which screen? In the tour across every screen, one screen can have its own lights.'
-      : 'Which screen? One screen\'s own settings are used when every screen shows its own city.';
+    [label, cc.what === k, () => { cc.what = k; cc.which = null; ccCustomize(); }]));
+  const mode = cc.what === 'full' ? st.fullMode : cc.what === 'wall' ? st.wallMode : null, n = st.screens.length;
+  const choices = n < 2 ? [] : mode === 'per' ? st.screens.map(x => [`Screen ${x.index + 1}`, x.index])
+    : mode === 'span' ? [['The tour', 'tour'], ...st.screens.map(x => [`Screen ${x.index + 1}'s lights`, x.index])] : [];
+  if (!choices.some(([, v]) => v === cc.which)) cc.which = choices.length ? choices[0][1] : null;
+  $('ccWhichWrap').hidden = !choices.length;
+  if (choices.length) {
+    ccSeg($('ccWhich'), choices.map(([label, v]) => [label, cc.which === v, () => { cc.which = v; ccCustomize(); }]));
+    $('ccWhichNote').textContent = mode === 'span' ? 'The tour runs across every screen. A screen can also have its own lights.'
+      : 'Every screen shows its own city. Pick the screen to change.';
   }
-  const what = { widget: 'the widget', full: 'full screen', wall: 'the desktop wallpaper' }[cc.what];
-  $('ccCrumb').textContent = cc.which === 'all'
-    ? `Changing ${what}${multi ? ` on every screen${span ? ' (the tour across all of them)' : ''}` : ''}.`
-    : `Changing ${what} on ${name(cc.which)}: ${span ? 'its own lights in the tour.' : 'its own city and look.'}`;
+  const scr = i => { const x = st.screens[i]; return `Screen ${i + 1}${x.label && x.label !== `Screen ${i + 1}` ? ` (${x.label})` : ''}`; };
+  const where = cc.what === 'wall' && mode === 'one' && st.screens[st.wallScreen] ? scr(st.wallScreen) : cc.what === 'wall' ? 'one screen' : 'the widget’s screen';
+  $('ccCrumb').textContent = cc.what === 'widget' ? 'Changing the widget.'
+    : mode === 'off' ? `${cc.what === 'full' ? 'Full screen' : 'The wallpaper'} is off. These settings apply when you turn it on (on one screen).`
+    : mode === 'one' ? `Changing ${cc.what === 'full' ? 'full screen' : 'the wallpaper'} on ${where}.`
+    : cc.which === 'tour' ? `Changing the tour across every screen.`
+    : cc.which === null ? `Changing ${cc.what === 'full' ? 'full screen' : 'the wallpaper'}.`
+    : mode === 'span' ? `Changing ${scr(cc.which)}'s own lights in the tour.` : `Changing ${scr(cc.which)}: its own city and look.`;
   const q = new URLSearchParams({ settings: '1', for: cc.what, embed: '1' });
-  if (cc.which !== 'all') { q.set('screen', cc.which); if (span) q.set('mode', 'span'); }
+  if (mode === 'span') q.set('mode', 'span');
+  if (Number.isInteger(cc.which)) q.set('screen', cc.which);
   const fr = $('ccSettings'), src = 'index.html?' + q;
   if (fr.dataset.src !== src) { fr.dataset.src = src; fr.src = src; }   // only reload when the choice changes
 }
@@ -2414,8 +2498,8 @@ function startControl() {
     if (w) C.setWall('span');
   };
   $('ccWidget').onclick = () => C.setWidget(!(ccState && ccState.widgetShown));
-  C.onGoto?.(({ target, screen }) => {                   // opened from the tray or the widget's gear: jump to that step
-    cc.what = ['widget', 'full', 'wall'].includes(target) ? target : 'widget'; cc.which = Number.isInteger(screen) ? screen : 'all';
+  C.onGoto?.(({ target }) => {                           // opened from the tray or the widget's gear: jump to that step
+    cc.what = ['widget', 'full', 'wall'].includes(target) ? target : 'widget'; cc.which = null;
     ccCustomize(); $('ccSettings').scrollIntoView({ block: 'nearest' });
   });
   C.state().then(ccRender);
@@ -2451,8 +2535,26 @@ function start() {
   };
   if (![...$('city').options].some(o => o.value === S.city)) S.city = DEF.city;   // its plugin is gone
   showSetting('city'); refreshPanel();
+  // the place search: you type a name, pick the right match, and only then does it ask for that place's weather
+  $('wxPlaceIn').value = S.wxName || '';
+  const find = async () => {
+    const q = $('wxPlaceIn').value.trim(); if (!q) return;
+    $('wxStatus').textContent = 'Searching…';
+    try {
+      const res = (await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=5`)).json()).results || [];
+      if (!res.length) { $('wxStatus').textContent = 'No place found by that name'; return; }
+      const pick = $('wxPick');
+      pick.innerHTML = res.map((p, i) => `<option value="${i}">${esc([p.name, p.admin1, p.country].filter(Boolean).join(', '))}</option>`).join('');
+      pick.hidden = false;
+      const choose = i => { const p = res[i]; S.wxName = p.name; S.wxLat = p.latitude; S.wxLon = p.longitude; save(); pollLive(true); };
+      pick.onchange = () => choose(+pick.value); choose(0);
+    } catch { $('wxStatus').textContent = 'Couldn’t reach the weather service'; }
+  };
+  $('wxFind').onclick = find;
+  $('wxPlaceIn').onkeydown = e => { if (e.key === 'Enter') find(); };
   if (controlMode) return startControl();
-  if (settingsMode) return;                              // a settings page draws no city, so no layout or animation loop
+  if (settingsMode) return pollLive();                   // a settings page checks the weather once for its status line: no polling, layout or animation loop
+  pollLive(); setInterval(pollLive, 60e3);
   layout();
   addEventListener('resize', layout);
   // The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.

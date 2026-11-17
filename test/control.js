@@ -18,14 +18,25 @@ app.whenReady().then(async () => {
     if (!crumb.includes(wantCrumb)) fails.push(`${JSON.stringify(clicks)}: crumb "${crumb}"`);
     return whichShown;
   };
+  const which = () => js(`[...document.querySelectorAll('#ccWhich button')].map(b => b.textContent).join('|')`);
   if (await step([['ccWhat', 'Widget']], 'index.html?settings=1&for=widget&embed=1', 'the widget')) fails.push('widget should not ask which screen');
-  if (!await step([['ccWhat', 'Full screen']], 'index.html?settings=1&for=full&embed=1', 'every screen')) fails.push('full screen should ask which screen');
-  await step([['ccWhich', 'Screen 2']], 'index.html?settings=1&for=full&embed=1&screen=1', 'Screen 2');
-  await step([['ccWhat', 'Wallpaper'], ['ccWhich', 'Screen 1']], 'index.html?settings=1&for=wall&embed=1&screen=0&mode=span', 'its own lights');
-  // the tray's "Settings → Full screen → Screen 2" lands on the same step
-  await js(`window.__goto({ target: 'full', screen: 1 })`);
+  // full screen off: one look, no screen choice
+  if (await step([['ccWhat', 'Full screen']], 'index.html?settings=1&for=full&embed=1', 'is off')) fails.push('full screen off should not ask which screen');
+  // one screen: still no screen choice, never "all screens"
+  await js(`__setState({ fullMode: 'one' })`);
+  if (!(await js(`document.getElementById('ccWhichWrap').hidden`))) fails.push('one screen should not offer screens');
+  // own city each: one screen at a time, no "all screens"
+  await js(`__setState({ fullMode: 'per' })`);
+  if (await which() !== 'Screen 1|Screen 2') fails.push('own city each offers ' + await which());
+  await step([['ccWhich', 'Screen 2']], 'index.html?settings=1&for=full&embed=1&screen=1', 'own city');
+  // the tour across all screens: the tour, or one screen's lights
+  await step([['ccWhat', 'Wallpaper']], 'index.html?settings=1&for=wall&embed=1&mode=span', 'the tour');
+  if (await which() !== "The tour|Screen 1's lights|Screen 2's lights") fails.push('tour offers ' + await which());
+  await step([['ccWhich', "Screen 1's lights"]], 'index.html?settings=1&for=wall&embed=1&mode=span&screen=0', 'own lights');
+  // the tray's Settings → Full screen lands on that step
+  await js(`window.__goto({ target: 'full' })`);
   const src = await js(`document.getElementById('ccSettings').dataset.src`);
-  if (src !== 'index.html?settings=1&for=full&embed=1&screen=1') fails.push('goto: ' + src);
+  if (src !== 'index.html?settings=1&for=full&embed=1&screen=0') fails.push('goto: ' + src);
   // the embedded settings page loads its panel without errors
   await new Promise(r => setTimeout(r, 800));
   const panel = await js(`!document.getElementById('ccSettings').contentDocument.getElementById('panel').hidden`);
