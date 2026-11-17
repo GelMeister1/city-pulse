@@ -1,5 +1,5 @@
 // The visualizer itself is index.html; windows differ only by URL flags.
-const { app, BrowserWindow, screen, session, ipcMain, Tray, Menu, nativeImage, dialog, globalShortcut } = require('electron');
+const { app, BrowserWindow, screen, session, ipcMain, Tray, Menu, nativeImage, dialog, globalShortcut, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -7,6 +7,10 @@ const { pathToFileURL } = require('url');
 const win32 = require('./winhelper');
 const audiocap = require('./audiocap');
 const { autoUpdater } = require('electron-updater');
+// On a Mac the pages listen to an input themselves (see index.html), the wallpaper is a desktop-level window, and updates
+// are downloaded by hand: an unsigned Mac app can't update itself.
+const MAC = process.platform === 'darwin';
+const RELEASES = 'https://github.com/GelMeister1/city-pulse/releases/latest';
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // Chromium stops painting windows it thinks are covered; the live wallpaper sits behind the desktop, so it always looks covered.
@@ -72,7 +76,8 @@ function openFull(mode = prefs.fullMode || 'one') {
       title: 'City Pulse', icon: ICON, autoHideMenuBar: true, webPreferences: PREFS });
     load(w, { full: '1', ...query });
     w.once('ready-to-show', () => {
-      w.setBounds(d.bounds); w.setFullScreen(true);       // place first: Windows can move a window created already full screen
+      w.setBounds(d.bounds);                              // place first: Windows can move a window created already full screen
+      MAC ? w.setSimpleFullScreen(true) : w.setFullScreen(true);   // simple: no separate Space per screen on a Mac
       d.id === home.id ? w.show() : w.showInactive();      // keyboard focus goes to the widget's screen
     });
     w.on('closed', () => { if (!alive(fulls).length) closeFull(); });
@@ -93,23 +98,25 @@ function closeFull() {
 
 // It opens on the screen it's about: that screen for per-screen settings, otherwise the widget's screen.
 async function openSettings(target = 'widget', screenIdx = null) {
-  // Per-screen settings only show while that view runs as "own city each". If it's running another way, offer to switch.
+  // A screen's own settings: its city and everything while "own city each" runs; just its lights while the tour runs
+  // across all screens. While one screen runs, offer to switch.
   const running = target === 'full' ? (alive(fulls).length ? prefs.fullMode : null) : target === 'wall' ? (prefs.wall || {}).mode : null;
-  if (screenIdx !== null && running && running !== 'off' && running !== 'per') {
+  const span = screenIdx !== null && running === 'span';
+  if (screenIdx !== null && running === 'one') {
     const what = target === 'full' ? 'Full screen' : 'The wallpaper';
     const parent = alive(fulls)[0];                       // attach to full screen so the question can't hide behind it
     const { response } = await dialog.showMessageBox(...(parent ? [parent] : []), { type: 'question', buttons: ['Switch to own city each', 'Just edit settings'], defaultId: 0, cancelId: 1,
-      message: `${what} is showing one ${running === 'span' ? 'tour across all screens' : 'screen'} right now.`,
+      message: `${what} is showing one screen right now.`,
       detail: 'Per-screen settings apply when every screen shows its own city. Switch so your changes show?' });
     if (response === 0) target === 'full' ? (closeFull(), openFull('per')) : await setWallpaper({ mode: 'per' });
   }
-  const id = screenIdx === null ? target : `${target}:${screenIdx}`, open = settings[id];
+  const id = screenIdx === null ? target : `${target}:${span ? 'span' : ''}${screenIdx}`, open = settings[id];
   if (open && !open.isDestroyed()) return raise(open);
   const d = screenIdx === null ? displayOf(widget) : (screensLR()[screenIdx] || displayOf(widget));
   const wa = d.workArea, ww = 380, wh = Math.min(760, wa.height - 40);
   const w = settings[id] = new BrowserWindow({ width: ww, height: wh, minWidth: 320, x: Math.round(wa.x + (wa.width - ww) / 2), y: Math.round(wa.y + (wa.height - wh) / 2),
     title: 'City Pulse Settings', icon: ICON, autoHideMenuBar: true, backgroundColor: '#0b0e1c', webPreferences: PREFS });
-  load(w, { settings: '1', for: target, ...(screenIdx === null ? {} : { screen: String(screenIdx) }) });
+  load(w, { settings: '1', for: target, ...(screenIdx === null ? {} : { screen: String(screenIdx) }), ...(span ? { mode: 'span' } : {}) });
   raise(w);
 }
 // Settings must sit above full screen, which otherwise covers it and swallows the clicks.
@@ -130,10 +137,11 @@ async function applyWallpaper(cfg) {
   const all = screen.getAllDisplays(), vx = Math.min(...all.map(x => x.bounds.x)), vy = Math.min(...all.map(x => x.bounds.y));
   walls = windowsFor(cfg.mode, one).map(({ d, query }) => {
     const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, skipTaskbar: true, focusable: false,
-      backgroundColor: '#05060c', title: 'City Pulse Wallpaper', webPreferences: { ...PREFS, backgroundThrottling: false } });
+      backgroundColor: '#05060c', title: 'City Pulse Wallpaper', ...(MAC ? { type: 'desktop' } : {}), webPreferences: { ...PREFS, backgroundThrottling: false } });
     load(w, { full: '1', wall: '1', ...query });
     w.once('ready-to-show', async () => {
       if (w.isDestroyed()) return;
+      if (MAC) { w.setVisibleOnAllWorkspaces(true); return w.showInactive(); }   // type 'desktop' already sits behind the icons
       const hwnd = w.getNativeWindowHandle().readBigUInt64LE(0), rel = { x: d.bounds.x - vx, y: d.bounds.y - vy, width: d.bounds.width, height: d.bounds.height };
       const res = await win32.wallpaper(hwnd, rel);
       if (w.isDestroyed() || !res) return;                // replaced meanwhile, or the helper restarted (it isn't a "no")
@@ -159,6 +167,7 @@ function checkForUpdates(manual) {
   autoUpdater.checkForUpdates().catch(() => {});         // results arrive as events below
 }
 function setupUpdates() {
+  if (MAC) return;
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('update-available', i => { update = { state: 'downloading', version: i.version }; updateTray(); });
@@ -182,7 +191,7 @@ function updateMenuItem() {
     case 'checking': return { label: 'Checking for updates…', enabled: false };
     case 'downloading': return { label: `Downloading version ${update.version}…`, enabled: false };
     case 'ready': return { label: `Restart to update to ${update.version}`, click: () => { app.quitting = true; autoUpdater.quitAndInstall(); } };
-    default: return { label: 'Check for updates', click: () => checkForUpdates(true) };
+    default: return MAC ? { label: 'Check for updates…', click: () => shell.openExternal(RELEASES) } : { label: 'Check for updates', click: () => checkForUpdates(true) };
   }
 }
 
@@ -224,16 +233,16 @@ function updateTray() {
       { label: 'Full screen (one screen or tour across)…', click: () => openSettings('full') },
       { label: 'Wallpaper (one screen or tour across)…', click: () => openSettings('wall') },
       { type: 'separator' },
-      { label: 'Full screen, own city per screen', submenu: perScreen('full') },
-      { label: 'Wallpaper, own city per screen', submenu: perScreen('wall') },
+      { label: 'Full screen, each screen', submenu: perScreen('full') },
+      { label: 'Wallpaper, each screen', submenu: perScreen('wall') },
     ] },
     { type: 'separator' },
-    { label: 'Start with Windows', type: 'checkbox', enabled: app.isPackaged, checked: app.getLoginItemSettings(LOGIN).openAtLogin,
+    { label: MAC ? 'Open at login' : 'Start with Windows', type: 'checkbox', enabled: app.isPackaged, checked: app.getLoginItemSettings(LOGIN).openAtLogin,
       click: m => app.setLoginItemSettings({ ...LOGIN, openAtLogin: m.checked }) },
     { type: 'separator' },
     { label: `City Pulse ${app.getVersion()}`, enabled: false },
     updateMenuItem(),
-    { label: 'Uninstall City Pulse…', click: uninstall },
+    ...(MAC ? [] : [{ label: 'Uninstall City Pulse…', click: uninstall }]),   // on a Mac: drag the app to the Bin
     { type: 'separator' },
     { label: 'Quit City Pulse', click: () => app.quit() },
   ]));
@@ -246,6 +255,7 @@ let stopCapture = null, captureKey = '', defaultOut = null, retry = null, fellBa
 const cityWindows = () => [widget, ...fulls, ...walls].filter(w => w && !w.isDestroyed());
 const currentSource = () => (!fellBack && prefs.source) || { id: '', input: false };
 function startCapture() {
+  if (MAC) return;
   const src = currentSource(), key = `${src.input}:${src.id}:${src.id ? '' : defaultOut}`;
   if (stopCapture && key === captureKey) return;
   stopCapture?.(); captureKey = key; clearTimeout(retry);

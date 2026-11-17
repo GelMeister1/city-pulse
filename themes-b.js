@@ -207,7 +207,7 @@
         g.fill();
         if (b.roof && b.roof[0] === 'dome') {
           g.strokeStyle = 'rgba(255,225,180,.22)'; g.lineWidth = Math.max(1, u * .25); g.beginPath();
-          g.ellipse(cx, y, tw / 2 - .5, b.roof[1] * u - .5, 0, Math.PI * 1.05, Math.PI * 1.45); g.stroke();
+          g.ellipse(tip[0], tip[1] + b.roof[1] * u, tw / 2 - .5, b.roof[1] * u - .5, 0, Math.PI * 1.05, Math.PI * 1.45); g.stroke();
         }
         if (mt) {
           const [mx, by, mh] = mt, c = b.id % 2 ? 36 : 175;

@@ -10,13 +10,13 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 
 ## Features
 
-- **Listens to whatever your PC is playing.** In the app, system audio is picked up automatically.
+- **Listens to whatever your PC is playing.** On Windows, system audio is picked up automatically. On a Mac, see [Mac](#mac-preview).
   - The song is split into 8 bands, from bass to treble (Bass, Kick, Low-mid, Mid, Upper-mid, Presence, Treble, Air).
   - Each building is assigned one band for good. Landmarks are spread from bass to treble, so each famous building owns a clear part of the song.
   - Buildings on the same band move together.
-- **Listen to anything:** choose any output (speakers, headphones, TV) or input (microphone, line-in). City Pulse listens to that device directly, so you never have to change your Windows default. "Default output" follows whatever Windows is playing through.
+- **Listen to anything (Windows):** choose any output (speakers, headphones, TV) or input (microphone, line-in). City Pulse listens to that device directly, so you never have to change your Windows default. "Default output" follows whatever Windows is playing through.
 - **Calm when quiet:** with no music playing, the city sits still.
-- **Loudness meter:** tops out at your Windows volume, so at 50% volume it peaks halfway.
+- **Loudness meter:** on Windows, tops out at your Windows volume, so at 50% volume it peaks halfway.
 - **Skylines:**
   - **12 real cities** with hand-drawn landmarks: New York, Chicago, Seattle, San Francisco, Toronto, Dubai, Paris, London, Tokyo, Sydney, Hong Kong and Shanghai.
   - **13 themed cities**: Neon City, Cyberpunk, Noir City, Synthwave, Aero, Atlantis, Abyssal City, Aurora Harbor, Lantern District, Desert Mirage, Brasshaven, Lunar Colony and Neon Strip. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
@@ -40,7 +40,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Presets:** four built in (Lounge, Chill Night, Party, Neon Tour). Your own presets are shared between the widget and full screen.
 - **TV-friendly:**
   - full screen opens on whichever display the widget is on
-  - **multiple screens:** full screen and the live wallpaper can each run on all screens, with either **its own city on each screen** or **one tour across all of them**. In the tour, cities scroll from screen to screen, and each screen shows its own city name.
+  - **multiple screens:** full screen and the live wallpaper can each run on all screens, with either **its own city on each screen** or **one tour across all of them**. In the tour, cities scroll from screen to screen, each screen shows its own city name, and each screen can have **its own lights** (colors, style, brightness): use **Lights on this screen…** in the Control Center.
   - the controls auto-hide
   - optional burn-in protection creeps the picture a few pixels over about 20 minutes
 - **Control Center:** a window you can keep open on any screen. It has the audio source, full screen and wallpaper modes, a city for each screen, a **Tour on every screen** button, and links to every settings window. Click the tray icon, the ☰ button, or launch City Pulse again to open it.
@@ -53,9 +53,30 @@ Download `City-Pulse-Setup-x.y.z.exe` from Releases and run it. It adds Start-me
 
 The exe isn't code-signed yet, so Windows SmartScreen may warn on first run. Choose **More info → Run anyway**.
 
+### Mac (preview)
+
+The Mac version is new and not signed by Apple yet.
+
+1. From Releases, download `City-Pulse-x.y.z-arm64.dmg` for Apple Silicon (M1 and later) or `City-Pulse-x.y.z-x64.dmg` for Intel Macs.
+2. Open it and drag **City Pulse** into **Applications**.
+3. The first time, macOS blocks it. Open **System Settings → Privacy & Security**, scroll down and choose **Open Anyway**. If macOS says the app "is damaged", run this in Terminal, then open it again:
+
+```bash
+xattr -cr "/Applications/City Pulse.app"
+```
+
+4. Allow microphone access when asked. City Pulse lives in the menu bar, not the Dock.
+
+**Listening on a Mac:** macOS doesn't let apps hear what's playing, so City Pulse listens to an input you pick under **Listen to**: a microphone, a line-in, or [BlackHole](https://existential.audio/blackhole/), a free driver that carries your Mac's sound:
+1. Install **BlackHole 2ch**.
+2. In **Audio MIDI Setup**, click **+ → Create Multi-Output Device** and tick your speakers or headphones and **BlackHole 2ch**.
+3. Choose that Multi-Output Device as your sound output, then choose **BlackHole 2ch** under **Listen to**.
+
+Mac differences: updates are downloaded by hand (the menu's **Check for updates…** opens the Releases page), the loudness meter isn't scaled by the Mac volume, and to uninstall you drag the app to the Bin.
+
 ### Updates
 
-City Pulse updates itself, so you never need to download a new installer.
+On Windows, City Pulse updates itself, so you never need to download a new installer.
 - It checks for a new version when it starts and every 6 hours.
 - A new version downloads in the background and installs the next time City Pulse restarts. To install it straight away, use the tray's **Restart to update**.
 - There's only ever one copy installed. Running a newer installer by hand also replaces the old version and keeps your settings and presets.
@@ -110,6 +131,8 @@ npm run dist
 
 The installer is written to `dist/`.
 
+On a Mac, `npm run dist:mac` builds the `.dmg` files. Without a Mac, GitHub builds them: run **Mac build** from the repository's **Actions** tab and download the result from the run's page.
+
 ## Publish a new version (maintainers)
 
 1. Bump `"version"` in `package.json`, for example from 0.5.0 to 0.5.1, then commit and push.
@@ -129,7 +152,7 @@ git push origin v0.5.1
 GH_TOKEN=$(gh auth token) npm run release
 ```
 
-This builds the installer and publishes it as a GitHub Release, together with `latest.yml`, the file installed copies check to find updates. Every installed copy then updates itself.
+This builds the installer and publishes it as a GitHub Release, together with `latest.yml`, the file installed copies check to find updates. Every installed Windows copy then updates itself. Publishing the release also starts the **Mac build**, which adds the two `.dmg` files to it a few minutes later.
 
 Automatic updates need the repository to be **public**, because installed copies read the Releases page without signing in.
 

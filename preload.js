@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const listen = (channel, cb) => ipcRenderer.on(channel, (_, v) => cb(v));
 
 contextBridge.exposeInMainWorld('cityPulse', {
+  platform: process.platform,                            // 'win32' | 'darwin'
   openFull: () => ipcRenderer.send('open-full'),
   openSettings: () => ipcRenderer.send('open-settings'),
   closeWindow: () => ipcRenderer.send('close-window'),

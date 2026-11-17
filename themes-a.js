@@ -715,7 +715,7 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       if (b.lm) return;
       const u = E.unit, GY = E.GY, tw = b.tiers[b.tiers.length - 1].w * u, ty = GY - b.hU * u;
       if (b.roof && b.roof[0] === 'dome') {
-        g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(cx - tw * .15, ty - b.roof[1] * u * .55, tw * .14, b.roof[1] * u * .22, -.5, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(tip[0] - tw * .15, tip[1] + b.roof[1] * u * .45, tw * .14, b.roof[1] * u * .22, -.5, 0, TAU); g.fill();
       }
       if (b.dish) {
         const x = cx + tw * .28, y = ty - u * 1.2, a = Math.sin(E.t / 1800 * (1 + avg(E.bands, 2, 4)) + b.dphase) * .7 - Math.PI / 2;

@@ -51,6 +51,7 @@
   html.settings,html.settings body{overflow:auto;background:#0b0e1c}
   html.settings #panel{position:static;width:auto;max-height:none;border:0;border-radius:0;padding:14px 16px 24px;font-size:14px;gap:10px;background:none}
   html.settings #panel select,html.settings #panel input[type=color],html.settings #panel .row2 input{padding:6px;font-size:14px}
+  html.spanScreen #panel .presets,html.spanScreen #panel details:not(#lights){display:none}
   html.settings #panel summary{padding:9px 10px;font-size:15px}
   html.settings #panel .body{gap:12px;padding:12px 4px 6px}
   html.wall #ui,html.wall #panel{display:none !important}
@@ -117,7 +118,8 @@
     </select></label>
     <label>Spacing <input type="range" id="gap" min="0" max="300"></label>
   </div></details>
-  <details name="sect"><summary>Lights</summary><div class="body">
+  <details name="sect" id="lights"><summary>Lights</summary><div class="body">
+    <label class="row"><input type="checkbox" id="ownLights"> Own lights on this screen</label>
     <label>Style <select id="mode">
       <option value="floors">Floors</option>
       <option value="pulse">Pulse</option>
@@ -205,6 +207,7 @@ const screenI = Math.max(0, parseInt(qs.get('screen'), 10) || 0);
 const screens = (qs.get('screens') || '').split(',').map(s => s.split('x').map(Number)).filter(a => a.length === 2 && a.every(n => n > 0));
 const spanMode = !settingsMode && qs.get('mode') === 'span';
 const perScreen = qs.has('screen') && (qs.get('mode') === 'per' || (settingsMode && qs.get('mode') !== 'span'));
+const spanScreen = settingsMode && qs.get('mode') === 'span' && qs.has('screen');   // a settings window for one screen's lights in the tour
 
 // ---------- settings (remembered between launches) ----------
 const DEF = { city: 'generic', view: 'fit', scroll: 30, scrollDir: 'rtl', gap: 40, pan: .5,
@@ -213,23 +216,41 @@ const DEF = { city: 'generic', view: 'fit', scroll: 30, scrollDir: 'rtl', gap: 4
   weather: 'none', wxAmt: 50,
   roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
   search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true,
-  tourOff: [] };                                          // city menu values left out of the tour
+  tourOff: [],                                            // city menu values left out of the tour
+  ownLights: false };                                     // tour across all screens: this screen uses its own Lights settings
 let S;
 // Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
 const SHARED_KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
-const KEY = perScreen ? `${SHARED_KEY}:${screenI}` : SHARED_KEY;
+// In the tour across all screens every screen shares one world, but each can light it its own way: those Lights settings
+// live under OWN_KEY and are laid over the shared ones when ownLights is on.
+const OWN_KEY = `${SHARED_KEY}:span${screenI}`;
+const LIGHT = ['mode', 'peak', 'effect', 'color', 'speed', 'react', 'loudFill', 'cityLine', 'lineH', 'bright', 'meter'];
+const KEY = perScreen ? `${SHARED_KEY}:${screenI}` : spanScreen ? OWN_KEY : SHARED_KEY;
 // A screen's own settings start as a copy of the shared ones; the wallpaper starts as a copy of the full-screen look.
-const stored = localStorage.getItem(KEY) || localStorage.getItem(SHARED_KEY) || (TARGET === 'wall' && localStorage.getItem('cityPulse:full')) || '{}';
+const stored = () => localStorage.getItem(KEY) || localStorage.getItem(SHARED_KEY) || (TARGET === 'wall' && localStorage.getItem('cityPulse:full')) || '{}';
 let savedView;                                           // span mode forces the tour without overwriting the saved view
+let tourLights = null;                                   // span mode, own lights on: the tour's Lights settings, kept to save back
 function loadSettings(json) {
   S = { ...DEF, ...JSON.parse(json) };
   if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
   if (S.preset === 'Background') S.preset = 'Lounge';
   if (!Array.isArray(S.tourOff)) S.tourOff = [];
   savedView = S.view; if (spanMode) S.view = 'tour';
+  tourLights = null;
+  let own = null;
+  if (spanMode) try { own = JSON.parse(localStorage.getItem(OWN_KEY) || 'null'); } catch {}
+  if (own && own.ownLights) { tourLights = Object.fromEntries(LIGHT.map(k => [k, S[k]])); for (const k of LIGHT) if (k in own) S[k] = own[k]; }
 }
-try { loadSettings(stored); } catch { loadSettings('{}'); }
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(spanMode ? { ...S, view: savedView } : S)); } catch {} };
+try { loadSettings(stored()); } catch { loadSettings('{}'); }
+const save = () => { try {
+  const out = spanMode ? { ...S, view: savedView } : { ...S };
+  if (tourLights) {                                      // this screen's lights go to its own key, the tour's stay as they were
+    let own = {}; try { own = JSON.parse(localStorage.getItem(OWN_KEY) || '{}') || {}; } catch {}
+    for (const k of LIGHT) { own[k] = S[k]; out[k] = tourLights[k]; }
+    localStorage.setItem(OWN_KEY, JSON.stringify(own));
+  }
+  localStorage.setItem(KEY, JSON.stringify(out));
+} catch {} };
 
 // ---------- buildings ----------
 // Window styles, in units: cw = column pitch, ch = floor pitch, ww/wh = window size as a share of the cell.
@@ -749,9 +770,8 @@ function layout() {
 let actx, analyser, abins, tbuf, src, stream;
 let bins = null, natBins = null, natPeak = 0, natT = -1e9, natKind = 'output';   // bins: what this frame analyses (null = no sound)
 const nativeLive = () => performance.now() - natT < 1000;
-async function useSystemAudio() {
+function ensureAnalyser() {
   actx ??= new AudioContext();
-  await actx.resume();
   if (!analyser) {
     analyser = actx.createAnalyser();
     analyser.fftSize = 2048;
@@ -759,16 +779,40 @@ async function useSystemAudio() {
     abins = new Uint8Array(analyser.frequencyBinCount);
     tbuf = new Float32Array(analyser.fftSize);
   }
+  return actx.resume();
+}
+function listenTo(s) {
+  if (src) src.disconnect();
+  stream?.getTracks().forEach(t => t.stop());
+  stream = s; src = actx.createMediaStreamSource(s); src.connect(analyser);
+  $('hint').textContent = 'Listening · F full screen · M lights · C color · V view · W weather';
+}
+async function useSystemAudio() {
+  await ensureAnalyser();
   const desk = { mandatory: { chromeMediaSource: 'desktop' } };   // Electron-only route to Windows system audio
   const s = inApp ? await navigator.mediaDevices.getUserMedia({ audio: desk, video: desk })
                   : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
   if (!s.getAudioTracks().length) { s.getTracks().forEach(t => t.stop()); throw new Error('No audio shared — tick "Share audio" in the picker.'); }
   s.getVideoTracks().forEach(t => t.stop());           // only the audio is needed
   if (natBins) { s.getTracks().forEach(t => t.stop()); return; }   // native frames arrived meanwhile: they win
-  if (src) src.disconnect();
-  stream?.getTracks().forEach(t => t.stop());
-  stream = s; src = actx.createMediaStreamSource(s); src.connect(analyser);
-  $('hint').textContent = 'Listening · F full screen · M lights · C color · V view · W weather';
+  listenTo(s);
+}
+// Macs give apps no "what's playing" audio, so there the city listens to an input: a microphone or line-in, or the free
+// BlackHole driver carrying the system sound. The choice is shared by every window.
+const macAudio = inApp && cityPulse.platform === 'darwin', INPUT_KEY = 'cityPulse:input';
+async function useInput(id) {
+  await ensureAnalyser();
+  const opt = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  let s;
+  try { s = await navigator.mediaDevices.getUserMedia({ audio: id ? { ...opt, deviceId: { exact: id } } : opt }); }
+  catch (e) { if (!id) throw e; s = await navigator.mediaDevices.getUserMedia({ audio: opt }); }   // that device is gone: the default input
+  listenTo(s);
+}
+async function macSources() {
+  const id = localStorage.getItem(INPUT_KEY) || '';
+  const ins = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && !['default', 'communications'].includes(d.deviceId));
+  fillSources([{ id: '', name: 'Default input', kind: 'input', selected: !id },
+    ...ins.map(d => ({ id: d.deviceId, name: d.label || 'Input', kind: 'input', selected: d.deviceId === id }))]);
 }
 $('share').onclick = () => useSystemAudio().catch(e => alert(e.message));
 $('close').onclick = () => inApp ? cityPulse.closeWindow() : window.close();
@@ -795,26 +839,36 @@ async function fillSources(list) {
   };
   for (const el of [$('output'), $('ccSource')]) { el.innerHTML = group('output', 'Outputs') + group('input', 'Inputs'); el.value = String(list.findIndex(x => x.selected)); }
 }
-for (const el of [$('output'), $('ccSource')]) el.onchange = () => { const x = sourceList[+el.value]; if (x) cityPulse.setSource(x.id); };
+for (const el of [$('output'), $('ccSource')]) el.onchange = () => {
+  const x = sourceList[+el.value];
+  if (!x) return;
+  if (!macAudio) return cityPulse.setSource(x.id);
+  try { localStorage.setItem(INPUT_KEY, x.id); } catch {}  // other windows follow through the storage event
+  if (!noCity) useInput(x.id).catch(e => console.warn('Input unavailable:', e.message));
+};
 
 if (inApp && !settingsMode) {
-  if (cityPulse.sources) { fillSources().catch(e => console.warn('Audio sources unavailable:', e.message)); cityPulse.onSources?.(fillSources); }
+  if (macAudio) { macSources().catch(() => {}); navigator.mediaDevices.ondevicechange = () => macSources().catch(() => {}); }
+  else if (cityPulse.sources) { fillSources().catch(e => console.warn('Audio sources unavailable:', e.message)); cityPulse.onSources?.(fillSources); }
   else $('output').hidden = true;
 }
 if (inApp && !noCity) {
   $('hint').textContent = 'F full screen · M lights · C color · V view · W weather';
-  cityPulse.onAudio?.(f => {
-    natBins = f.bins; natPeak = f.peak || 0; natT = performance.now(); natKind = sourceKinds.get(f.source || '') || 'output';
-    if (stream) { stream.getTracks().forEach(t => t.stop()); src.disconnect(); stream = src = null; }   // native capture took over
-  });
-  // Chromium's capture only if no native frame comes in the first 1.5 s; it can fail while Windows audio starts, so retry.
-  setTimeout(function tryAudio(n = 6) {
-    if (natBins) return;
-    useSystemAudio().then(() => console.log('System audio connected (fallback)'), e => {
-      if (n > 1) setTimeout(() => tryAudio(n - 1), 2000); else console.warn('System audio unavailable:', e.message);
+  if (macAudio) useInput(localStorage.getItem(INPUT_KEY) || '').then(() => macSources(), e => console.warn('Input unavailable:', e.message));
+  else {
+    cityPulse.onAudio?.(f => {
+      natBins = f.bins; natPeak = f.peak || 0; natT = performance.now(); natKind = sourceKinds.get(f.source || '') || 'output';
+      if (stream) { stream.getTracks().forEach(t => t.stop()); src.disconnect(); stream = src = null; }   // native capture took over
     });
-  }, 1500);
-  pollVolume(); setInterval(pollVolume, 500);
+    // Chromium's capture only if no native frame comes in the first 1.5 s; it can fail while Windows audio starts, so retry.
+    setTimeout(function tryAudio(n = 6) {
+      if (natBins) return;
+      useSystemAudio().then(() => console.log('System audio connected (fallback)'), e => {
+        if (n > 1) setTimeout(() => tryAudio(n - 1), 2000); else console.warn('System audio unavailable:', e.message);
+      });
+    }, 1500);
+    pollVolume(); setInterval(pollVolume, 500);
+  }
 }
 
 // ---------- controls ----------
@@ -840,6 +894,7 @@ function refreshPanel() {
   hide('flickAmt', !S.flicker);
   hide('captions', S.view !== 'tour');
   hide('tourList', S.view !== 'tour');
+  hide('ownLights', !spanScreen);
   for (const el of $('tourList').querySelectorAll('input')) el.checked = !S.tourOff.includes(el.value);
   hide('traffic', !S.ground.startsWith('street'));
   hide('wxAmt', S.weather === 'none');
@@ -856,6 +911,7 @@ for (const k of Object.keys(DEF)) {
   el.oninput = () => {
     S[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value;
     S.preset = ''; $('preset').value = '';             // a hand-made change means you're no longer on a preset
+    if (spanScreen && LIGHT.includes(k)) { S.ownLights = true; showSetting('ownLights'); }   // changing a light means this screen has its own
     const T = k === 'city' && THEMES[themeKey(S.city)];
     if (T && T.weather && S.weather === 'none') { S.weather = T.weather; showSetting('weather'); }   // e.g. Cyberpunk and Noir City rain by default
     save();
@@ -867,7 +923,7 @@ for (const k of Object.keys(DEF)) {
 
 // ---------- presets ----------
 // A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
-const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff'];
+const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff', 'ownLights'];
 const lookOf = s => Object.fromEntries(Object.keys(DEF).filter(k => !PLACE.includes(k)).map(k => [k, s[k]]));
 const BUILTIN = Object.assign(Object.create(null), {
   'Lounge': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
@@ -932,14 +988,17 @@ function toggleFs() {
 }
 if (full) { $('fs').textContent = '⛶ Exit full screen'; addEventListener('keydown', e => { if (e.key === 'Escape') cityPulse.closeWindow(); }); }
 addEventListener('storage', e => {
-  if (e.key === 'cityPulsePresets') {                  // presets saved in any window appear everywhere right away
+  if (macAudio && e.key === INPUT_KEY) {                // the input was changed in another window
+    if (!noCity) useInput(e.newValue || '').catch(() => {});
+    macSources().catch(() => {});
+  } else if (e.key === 'cityPulsePresets') {                  // presets saved in any window appear everywhere right away
     mine = readMine(e.newValue);
     fillPresets();
   } else if (controlMode) {                            // a screen's city changed somewhere: show it
     if (e.key?.startsWith('cityPulse:')) ccCities();
-  } else if (e.key === KEY) {                           // another window changed these settings: apply them live
+  } else if (e.key === KEY || (spanMode && e.key === OWN_KEY)) {   // another window changed these settings: apply them live
     const before = RELAYOUT.map(k => S[k]).join('|');
-    try { loadSettings(e.newValue || '{}'); } catch { return; }
+    try { loadSettings(stored()); } catch { return; }
     Object.keys(DEF).forEach(showSetting); pick = hexToHS(S.color); refreshPanel();
     if (!noCity && RELAYOUT.map(k => S[k]).join('|') !== before) layout();   // a rebuild re-rolls clouds and cars, so only when the scene changed
   }
@@ -950,7 +1009,8 @@ $('gear').onclick = () => {
 };
 if (settingsMode) {
   $('panel').hidden = false;
-  document.title = `City Pulse Settings — ${{ widget: 'Widget', full: 'Full screen', wall: 'Wallpaper' }[TARGET]}${perScreen ? `, screen ${screenI + 1}` : ''}`;
+  document.title = `City Pulse Settings — ${{ widget: 'Widget', full: 'Full screen', wall: 'Wallpaper' }[TARGET]}${perScreen || spanScreen ? `, screen ${screenI + 1}` : ''}${spanScreen ? ' (lights in the tour)' : ''}`;
+  if (spanScreen) { document.documentElement.classList.add('spanScreen'); $('lights').open = true; }
 }
 $('fs').onclick = toggleFs;
 $('ccOpen').hidden = !(inApp && cityPulse.control);
@@ -1083,7 +1143,6 @@ function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for th
   g.beginPath();
   if (type === 'antenna') g.rect(cx - u * .25, y - h, u * .5, h);
   else if (type === 'antenna2') { g.rect(cx - tw / 4 - u * .25, y - h, u * .5, h); g.rect(cx + tw / 4 - u * .25, y - h * .8, u * .5, h * .8); g.fill(); return [cx - tw / 4, y - h]; }
-  else if (type === 'dome') g.ellipse(cx, y, tw / 2, h, 0, Math.PI, 2 * Math.PI);
   else if (type === 'ziggurat') { for (let i = 0; i < 3; i++) g.rect(cx - tw * (.4 - i * .12), y - h * (i + 1) / 3, tw * (.8 - i * .24), h / 3 + .5); }   // Art Deco stepped crown
   else if (type === 'deco') {                           // Art Deco arched crown with a needle
     for (let i = 0; i < 3; i++) g.ellipse(cx, y - h * i * .18, tw * (.4 - i * .1), h * .22, 0, Math.PI, 2 * Math.PI);
@@ -1096,6 +1155,23 @@ function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for th
   }
   g.fill();
   return [cx, y - h];
+}
+
+// A dome on the top tier. With 3D detail it stands on the block's top face (shifted back like that face) and is lit from
+// the upper left, the same way the side and top faces are shaded; a thin rim catches the light along the left of the curve.
+function dome(g, T, hU, cx, y, tw) {
+  const h = hU * unit, r = tw / 2;
+  g.beginPath();
+  if (!S.detail) { g.fillStyle = T.body; g.ellipse(cx, y, r, h, 0, Math.PI, 2 * Math.PI); g.fill(); return [cx, y - h]; }
+  const d = Math.min(1.6 * unit, tw * .18), x = cx + d / 2, by = y - d / 4;   // the top face's middle
+  const gr = g.createRadialGradient(x - r * .45, by - h * .75, 0, x - r * .15, by - h * .35, Math.max(r, h) * 1.3);
+  gr.addColorStop(0, T.top); gr.addColorStop(.55, T.side); gr.addColorStop(1, T.body);
+  g.fillStyle = gr;
+  g.ellipse(x, by, r, h, 0, Math.PI, 2 * Math.PI); g.ellipse(x, by, r, d / 4, 0, 0, Math.PI);   // the curve, then the near half of its base ring
+  g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = Math.max(1, unit * .25); g.beginPath();
+  g.ellipse(x, by, Math.max(.5, r - g.lineWidth / 2), Math.max(.5, h - g.lineWidth / 2), 0, Math.PI * 1.1, Math.PI * 1.42); g.stroke();
+  return [x, by - h];
 }
 
 function drawBuilding(g, b, cx, t) {
@@ -1150,7 +1226,7 @@ function drawBuilding(g, b, cx, t) {
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
-    tip = b.roof ? (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u)) : [cx, y];
+    tip = !b.roof ? [cx, y] : b.roof[0] === 'dome' ? dome(g, T, b.roof[1], cx, y + .5, top.w * u) : (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u));
   }
   if (T.drawExtras) T.drawExtras(g, b, cx, tip, E);
   if (S.search && b.search && T.searchlights) {
@@ -1573,7 +1649,7 @@ function frame(t) {
       g.fillStyle = i >= on ? '#ffffff14' : i >= segs * .85 ? '#ff4040' : i >= segs * .6 ? '#ffd040' : '#40ff80';
       g.fillRect(x, GY - 10 - (i + 1) * sh, 6, sh - 2);
     }
-    if (inApp && !(nativeLive() && natKind === 'input')) { g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x - 2, GY - 10 - (sysMuted ? 0 : sysVol) * mh - 1, 10, 1.5); }
+    if (inApp && !macAudio && !(nativeLive() && natKind === 'input')) { g.fillStyle = 'rgba(255,255,255,.55)'; g.fillRect(x - 2, GY - 10 - (sysMuted ? 0 : sysVol) * mh - 1, 10, 1.5); }
   }
 }
 
@@ -1874,8 +1950,13 @@ function ccRender(st) {
   $('ccWidget').textContent = st.widgetShown ? 'Hide widget' : 'Show widget';
   $('ccWidget').classList.toggle('on', !!st.widgetShown);
   const key = JSON.stringify(st.screens);
-  if (key === ccScreensKey) return;                      // rebuild the screen rows only when the screens change
+  if (key !== ccScreensKey) ccScreenRows(st);            // rebuild the screen rows only when the screens change
   ccScreensKey = key;
+  for (const b of document.querySelectorAll('#ccScreens button'))   // in the tour across all screens, a screen's button sets its own lights
+    b.textContent = (b.dataset.t === 'full' ? st.fullMode : st.wallMode) === 'span' ? 'Lights on this screen…' : 'More settings…';
+}
+function ccScreenRows(st) {
+  const C = cityPulse.control, name = x => x.label || `Screen ${x.index + 1}`;
   const pickCity = (t, i) => `<select data-t="${t}" data-i="${i}" aria-label="${t === 'full' ? 'Full-screen' : 'Wallpaper'} city">${$('city').innerHTML}</select>`;
   const more = (t, i) => `<button data-t="${t}" data-i="${i}">More settings…</button>`;
   $('ccScreens').innerHTML = '<span></span><b>Full screen</b><b>Wallpaper</b>' + st.screens.map(x =>
