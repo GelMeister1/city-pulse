@@ -29,6 +29,22 @@
     g.fillStyle = L; for (const x of [-11, 11]) g.fillRect(x - .4, -31, .8, .8);
   };
   anzac.w = 52;
+
+  const skyway = (g, L) => {                             // the Sunshine Skyway: a long low span rising to twin pylons and fans of cables
+    g.beginPath(); g.moveTo(-34, -2); g.quadraticCurveTo(0, -12, 34, -2); g.lineTo(34, -1); g.quadraticCurveTo(0, -11, -34, -1); g.fill();
+    for (const x of [-6, 6]) g.fillRect(x - .7, -22, 1.4, 15);
+    g.strokeStyle = g.fillStyle; g.lineWidth = .2; g.beginPath();
+    for (const x of [-6, 6]) for (let k = 1; k <= 7; k++) { g.moveTo(x, -21.5 + k * 1.5); g.lineTo(x - k * 3, -8.5 + k * .5); g.moveTo(x, -21.5 + k * 1.5); g.lineTo(x + k * 3, -8.5 + k * .5); }
+    g.stroke();
+    g.fillStyle = L; for (const x of [-6, 6]) g.fillRect(x - .4, -23, .8, .8);
+  };
+  skyway.w = 68;
+  const stadium = (g, L) => {                            // Bank of America Stadium: a wide bowl with light towers
+    g.beginPath(); g.moveTo(-20, 0); g.lineTo(-17, -9); g.quadraticCurveTo(0, -12, 17, -9); g.lineTo(20, 0); g.fill();
+    for (const x of [-15, -5, 5, 15]) { g.fillRect(x - .25, -16, .5, 7); g.fillRect(x - 1.2, -17, 2.4, 1.2); }
+    g.fillStyle = L; for (const x of [-15, -5, 5, 15]) g.fillRect(x - 1, -16.8, 2, .6);
+  };
+  stadium.w = 40;
   const path = (g, pts) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); };
   const mirror = pts => [...pts, ...pts.slice().reverse().map(([x, y]) => [-x, y])];   // right half → whole outline
   const glow = (L, y, min) => L.win(Math.max(L.lit(y), min));                        // lights that never go fully dark
@@ -319,5 +335,131 @@
     [1, '@shtower'],                                                             // Shanghai Tower
     [1, 'ribbon', ['antenna', 4], [[10, 44]]],
     [.5, 'grid', null, [[9, 30]]],
+  ]});
+  // ---------- Tampa ----------
+  // A row of windows between x0 and x1 every dy units from y0 to y1 (heights up), lit by height like any building.
+  const rows = (g, L, x0, x1, y0, y1, { dx = 1.2, ww = .5, dy = 1.7, wh = .8 } = {}) => {
+    for (let y = y0; y < y1 - wh; y += dy) { g.fillStyle = L.win(L.lit(y)); for (let x = x0; x <= x1 - ww + 1e-6; x += dx) g.fillRect(x, -y - wh, ww, wh); }
+  };
+  const palm = (g, x, h, lean) => {                       // a palm: a curved trunk and a crown of drooping fronds
+    g.lineWidth = .55; g.strokeStyle = g.fillStyle; g.beginPath(); g.moveTo(x, 0); g.quadraticCurveTo(x + lean * .3, -h * .6, x + lean, -h); g.stroke();
+    g.lineWidth = .35; g.beginPath();
+    for (const a of [-2.8, -2.2, -1.6, -1, -.4, .2]) { const ex = x + lean + Math.cos(a) * 3.2, ey = -h + Math.sin(a) * 1.4 + 1.6; g.moveTo(x + lean, -h); g.quadraticCurveTo((x + lean + ex) / 2, -h - 1.2, ex, ey); }
+    g.stroke();
+  };
+  // University of Tampa's Plant Hall (the old Tampa Bay Hotel): a long Moorish hall, horseshoe-arched windows, and slim
+  // minarets crowned with onion domes and silver crescents. Palms out front.
+  const MINARETS = [[-12, 15], [-7.5, 18.5], [-2.5, 22], [2.5, 20], [7.5, 17], [12, 14]];
+  lm('planthall', { w: 30, h: 25, draw(g, L) {
+    g.fillStyle = L.body; g.fillRect(-14, -8, 28, 8); g.fillRect(-15, -8.6, 30, .6);
+    for (const [x, h] of MINARETS) {
+      g.fillRect(x - .9, -h + 3, 1.8, h - 11);            // the shaft
+      g.fillRect(x - 1.3, -h + 3, 2.6, .5);               // a balcony under the dome
+      g.beginPath(); g.moveTo(x - 1.3, -h + 3);           // the onion dome
+      g.bezierCurveTo(x - 2.4, -h + 1.4, x - .5, -h + .6, x, -h - .4); g.bezierCurveTo(x + .5, -h + .6, x + 2.4, -h + 1.4, x + 1.3, -h + 3); g.fill();
+      g.fillRect(x - .08, -h - 1.6, .16, 1.3);
+      g.strokeStyle = L.win(Math.max(L.lit(h), .35)); g.lineWidth = .22;   // the silver crescent catches the light
+      g.beginPath(); g.arc(x, -h - 2.1, .55, Math.PI * .15, Math.PI * 1.35); g.stroke();
+    }
+    for (let x = -13; x < 13.2; x += 1.6) {               // horseshoe arches along the hall
+      g.fillStyle = L.win(L.lit(3)); g.beginPath(); g.moveTo(x, -1.6); g.lineTo(x, -4.4); g.arc(x + .5, -4.4, .5, Math.PI, 0); g.lineTo(x + 1, -1.6); g.fill();
+      g.fillStyle = L.win(L.lit(6)); g.fillRect(x + .2, -7.3, .6, 1.3);
+    }
+    for (const [x, h] of MINARETS) { g.fillStyle = L.win(L.lit(h - 5)); g.fillRect(x - .25, -h + 5, .5, 1.6); }
+    g.fillStyle = L.body; palm(g, -15.5, 11, -1.2); palm(g, 15.2, 12.5, 1.4); palm(g, -10, 9, .8);
+  } });
+  // Rivergate Tower, "the Beer Can": a round tower, its windows narrowing toward the curved edges, flat top with a rim.
+  lm('beercan', { w: 10, h: 34, draw(g, L) {
+    g.fillStyle = L.body; g.fillRect(-5, -32, 10, 32);
+    g.beginPath(); g.ellipse(0, -32, 5, 1.1, 0, Math.PI, 0); g.fill(); g.fillRect(-5.3, -32.6, 10.6, .8); g.fillRect(-.8, -34, 1.6, 1.6);
+    for (let y = 1.2; y < 31; y += 1.5) {
+      g.fillStyle = L.win(L.lit(y));
+      for (let a = -1.35; a <= 1.36; a += .3) {           // columns round the drum: x = 5 sin(a), width shrinks with cos(a)
+        const x = 4.4 * Math.sin(a), w = .7 * Math.cos(a); if (w > .12) g.fillRect(x - w / 2, -y - .8, w, .8);
+      }
+    }
+    if (L.edge) { g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath(); for (let y = 6; y < 31; y += 6) { g.moveTo(-5, -y); g.lineTo(5, -y); } g.stroke(); }
+  } });
+  // The Sykes Building: a crescent of glass, its curved face sweeping up to a rounded top, and a low podium.
+  lm('sykes', { w: 12, h: 33, draw(g, L) {
+    g.fillStyle = L.body; g.fillRect(-6, -5, 12, 5);
+    g.beginPath(); g.moveTo(-4.5, -5); g.lineTo(-4.5, -30); g.quadraticCurveTo(-1, -34.5, 3.6, -31.5);
+    g.quadraticCurveTo(5.6, -18, 4.5, -5); g.closePath(); g.fill();
+    for (let y = 6; y < 31; y += 1.25) {                  // glass bands that follow the curve
+      const r = 4.5 + 1 * Math.sin((y - 5) / 26 * Math.PI) - .6, l = -3.8, top = y > 29 ? 2.2 : r;
+      g.fillStyle = L.win(L.lit(y)); g.fillRect(l, -y - .55, top - l, .55);
+    }
+    rows(g, L, -5.3, 5.3, .8, 4.6, { dx: 1.3, ww: .7, dy: 1.6, wh: .9 });
+  } });
+  city('tampa', { name: 'Tampa', back: [.6, .9], far: [skyway, farTowers([[-8, 5, 22], [-2, 6, 28], [5, 5, 18]])], b: [
+    [0, 'wide', null, [[12, 14]]],
+    [.5, '@planthall'],                                                          // Plant Hall, University of Tampa
+    [2, 'grid', null, [[10, 22]]],
+    [.5, '@sykes'],                                                              // Sykes Building
+    [.5, 'ribbon', ['antenna2', 4], [[12, 37]]],                                 // One Tampa City Center
+    [.5, 'cols', ['pyramid', 4], [[11, 30], [9, 9]]],                            // 100 North Tampa
+    [.5, 'grid', ['ziggurat', 4], [[11, 34], [8, 6]]],                           // Bank of America Plaza
+    [.5, '@beercan'],                                                            // Rivergate Tower ("the Beer Can")
+    [.5, 'slim', null, [[9, 28]]],
+    [.5, 'pairs', ['pyramid', 3], [[10, 20]]],
+    [.5, 'tall', null, [[9, 25]]],
+  ]});
+
+  // ---------- Charlotte ----------
+  // Bank of America Corporate Center: a granite shaft that steps in near the top, crowned by a ring of tall metal rods,
+  // longest in the middle, lit from within.
+  const BOFA = mirror([[7, 0], [7, -40], [6.3, -40], [6.3, -47], [5.4, -47], [5.4, -52], [4.6, -52], [4.6, -54]]);
+  lm('bofacc', { w: 14, h: 64, draw(g, L) {
+    g.fillStyle = L.body; path(g, BOFA); g.fill();
+    for (let x = -4.4; x <= 4.41; x += .55) {             // the crown of rods
+      const top = 54 + 9.5 * Math.pow(1 - Math.abs(x) / 4.9, .7);
+      g.fillStyle = L.body; g.fillRect(x - .16, -top, .32, top - 53.5);
+      g.fillStyle = glow(L, 58, .3); g.fillRect(x - .08, -top + .4, .16, Math.max(0, top - 55.4));
+    }
+    rows(g, L, -6.2, 6.2, 1.2, 39.5, { dx: 1.05, ww: .45, dy: 1.6, wh: .8 });
+    rows(g, L, -5.6, 5.6, 40.6, 46.6, { dx: 1.05, ww: .45, dy: 1.6, wh: .8 });
+    rows(g, L, -4.8, 4.8, 47.6, 51.6, { dx: 1.05, ww: .45, dy: 1.6, wh: .8 });
+    if (L.edge) { g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath(); for (const x of [-3.5, 0, 3.5]) { g.moveTo(x, 0); g.lineTo(x, -40); } g.stroke(); }
+  } });
+  // Duke Energy Center: a tall glass box whose top is cut on a slope, its crown a lattice that glows with colour.
+  lm('dukeenergy', { w: 13, h: 58, draw(g, L) {
+    g.fillStyle = L.body; g.beginPath(); g.moveTo(-6.5, 0); g.lineTo(-6.5, -50); g.quadraticCurveTo(0, -51.5, 6.5, -58); g.lineTo(6.5, 0); g.fill();
+    rows(g, L, -5.8, 5.8, 1.2, 49, { dx: 1, ww: .5, dy: 1.5, wh: .75 });
+    g.strokeStyle = glow(L, 54, .35); g.lineWidth = .2; g.beginPath();   // the lit crown lattice under the slope
+    for (let x = -6; x <= 6; x += 1.5) { const top = x < 0 ? 50.3 + (x + 6.5) * .12 : 51 + x * .95; g.moveTo(x, -49.6); g.lineTo(x, -top + .3); }
+    g.moveTo(-6.5, -49.6); g.lineTo(6.5, -49.6); g.stroke();
+  } });
+  // Truist Center (the old Hearst Tower): Art Deco setbacks rising to a crown of four finials round a central spire.
+  const TRUIST = mirror([[5.5, 0], [5.5, -38], [4.6, -38], [4.6, -41.5], [3.6, -41.5], [3.6, -44], [1.2, -44], [.25, -49]]);
+  lm('truist', { w: 11, h: 49, draw(g, L) {
+    g.fillStyle = L.body; path(g, TRUIST); g.fill();
+    for (const x of [-3.2, -1.9, 1.9, 3.2]) { g.beginPath(); g.moveTo(x - .35, -44); g.lineTo(x, -46.4); g.lineTo(x + .35, -44); g.fill(); }
+    rows(g, L, -4.7, 4.7, 1.2, 37.5, { dx: 1.2, ww: .4, dy: 1.9, wh: 1.2 });   // tall Deco slit windows
+    rows(g, L, -3.8, 3.8, 38.6, 41, { dx: 1.2, ww: .4, dy: 1.9, wh: 1.2 });
+    g.fillStyle = glow(L, 43, .25); g.fillRect(-3.4, -43.6, 6.8, .35);
+    if (L.edge) { g.strokeStyle = L.edge; g.lineWidth = .15; g.beginPath(); for (const x of [-3, 3]) { g.moveTo(x, 0); g.lineTo(x, -38); } g.stroke(); }
+  } });
+  // One Wells Fargo Center, "the Jukebox": a shaft topped by a rounded crown with ribs and bands, lit like an old jukebox.
+  lm('jukebox', { w: 12, h: 43, draw(g, L) {
+    g.fillStyle = L.body; g.fillRect(-6, -35, 12, 35);
+    g.beginPath(); g.moveTo(-5.4, -35); g.lineTo(-5.4, -38); g.quadraticCurveTo(-5.2, -43, 0, -43); g.quadraticCurveTo(5.2, -43, 5.4, -38); g.lineTo(5.4, -35); g.fill();
+    rows(g, L, -5.3, 5.3, 1.2, 34.5, { dx: 1.1, ww: .5, dy: 1.6, wh: .8 });
+    const c = glow(L, 39, .3); g.strokeStyle = c; g.lineWidth = .22; g.beginPath();   // the crown's ribs and bands
+    for (const x of [-3.6, -1.8, 0, 1.8, 3.6]) { g.moveTo(x, -35.2); g.lineTo(x, -38 - 4.6 * Math.sqrt(Math.max(0, 1 - (x / 5.6) ** 2))); }
+    for (const y of [36.4, 38.2, 40]) { const hw = y < 38 ? 5.2 : 5.2 * Math.sqrt(Math.max(0, 1 - ((y - 38) / 5.2) ** 2)); g.moveTo(-hw, -y); g.lineTo(hw, -y); }
+    g.stroke();
+  } });
+  city('charlotte', { name: 'Charlotte', back: [.7, .9], far: [stadium, farTowers([[-9, 5, 26], [-3, 6, 32], [4, 5, 22], [10, 4, 18]])], b: [
+    [0, 'grid', null, [[10, 22]]],
+    [.5, 'slim', ['antenna', 4], [[9, 30]]],
+    [.5, '@jukebox'],                                                            // One Wells Fargo Center ("the Jukebox")
+    [.5, 'ribbon', null, [[11, 34]]],                                            // 301 South College
+    [.5, '@bofacc'],                                                             // Bank of America Corporate Center
+    [.5, 'cols', null, [[10, 43]]],                                              // 550 South Tryon
+    [.5, '@dukeenergy'],                                                         // Duke Energy Center
+    [.5, 'pairs', ['pyramid', 3], [[10, 24]]],
+    [.5, '@truist'],                                                             // Truist Center
+    [.5, 'wide', null, [[12, 18]]],
+    [.5, 'tall', ['ziggurat', 3], [[10, 28]]],
   ]});
 })();

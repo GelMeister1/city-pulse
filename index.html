@@ -222,7 +222,8 @@ const perScreen = qs.has('screen') && (qs.get('mode') === 'per' || (settingsMode
 const spanScreen = settingsMode && qs.get('mode') === 'span' && qs.has('screen');   // a settings window for one screen's lights in the tour
 
 // ---------- settings (remembered between launches) ----------
-const DEF = { city: 'generic', view: 'fit', scroll: 30, scrollDir: 'rtl', gap: 40, pan: .5,
+const DEF = { city: 'nyc',                             // New York on a first run; saved settings keep their own city
+  view: 'fit', scroll: 30, scrollDir: 'rtl', gap: 40, pan: .5,
   mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, loudFill: false, cityLine: false, lineH: 70, bright: 100, meter: true,
   ground: TARGET === 'widget' ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
   weather: 'none', wxAmt: 50,
@@ -1333,7 +1334,10 @@ function drawBuilding(g, b, cx, t) {
       // toward the back, so a floor's line slants up a little more the higher up the tier it is: windows stay on their floor.
       const sideY = (s, yv) => yv - s * rise * (y - yv) / th;
       const sideQuad = (s0, s1, ya, yb) => { g.beginPath(); g.moveTo(x1 + s0 * d, sideY(s0, ya)); g.lineTo(x1 + s1 * d, sideY(s1, ya)); g.lineTo(x1 + s1 * d, sideY(s1, yb)); g.lineTo(x1 + s0 * d, sideY(s0, yb)); g.fill(); };
-      const sideWins = d >= 3 ? (d >= 6 ? 2 : 1) : 0;    // windows per floor on the side: two where there's room
+      // Side windows follow the building's own window style, seen at an angle: a ribbon building gets one short bar per floor,
+      // the others as many windows as their column pitch fits (1 for square and wide windows, 2 for tall, slim and slit ones).
+      const sideWins = d < 3 ? 0 : !st.cw ? 1 : Math.max(1, Math.min(3, Math.round(d / (st.cw * u * .6))));
+      const sideW = st.cw ? st.ww : .8;                  // each window's share of its cell, as on the front
       if (d) {                                          // side and top faces so it reads as a block, not a flat box
         g.fillStyle = side; g.beginPath();
         g.moveTo(x0 + tw, y); g.lineTo(x0 + tw + d, y); g.lineTo(x0 + tw + d, y - th - rise); g.lineTo(x0 + tw, y - th); g.fill();
@@ -1351,7 +1355,7 @@ function drawBuilding(g, b, cx, t) {
           g.fillStyle = style;
           if (sideWins) {                               // the same floor round the side, half as bright: the shaded face
             const a0 = g.globalAlpha; g.globalAlpha = a0 * .5;
-            for (let k = 0; k < sideWins; k++) sideQuad((k + .22) / sideWins, (k + .78) / sideWins, wy, wy + wh);
+            for (let k = 0; k < sideWins; k++) sideQuad((k + (1 - sideW) / 2) / sideWins, (k + (1 + sideW) / 2) / sideWins, wy, wy + wh);
             g.globalAlpha = a0;
           }
           if (!cols) { g.fillRect(x0 + u * .6, wy, tw - u * 1.2, wh); continue; }
@@ -2153,7 +2157,7 @@ let tourGroups = [];                                     // [[group name, [[menu
 function start() {
   for (const [k, c] of Object.entries(CITIES)) if (!c.b.every(okSpec)) { console.error(`City Pulse: city "${k}" ignored: it uses an unknown window style or landmark.`); delete CITIES[k]; }
   const opt = (k, name) => `<option value="${esc(k)}">${esc(name)}</option>`;
-  const groups = tourGroups = [['Real cities', Object.entries(CITIES).map(([k, c]) => [k, c.name])],
+  const groups = tourGroups = [['Real cities', Object.entries(CITIES).map(([k, c]) => [k, c.name]).sort(([, a], [, b]) => a.localeCompare(b))],   // A to Z
     ['Themed', [['generic', 'Neon City'], ...Object.keys(THEMES).filter(k => k !== 'none').map(k => [k, THEMES[k].name])]
       .sort(([, a], [, b]) => a.replace(/^The /, '').localeCompare(b.replace(/^The /, '')))]];   // A to Z, "The Grid" under G
   $('city').innerHTML = groups.map(([g, list]) => `<optgroup label="${g}">${list.map(([k, n]) => opt(k, n)).join('')}</optgroup>`).join('');
@@ -2171,7 +2175,7 @@ function start() {
     const [real, themed] = tourGroups.map(([, list]) => list.map(([k]) => k));
     setTourOff(pick === 'all' ? [] : pick === 'real' ? themed : real);
   };
-  if (![...$('city').options].some(o => o.value === S.city)) S.city = 'generic';   // its plugin is gone
+  if (![...$('city').options].some(o => o.value === S.city)) S.city = DEF.city;   // its plugin is gone
   showSetting('city'); refreshPanel();
   if (controlMode) return startControl();
   layout();
