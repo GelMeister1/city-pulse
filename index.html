@@ -339,6 +339,16 @@ const LM = {
     for (let x = -6.5; x < 6.4; x += .9) g.fillRect(x, -50.6, .55, .7);
   } },
   bigben: { w: 9, h: 63, draw(g, L) {
+    if (L.d) {                                            // the 3D side, drawn by hand: the shaft, the clock stage with its
+      const dd = L.d * .85;                               // side clock seen at an angle, the belfry and the spire's right face
+      const side = (x, y0, y1) => { g.beginPath(); g.moveTo(x, -y0); g.lineTo(x + dd, -y0 - dd / 2 * (y0 > 0 ? 1 : 0)); g.lineTo(x + dd, -y1 - dd / 2); g.lineTo(x, -y1); g.fill(); };
+      g.fillStyle = L.sideCol; side(3, 0, 36); side(3.7, 36, 44.5); side(3.9, 44.5, 45.3); side(3.2, 45.3, 50);
+      g.beginPath(); g.moveTo(3.6, -50); g.lineTo(3.6 + dd, -50 - dd / 2); g.lineTo(dd / 2, -60.5 - dd / 4); g.fill();
+      g.fillStyle = L.topCol; g.beginPath(); g.moveTo(-3.7, -44.5); g.lineTo(-3.7 + dd, -44.5 - dd / 2); g.lineTo(3.7 + dd, -44.5 - dd / 2); g.lineTo(3.7, -44.5); g.fill();
+      const a = L.lit(40);
+      g.fillStyle = L.win(Math.max(a, .2) * .7); g.beginPath(); g.ellipse(3.7 + dd / 2, -40.2 - dd / 4, dd * .38, 2.5, 0, 0, Math.PI * 2); g.fill();
+      for (let y = 3; y < 34; y += 3.4) { g.fillStyle = L.win(L.lit(y) * .5); g.fillRect(3 + dd * .3, -y - 2 - dd / 2 * (y / 36), dd * .35, 2); }
+    }
     g.fillStyle = L.body;
     g.fillRect(-3, -36, 6, 36);
     g.fillRect(-3.7, -44.5, 7.4, 8.5);
@@ -511,7 +521,22 @@ const FAR = {
     g.fillStyle = L; for (const [x, h] of [[-18, 26], [14, 30]]) for (let y = -h; y < -3; y += 3) g.fillRect(x, y, 1, 1.4);
   },
 };
-for (const [k, w] of Object.entries({ stpauls: 30, eye: 32, towerbridge: 42, bttower: 7, sacrecoeur: 52, arc: 20, notredame: 34, grandearche: 40 })) FAR[k].w = w;
+// The Golden Gate Bridge, far off: two towers with their portal struts, the main cables swooping between them and
+// down to the shore, the deck, suspender cables and a string of lights. Drawn in a dim, hazy international orange.
+FAR.goldengate = (g, L) => {
+  const col = 'rgba(120,52,48,.85)'; g.fillStyle = col; g.strokeStyle = col;
+  g.fillRect(-36, -9.5, 72, 1.1);                               // the deck
+  for (const x of [-16, 16]) {                                  // the towers
+    g.fillRect(x - 1.6, -36, .9, 36); g.fillRect(x + .7, -36, .9, 36);
+    for (const y of [-13, -22, -29, -35]) g.fillRect(x - 1.6, y, 3.2, .7);
+  }
+  const cable = x => x < -16 ? -34 + (x + 16) / -20 * 27 : x > 16 ? -34 + (x - 16) / 20 * 27 : -34 + 20 * (1 - (x / 16) ** 2);   // sags to -14 mid-span
+  g.lineWidth = .35; g.beginPath(); for (let x = -36; x <= 36; x += 1) x > -36 ? g.lineTo(x, cable(x)) : g.moveTo(x, cable(x)); g.stroke();
+  g.lineWidth = .12; g.beginPath(); for (let x = -34; x <= 34; x += 2) { if (Math.abs(Math.abs(x) - 16) < 1) continue; g.moveTo(x, cable(x)); g.lineTo(x, -9.5); } g.stroke();
+  g.fillStyle = L; for (let x = -34; x <= 34; x += 4) g.fillRect(x - .25, cable(x) - .25, .5, .5);
+  g.fillStyle = 'rgba(255,90,70,.6)'; for (const x of [-16, 16]) g.fillRect(x - .3, -37, .6, .6);   // the aircraft lights on top
+};
+for (const [k, w] of Object.entries({ goldengate: 72, stpauls: 30, eye: 32, towerbridge: 42, bttower: 7, sacrecoeur: 52, arc: 20, notredame: 34, grandearche: 40 })) FAR[k].w = w;
 const CITIES = {
   nyc: { name: 'New York', back: [1, 1], b: [
     [0, 'grid', null, [[10, 30]]],
@@ -546,7 +571,7 @@ const CITIES = {
     [2, 'pairs', null, [[11, 18]]],
     [.5, 'cols', null, [[8, 26]]],
   ]},
-  sf: { name: 'San Francisco', back: [.6, .8], b: [
+  sf: { name: 'San Francisco', back: [.6, .8], far: [FAR.goldengate], b: [
     [0, 'grid', null, [[10, 22]]],
     [.5, 'ribbon', ['dome', 5], [[12, 75]]],                                     // Salesforce Tower
     [.5, 'pairs', null, [[10, 40]]],
@@ -1369,7 +1394,7 @@ function drawBuilding(g, b, cx, t) {
       g.restore();
     }
     g.save(); g.translate(cx, GY); g.scale(u, u);
-    b.lm.draw?.(g, { body, edge, win: a => winStyle(c, a), lit });
+    b.lm.draw?.(g, { body, edge, win: a => winStyle(c, a), lit, d: depthOf(b.lm.w * u) / u, sideCol: T.side, topCol: T.top });
     g.restore();
     tip = [cx, GY - b.lm.h * u];
   } else {
@@ -1938,7 +1963,9 @@ function registerCity(key, def) {
   CITIES[key] = def;
 }
 // A hand-drawn landmark, shaped like the LM entries; a spec refers to it as '@key'.
-for (const k of ['eiffel', 'tokyotower']) LM[k].flat = true;   // open lattices: no solid 3D side
+// No automatic 3D side for these: open lattices, the slim Space Needle (copies make it look boxy) and Big Ben, which
+// draws its own side (L.d) with the side clock face seen at an angle.
+for (const k of ['eiffel', 'tokyotower', 'needle', 'bigben']) LM[k].flat = true;
 function registerLandmark(key, def) {
   if (typeof key !== 'string' || !key || !def || !(def.w > 0) || !(def.h > 0) || typeof def.draw !== 'function')
     return console.error(`City Pulse: landmark "${key}" ignored: it needs w, h and draw(g, L).`);
@@ -2018,38 +2045,66 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       g.strokeStyle = `hsla(${b.ring.hue},100%,70%,${.18 * al * a})`; g.lineWidth = Math.max(2, u * .9); g.beginPath(); g.ellipse(cx, y, rx, ry, 0, from, to); g.stroke();
     }
   };
-  // The giant hologram koi: translucent, scanlined, swimming slowly between the towers; it glitches into offset slices
-  // on a bass hit. An original design.
-  const koiPath = (g, L, sw) => {                         // body along +x (head at +L/2), tail swishing by sw
-    g.beginPath(); g.moveTo(L * .5, 0);
-    g.bezierCurveTo(L * .42, -L * .16, L * .05, -L * .2, -L * .22, -L * .1);
-    g.quadraticCurveTo(-L * .34, -L * .04 + sw * L * .05, -L * .38, sw * L * .06);
-    g.lineTo(-L * .58, -L * .17 + sw * L * .14); g.quadraticCurveTo(-L * .5, sw * L * .08, -L * .58, L * .17 + sw * L * .14);
-    g.lineTo(-L * .38, sw * L * .06);
-    g.quadraticCurveTo(-L * .34, L * .04 + sw * L * .05, -L * .22, L * .1);
-    g.bezierCurveTo(L * .05, L * .2, L * .42, L * .16, L * .5, 0); g.closePath();
-  };
+  // The giant hologram koi: an original design, translucent and scanlined, holding its place among the towers (it moves
+  // with the pan and the tour) while it swims in place: its body ripples, its long tail flows, its fins paddle. It glitches
+  // into offset slices on a bass hit.
+  let koiAt = null;
   const drawKoi = (g, E) => {
-    if (E.widget) return;
-    const { W, GY, t, bassFlash } = E, L = Math.min(W * .2, GY * .5), x = W * (.5 + .34 * Math.sin(t / 26000)), y = GY * (.33 + .07 * Math.sin(t / 9000));
-    const dir = Math.cos(t / 26000) >= 0 ? 1 : -1, sw = Math.sin(t / 520), glitch = bassFlash > .6;
-    const pa = g.globalAlpha;
-    for (let sl = 0; sl < (glitch ? 4 : 1); sl++) {       // on a hit, draw it as offset horizontal slices
+    if (E.widget || !koiAt) return;
+    const { GY, t, bassFlash } = E, L = Math.min(E.W * .22, GY * .55), TAU = Math.PI * 2;
+    const x = E.toScreen(koiAt.cx) + Math.sin(t / 7000) * L * .08, y = GY * .32 + Math.sin(t / 3100) * GY * .025;
+    if (x < -L || x > E.W + L) return;
+    const w = t / 650, bend = (px) => Math.sin(px / L * 5 - w) * L * .035 * ((L * .45 - px) / L) ** 1.6;   // the ripple, growing toward the tail
+    const half = px => {                                  // a koi's profile: a rounded head, a full belly, a long taper to the tail
+      const p = Math.min(1, Math.max(0, (L * .5 - px) / (L * .82)));
+      const r = L * .135 * Math.sin(Math.PI * Math.min(.98, Math.pow(p, .62) * .92 + .04));
+      return p > .5 ? Math.max(L * .028, r) : p < .22 ? r * (.18 + .82 * Math.sin(p / .22 * Math.PI / 2) ** .8) : r;   // a tapered, rounded snout
+    };
+    const body = () => {                                  // the outline: along the back to the tail, back along the belly
+      g.beginPath();
+      for (let k = 0; k <= 60; k++) { const px = L * .5 - L * .82 * (k / 60) ** 1.4; g.lineTo(px, bend(px) - half(px)); }   // denser at the head
+      for (let k = 60; k >= 0; k--) { const px = L * .5 - L * .82 * (k / 60) ** 1.4; g.lineTo(px, bend(px) + half(px)); }
+      g.closePath();
+    };
+    const tx = -L * .32, ty = bend(tx), sw = Math.sin(w - 1.4);
+    const tail = () => {                                  // two long, flowing lobes with soft wavy edges
+      g.beginPath();
+      for (const s2 of [-1, 1]) {
+        g.moveTo(tx, ty);
+        g.bezierCurveTo(tx - L * .08, ty + s2 * L * .03 + sw * L * .03, tx - L * .18, ty + s2 * L * .12 + sw * L * .06, tx - L * .3, ty + s2 * L * .11 + sw * L * .09);
+        g.quadraticCurveTo(tx - L * .22, ty + s2 * L * .04 + sw * L * .06, tx - L * .27, ty + sw * L * .07);
+        g.quadraticCurveTo(tx - L * .14, ty + sw * L * .03, tx, ty);
+      }
+    };
+    const pa = g.globalAlpha, glitch = bassFlash > .6;
+    for (let sl = 0; sl < (glitch ? 4 : 1); sl++) {
       g.save();
-      if (glitch) { g.beginPath(); g.rect(0, y - L * .3 + sl * L * .15, W, L * .15); g.clip(); g.translate((E.hash(sl, Math.floor(t / 80), 5) - .5) * L * .12, 0); }
-      g.translate(x, y); g.scale(dir, 1); g.rotate(Math.sin(t / 3000) * .08);
-      koiPath(g, L, sw);
-      g.globalAlpha = pa * .16; g.fillStyle = '#5ef0ff'; g.fill();
-      g.globalAlpha = pa * .75; g.strokeStyle = 'rgba(120,245,255,.9)'; g.lineWidth = Math.max(1, L * .006); g.stroke();
-      g.save(); g.clip();                                 // scanlines and scale pattern inside the body
-      g.globalAlpha = pa * .35; g.strokeStyle = 'rgba(255,90,220,.9)'; g.lineWidth = 1; g.beginPath();
-      for (let k = -4; k <= 4; k++) { const sx = k * L * .07; g.moveTo(sx, -L * .2); g.quadraticCurveTo(sx + L * .04, 0, sx, L * .2); }
+      if (glitch) { g.beginPath(); g.rect(0, y - L * .35 + sl * L * .17, E.W, L * .17); g.clip(); g.translate((E.hash(sl, Math.floor(t / 80), 5) - .5) * L * .12, 0); }
+      g.translate(x, y); g.rotate(Math.sin(t / 5000) * .06);
+      g.globalAlpha = pa * .14; g.fillStyle = '#7ff4ff'; tail(); g.fill();   // the tail, fins, then the body over them
+      g.globalAlpha = pa * .6; g.strokeStyle = 'rgba(120,245,255,.9)'; g.lineWidth = Math.max(1, L * .004); tail(); g.stroke();
+      g.globalAlpha = pa * .35; g.lineWidth = Math.max(.6, L * .002); g.beginPath();   // rays in the tail
+      for (let k = -3; k <= 3; k++) { g.moveTo(tx, ty); g.quadraticCurveTo(tx - L * .13, ty + k * L * .025 + sw * L * .03, tx - L * .26, ty + k * L * .034 + sw * L * .08); }
       g.stroke();
-      g.fillStyle = 'rgba(255,255,255,.12)'; for (let ly = -L * .2; ly < L * .2; ly += 3) g.fillRect(-L * .6, ly, L * 1.2, 1);
+      const fin = (fx, fy, len, ang) => { g.beginPath(); g.moveTo(fx, fy); g.quadraticCurveTo(fx + Math.cos(ang - .5) * len, fy + Math.sin(ang - .5) * len, fx + Math.cos(ang) * len, fy + Math.sin(ang) * len); g.quadraticCurveTo(fx + Math.cos(ang + .3) * len * .6, fy + Math.sin(ang + .3) * len * .6, fx, fy); };
+      const pad = Math.sin(t / 380) * .35;
+      for (const s2 of [-1, 1]) { fin(L * .22, bend(L * .22) + s2 * half(L * .22) * .8, L * .14, s2 * (1.9 + pad) + Math.PI); g.globalAlpha = pa * .2; g.fillStyle = '#ff8ad8'; g.fill(); g.globalAlpha = pa * .55; g.stroke(); }   // pectoral fins
+      g.beginPath();                                    // the dorsal fin, along the back
+      for (let k = 0; k <= 10; k++) { const px = L * .14 - L * .34 * k / 10; g.lineTo(px, bend(px) - half(px) - L * .045 * Math.sin(k / 10 * Math.PI) * (1 + .2 * Math.sin(w + k))); }
+      g.globalAlpha = pa * .18; g.fillStyle = '#7ff4ff'; g.fill(); g.globalAlpha = pa * .5; g.stroke();
+      body(); g.globalAlpha = pa * .18; g.fillStyle = '#e6fdff'; g.fill(); g.globalAlpha = pa * .85; g.strokeStyle = 'rgba(140,250,255,1)'; g.lineWidth = Math.max(1, L * .005); g.stroke();
+      g.save(); body(); g.clip();                      // inside the body: kohaku patches, scales and scanlines
+      g.globalAlpha = pa * .4; g.fillStyle = '#ff5a8a';
+      for (const [px, py, rx, ry] of [[L * .3, -L * .05, L * .1, L * .07], [L * .05, -L * .03, L * .12, L * .08], [-L * .18, L * .01, L * .07, L * .05]]) { g.beginPath(); g.ellipse(px, bend(px) + py, rx, ry, .2, 0, TAU); g.fill(); }
+      g.globalAlpha = pa * .25; g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = 1; g.beginPath();
+      for (let px = L * .32; px > -L * .3; px -= L * .045) for (let py = -L * .12; py < L * .13; py += L * .045) { const yy = bend(px) + py + (Math.round(px / (L * .045)) % 2 ? L * .022 : 0); g.moveTo(px + L * .02, yy - L * .02); g.arc(px, yy, L * .022, -.8, .8); }
+      g.stroke();
+      g.globalAlpha = pa * .12; g.fillStyle = '#ffffff'; for (let ly = -L * .16; ly < L * .16; ly += 3) g.fillRect(-L * .4, ly, L * .95, 1);
       g.restore();
-      g.globalAlpha = pa * .6; g.fillStyle = '#ff70e0';   // fins and an eye
-      for (const s2 of [-1, 1]) { g.beginPath(); g.ellipse(L * .12, s2 * L * .16, L * .09, L * .035, s2 * .7 + sw * .2, 0, Math.PI * 2); g.fill(); }
-      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(L * .38, -L * .05, Math.max(1, L * .012), 0, Math.PI * 2); g.fill();
+      g.globalAlpha = pa * .9; g.fillStyle = '#ffffff'; g.beginPath(); g.arc(L * .4, bend(L * .4) - L * .04, Math.max(1.2, L * .012), 0, TAU); g.fill();   // eye
+      g.strokeStyle = 'rgba(160,250,255,1)'; g.lineWidth = Math.max(.8, L * .003); g.beginPath();   // barbels
+      for (const s2 of [-1, 1]) { const mx = L * .49, my = bend(mx) + s2 * L * .02; g.moveTo(mx, my); g.quadraticCurveTo(mx + L * .05, my + s2 * L * .03, mx + L * .03 + Math.sin(w * 1.3) * L * .01, my + s2 * L * .08); }
+      g.stroke();
       g.restore();
     }
     g.globalAlpha = pa;
@@ -2117,6 +2172,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     },
     afterLayout(list, r) {                               // skybridges between neighbouring towers
       flyers = []; drones = [];
+      koiAt = list[Math.floor(list.length * .55)] || null;   // the koi keeps its place by this tower
       for (let i = 0; i + 1 < list.length; i++) {
         const a = list[i], c = list[i + 1];
         if (!a.lm && !c.lm && r() < .35) a.bridge = { c, y: Math.min(a.hU, c.hU) * (.35 + .4 * r()) };

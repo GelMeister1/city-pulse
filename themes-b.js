@@ -93,10 +93,28 @@
       kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'pairs'], roofs: [null], tall: .18, shrink: .84, w0: 7, gaps: [.6, 2] },
       minF: .2, maxF: .62,
       sky: [[0, '#06061f'], [.55, '#151245'], [.85, '#2e1846'], [1, '#4a2238']],
-      drawSky(g, { W, H, GY, S, bassFlash }) {
-        const m = Math.min(W, H);
+      drawSky(g, E) {
+        const { W, H, GY, S, bassFlash } = E, m = Math.min(W, H), L0 = E.left, LW = E.right - E.left;
+        // Mount Fuji, broad and snow-capped, with layered ridges in front fading into the evening haze.
+        const fx = L0 + LW * .32, fw = Math.min(LW * .9, GY * 1.9), fh = GY * .64, fy = GY;
+        const fuji = () => { g.beginPath(); g.moveTo(fx - fw / 2, fy); g.quadraticCurveTo(fx - fw * .17, fy - fh * .55, fx - fw * .045, fy - fh); g.lineTo(fx + fw * .045, fy - fh); g.quadraticCurveTo(fx + fw * .17, fy - fh * .55, fx + fw / 2, fy); g.closePath(); };
+        const mg = g.createLinearGradient(0, fy - fh, 0, fy); mg.addColorStop(0, '#2c2758'); mg.addColorStop(1, '#1a1636');
+        fuji(); g.fillStyle = mg; g.fill();
+        g.save(); fuji(); g.clip();
+        const sn = g.createLinearGradient(fx - fw * .2, 0, fx + fw * .2, 0); sn.addColorStop(0, '#b9bde3'); sn.addColorStop(1, '#6d72a8');   // moonlit snow, not daylight white
+        g.fillStyle = sn; g.beginPath(); g.moveTo(fx - fw / 2, fy - fh * .62);   // the snow cap, its lower edge in ragged streaks
+        for (let k = 0; k <= 24; k++) { const x = fx - fw * .3 + fw * .6 * k / 24, d = E.hash(k, 3, 91); g.lineTo(x, fy - fh * (.6 - .16 * d * (k % 2 ? 1 : .4))); }
+        g.lineTo(fx + fw / 2, fy - fh * .62); g.lineTo(fx + fw / 2, fy - fh * 1.1); g.lineTo(fx - fw / 2, fy - fh * 1.1); g.closePath(); g.fill();
+        g.fillStyle = 'rgba(10,8,40,.28)'; g.fillRect(fx, fy - fh, fw / 2, fh);   // the shaded side, away from the moon
+        g.restore();
+        for (const [base, amp, col, ph] of [[.8, .2, 'rgba(34,24,66,.95)', 1.3], [.9, .14, 'rgba(26,18,52,.97)', 4.1]]) {   // ridges in front
+          g.fillStyle = col; g.beginPath(); g.moveTo(L0, GY);
+          for (let x = 0; x <= LW; x += LW / 60) g.lineTo(L0 + x, GY * base - GY * amp * (.5 + .3 * Math.sin(x / LW * 9 + ph) + .2 * Math.sin(x / LW * 23 + ph * 2)));
+          g.lineTo(L0 + LW, GY); g.fill();
+          g.fillStyle = 'rgba(255,150,120,.07)'; g.fillRect(L0, GY * base - GY * amp * .2, LW, GY * .03);   // a band of mist
+        }
         if (S.skyBody) {
-          const r = m * .075, x = W * .68, y = GY * .22, pa = g.globalAlpha;
+          const r = m * .075, x = L0 + LW * .68, y = GY * .22, pa = g.globalAlpha;
           g.globalAlpha = pa * (.3 + .15 * bassFlash); g.drawImage(sprite('255,215,160'), x - r * 3.5, y - r * 3.5, r * 7, r * 7); g.globalAlpha = pa;
           g.fillStyle = '#f7e6c2'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
           g.fillStyle = 'rgba(205,170,125,.3)'; g.beginPath();

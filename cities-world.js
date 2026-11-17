@@ -246,7 +246,7 @@
   ]});
 
   // Oriental Pearl Tower: big and small spheres strung on three columns, a splayed tripod, then the spire.
-  lm('pearl', { w: 18, h: 79, draw(g, L) {
+  lm('pearl', { flat: true, w: 18, h: 79, draw(g, L) {
     g.fillStyle = g.strokeStyle = L.body;
     for (const x of [-1.5, 0, 1.5]) g.fillRect(x - .45, -46, .9, 46);
     g.fillRect(-.8, -59, 1.6, 14);
@@ -350,7 +350,7 @@
   // University of Tampa's Plant Hall (the old Tampa Bay Hotel): a long Moorish hall, horseshoe-arched windows, and slim
   // minarets crowned with onion domes and silver crescents. Palms out front.
   const MINARETS = [[-12, 15], [-7.5, 18.5], [-2.5, 22], [2.5, 20], [7.5, 17], [12, 14]];
-  lm('planthall', { w: 30, h: 25, draw(g, L) {
+  lm('planthall', { flat: true, w: 30, h: 25, draw(g, L) {
     g.fillStyle = L.body; g.fillRect(-14, -8, 28, 8); g.fillRect(-15, -8.6, 30, .6);
     for (const [x, h] of MINARETS) {
       g.fillRect(x - .9, -h + 3, 1.8, h - 11);            // the shaft
@@ -391,13 +391,16 @@
     }
     rows(g, L, -5.3, 5.3, .8, 4.6, { dx: 1.3, ww: .7, dy: 1.6, wh: .9 });
   } });
-  // 100 North Tampa: a tower with a setback, crowned by a stepped pyramid of light cubes that put on a show. Beat chase:
+  // 100 North Tampa (the old Regions Building): a granite-and-pewter-glass tower with setbacks at the 38th and 40th floors,
+  // crowned by a stepped pyramid of light cubes that put on a show. Beat chase:
   // rows light from the bottom up as the music gets louder, and a bright row sweeps up through them in time.
   const CUBES = [7, 5, 3, 1], CS = 1.25;               // cubes per row, bottom up, and their size
   lm('hundrednorth', { w: 11, h: 45, draw(g, L) {
-    g.fillStyle = L.body; g.fillRect(-5.5, -30, 11, 30); g.fillRect(-4.6, -35.5, 9.2, 5.6);
+    g.fillStyle = L.body; g.fillRect(-5.5, -30, 11, 30); g.fillRect(-4.9, -33.1, 9.8, 3.2); g.fillRect(-4.4, -35.5, 8.8, 2.5);
+    g.fillRect(-5.7, -30.4, 11.4, .5); g.fillRect(-5.1, -33.4, 10.2, .4);   // granite cornices at the setbacks
     rows(g, L, -4.8, 4.8, 1.2, 29.5, { dx: 1.2, ww: .45, dy: 1.8, wh: 1.1 });
-    rows(g, L, -4, 4, 31, 35, { dx: 1.2, ww: .45, dy: 1.8, wh: 1.1 });
+    rows(g, L, -4.2, 4.2, 30.8, 33, { dx: 1.2, ww: .45, dy: 1.8, wh: 1.1 });
+    rows(g, L, -3.6, 3.6, 33.6, 35.4, { dx: 1.2, ww: .45, dy: 1.8, wh: 1.1 });
     const level = L.lit(36), lit = Math.round(level * CUBES.length * 1.3), sweep = Math.floor(performance.now() / 260) % (CUBES.length + 2);
     CUBES.forEach((n, row) => {
       const y = -35.5 - (row + 1) * CS, on = row < lit, hot = row === sweep;
@@ -409,6 +412,14 @@
       }
     });
   } });
+  // Bank of America Plaza: a 42-storey dark glass tower with notched corners and a stepped, lit top.
+  lm('bofaplaza', { w: 12, h: 43, draw(g, L) {
+    g.fillStyle = L.body; g.fillRect(-6, -40, 12, 40); g.fillRect(-5.4, -41.6, 10.8, 1.7); g.fillRect(-4, -43, 8, 1.5);
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(-6, -40, .9, 40); g.fillRect(5.1, -40, .9, 40);   // the notched corners
+    rows(g, L, -4.6, 4.6, 1.2, 39.5, { dx: 1.05, ww: .55, dy: 1.6, wh: .75 });
+    for (const x of [-5.6, 5.6]) for (let y = 2; y < 39; y += 3.2) { g.fillStyle = L.win(L.lit(y) * .6); g.fillRect(x - .15, -y - 1.6, .3, 1.6); }   // slim lights down the notches
+    g.fillStyle = L.win(Math.max(L.lit(41), .3)); g.fillRect(-5.4, -40.15, 10.8, .3); g.fillRect(-4, -41.75, 8, .3);   // lit bands at the steps
+  } });
   city('tampa', { name: 'Tampa', back: [.6, .9], far: [skyway, farTowers([[-8, 5, 22], [-2, 6, 28], [5, 5, 18]])], b: [
     [0, 'wide', null, [[12, 14]]],
     [.5, '@planthall'],                                                          // Plant Hall, University of Tampa
@@ -416,7 +427,7 @@
     [.5, '@sykes'],                                                              // Sykes Building
     [.5, 'ribbon', ['antenna2', 4], [[12, 37]]],                                 // One Tampa City Center
     [.5, '@hundrednorth'],                                                       // 100 North Tampa
-    [.5, 'grid', ['ziggurat', 4], [[11, 34], [8, 6]]],                           // Bank of America Plaza
+    [.5, '@bofaplaza'],                                                          // Bank of America Plaza
     [.5, '@beercan'],                                                            // Rivergate Tower ("the Beer Can")
     [.5, 'slim', null, [[9, 28]]],
     [.5, 'pairs', ['pyramid', 3], [[10, 20]]],
