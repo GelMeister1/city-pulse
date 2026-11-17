@@ -8,6 +8,18 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 | --- | --- |
 | ![Cyberpunk city with neon signs, hologram billboards and rain](docs/cyberpunk.png) | ![Synthwave city with a striped sunset and neon grid](docs/synthwave.png) |
 
+**Beat flash:** buildings light up on their part of the beat and go dark in between.
+
+![Chicago skyline with some buildings lit and others dark on the beat](docs/beat.png)
+
+| Shanghai | Noir City in the rain |
+| --- | --- |
+| ![Shanghai skyline with the Pearl Tower and lit skyscrapers](docs/shanghai.png) | ![Noir City in grey rain with muted colored windows](docs/noir.png) |
+
+| Abyssal City | Aero |
+| --- | --- |
+| ![Underwater city with glass domes, glowing jellyfish and fish](docs/abyssal.png) | ![Bright daytime city of white glass towers, blue sky and bubbles](docs/aero.png) |
+
 ## Features
 
 - **Listens to whatever your PC is playing.** On Windows, system audio is picked up automatically. On a Mac, see [Mac](#mac-preview).
