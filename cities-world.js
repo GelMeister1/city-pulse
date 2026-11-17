@@ -144,7 +144,7 @@
   } });
   // Harbour Bridge: steel through-arch with its truss, the deck hung below the crown, granite pylons at each end.
   const HB_A = 27, HB_D = 5.4, hbTop = x => 6.6 + 8.6 * (1 - (x / HB_A) ** 2), hbBot = x => 13 * (1 - (x / HB_A) ** 2);
-  lm('harbourbridge', { w: 72, h: 17, draw(g, L) {
+  lm('harbourbridge', { flat: true, w: 72, h: 17, draw(g, L) {
     g.strokeStyle = g.fillStyle = L.body; g.lineWidth = .75; g.beginPath();
     for (const f of [hbTop, hbBot]) { g.moveTo(-HB_A, -f(-HB_A)); for (let x = -HB_A + 1; x <= HB_A; x++) g.lineTo(x, -f(x)); }
     g.stroke();
@@ -391,13 +391,31 @@
     }
     rows(g, L, -5.3, 5.3, .8, 4.6, { dx: 1.3, ww: .7, dy: 1.6, wh: .9 });
   } });
+  // 100 North Tampa: a tower with a setback, crowned by a stepped pyramid of light cubes that put on a show. Beat chase:
+  // rows light from the bottom up as the music gets louder, and a bright row sweeps up through them in time.
+  const CUBES = [7, 5, 3, 1], CS = 1.25;               // cubes per row, bottom up, and their size
+  lm('hundrednorth', { w: 11, h: 45, draw(g, L) {
+    g.fillStyle = L.body; g.fillRect(-5.5, -30, 11, 30); g.fillRect(-4.6, -35.5, 9.2, 5.6);
+    rows(g, L, -4.8, 4.8, 1.2, 29.5, { dx: 1.2, ww: .45, dy: 1.8, wh: 1.1 });
+    rows(g, L, -4, 4, 31, 35, { dx: 1.2, ww: .45, dy: 1.8, wh: 1.1 });
+    const level = L.lit(36), lit = Math.round(level * CUBES.length * 1.3), sweep = Math.floor(performance.now() / 260) % (CUBES.length + 2);
+    CUBES.forEach((n, row) => {
+      const y = -35.5 - (row + 1) * CS, on = row < lit, hot = row === sweep;
+      for (let k = 0; k < n; k++) {
+        const x = -n * CS / 2 + k * CS, a = hot ? 1 : on ? .45 + .55 * level : .08;
+        g.fillStyle = L.body; g.fillRect(x, y, CS, CS);
+        g.fillStyle = L.win(a); g.fillRect(x + .12, y + .12, CS - .24, CS - .24);
+        g.fillStyle = L.win(a * .6); g.beginPath(); g.moveTo(x + .12, y + .12); g.lineTo(x + .42, y - .18); g.lineTo(x + CS + .18, y - .18); g.lineTo(x + CS - .12, y + .12); g.fill();   // its top
+      }
+    });
+  } });
   city('tampa', { name: 'Tampa', back: [.6, .9], far: [skyway, farTowers([[-8, 5, 22], [-2, 6, 28], [5, 5, 18]])], b: [
     [0, 'wide', null, [[12, 14]]],
     [.5, '@planthall'],                                                          // Plant Hall, University of Tampa
     [2, 'grid', null, [[10, 22]]],
     [.5, '@sykes'],                                                              // Sykes Building
     [.5, 'ribbon', ['antenna2', 4], [[12, 37]]],                                 // One Tampa City Center
-    [.5, 'cols', ['pyramid', 4], [[11, 30], [9, 9]]],                            // 100 North Tampa
+    [.5, '@hundrednorth'],                                                       // 100 North Tampa
     [.5, 'grid', ['ziggurat', 4], [[11, 34], [8, 6]]],                           // Bank of America Plaza
     [.5, '@beercan'],                                                            // Rivergate Tower ("the Beer Can")
     [.5, 'slim', null, [[9, 28]]],
@@ -444,9 +462,18 @@
     g.fillStyle = L.body; g.fillRect(-6, -35, 12, 35);
     g.beginPath(); g.moveTo(-5.4, -35); g.lineTo(-5.4, -38); g.quadraticCurveTo(-5.2, -43, 0, -43); g.quadraticCurveTo(5.2, -43, 5.4, -38); g.lineTo(5.4, -35); g.fill();
     rows(g, L, -5.3, 5.3, 1.2, 34.5, { dx: 1.1, ww: .5, dy: 1.6, wh: .8 });
-    const c = glow(L, 39, .3); g.strokeStyle = c; g.lineWidth = .22; g.beginPath();   // the crown's ribs and bands
-    for (const x of [-3.6, -1.8, 0, 1.8, 3.6]) { g.moveTo(x, -35.2); g.lineTo(x, -38 - 4.6 * Math.sqrt(Math.max(0, 1 - (x / 5.6) ** 2))); }
-    for (const y of [36.4, 38.2, 40]) { const hw = y < 38 ? 5.2 : 5.2 * Math.sqrt(Math.max(0, 1 - ((y - 38) / 5.2) ** 2)); g.moveTo(-hw, -y); g.lineTo(hw, -y); }
+    // The crown: ribs that curve over the dome like meridians, bands that wrap round it, and a sheen from lit left to
+    // shaded right, so it reads as a rounded, banded drum and dome rather than a flat grille.
+    const sh = g.createLinearGradient(-5.4, 0, 5.4, 0); sh.addColorStop(0, 'rgba(255,255,255,.16)'); sh.addColorStop(.55, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(0,0,0,.35)');
+    g.fillStyle = sh; g.beginPath(); g.moveTo(-5.4, -35); g.lineTo(-5.4, -38); g.quadraticCurveTo(-5.2, -43, 0, -43); g.quadraticCurveTo(5.2, -43, 5.4, -38); g.lineTo(5.4, -35); g.fill();
+    if (L.side) return;
+    const c = glow(L, 39, .3); g.strokeStyle = c; g.lineWidth = .22; g.beginPath();
+    for (const k of [-.7, -.35, .35, .7]) {                  // meridians: straight up the drum, then curving over to the top
+      const x = 5.4 * k; g.moveTo(x, -35.2); g.lineTo(x, -38);
+      g.ellipse(0, -38, Math.abs(x), 5, 0, k < 0 ? Math.PI : 0, Math.PI * 1.5, k > 0);
+    }
+    g.moveTo(0, -35.2); g.lineTo(0, -43);
+    for (const [y, hw, sag] of [[36.4, 5.4, .45], [38.4, 5.2, .4], [40.3, 4.2, .3]]) { g.moveTo(-hw, -y); g.ellipse(0, -y, hw, sag, 0, Math.PI, 0, true); }   // bands, sagging toward you
     g.stroke();
   } });
   city('charlotte', { name: 'Charlotte', back: [.7, .9], far: [stadium, farTowers([[-9, 5, 26], [-3, 6, 32], [4, 5, 22], [10, 4, 18]])], b: [

@@ -1267,23 +1267,50 @@ function flick(id, f, c, t) {
 }
 
 // ---------- draw ----------
-function roof(g, [type, hU], cx, y, tw) {             // returns the tip, for the blinking light
-  const h = hU * unit, u = unit;
-  g.beginPath();
-  if (type === 'antenna') g.rect(cx - u * .25, y - h, u * .5, h);
-  else if (type === 'antenna2') { g.rect(cx - tw / 4 - u * .25, y - h, u * .5, h); g.rect(cx + tw / 4 - u * .25, y - h * .8, u * .5, h * .8); g.fill(); return [cx - tw / 4, y - h]; }
-  else if (type === 'ziggurat') { for (let i = 0; i < 3; i++) g.rect(cx - tw * (.4 - i * .12), y - h * (i + 1) / 3, tw * (.8 - i * .24), h / 3 + .5); }   // Art Deco stepped crown
-  else if (type === 'deco') {                           // Art Deco arched crown with a needle
+// A roof on a top tier tw wide whose front top edge is at y (fill style = the building colour). Returns the tip, for the
+// blinking light. With 3D detail, pyramids, spires and crowns are real pyramids: the apex stands over the middle of the
+// block's 3D top, with a lit front face and a shaded right face; stepped crowns are little blocks with sides and tops.
+function roof(g, [type, hU], cx, y, tw, T) {
+  const h = hU * unit, u = unit, body = g.fillStyle, D = depthOf(tw);
+  // A pyramid whose front base edge is base wide, centred on bx at by, with depth d (0 = flat) and height th above its top face.
+  const pyr = (bx, by, base, th, d) => {
+    const x0 = bx - base / 2, x1 = bx + base / 2, ax = bx + d / 2, ay = by - d / 4 - th;
+    g.fillStyle = body; g.beginPath(); g.moveTo(x0, by); g.lineTo(x1, by); g.lineTo(ax, ay); g.closePath(); g.fill();
+    if (d) { g.fillStyle = T.side; g.beginPath(); g.moveTo(x1, by); g.lineTo(x1 + d, by - d / 2); g.lineTo(ax, ay); g.closePath(); g.fill(); }
+    return [ax, ay];
+  };
+  // A small block standing on the middle of the top face: front w x hh with its own depth, sides shaded like the tower.
+  const block = (bw, hh, base) => {
+    const d = D * bw / tw, sx = cx - bw / 2 + (D - d) / 2, sy = base - (D - d) / 4 - hh;
+    if (d) {
+      g.fillStyle = T.side; g.beginPath(); g.moveTo(sx + bw, sy + hh); g.lineTo(sx + bw + d, sy + hh - d / 2); g.lineTo(sx + bw + d, sy - d / 2); g.lineTo(sx + bw, sy); g.fill();
+      g.fillStyle = T.top; g.beginPath(); g.moveTo(sx, sy); g.lineTo(sx + d, sy - d / 2); g.lineTo(sx + bw + d, sy - d / 2); g.lineTo(sx + bw, sy); g.fill();
+    }
+    g.fillStyle = body; g.fillRect(sx, sy, bw, hh + .5);
+    return sy + (D - d) / 4;                            // the next step stands on this one's top
+  };
+  if (type === 'pyramid') return pyr(cx, y, tw, h, D);
+  if (type === 'spire' || type === 'crown') {          // a slim pyramid on the middle of the roof (a crown adds a needle)
+    const base = type === 'spire' ? Math.min(tw * .3, 3 * u) : tw, d = D * base / tw, th = type === 'crown' ? h * .5 : h;
+    const tip = pyr(cx + (D - d) / 2, y - (D - d) / 4, base, th, d);
+    if (type !== 'crown') return tip;
+    g.fillStyle = body; g.beginPath(); g.moveTo(tip[0] - u * .4, tip[1] + th * .2); g.lineTo(tip[0], tip[1] - h * .5); g.lineTo(tip[0] + u * .4, tip[1] + th * .2); g.fill();
+    return [tip[0], tip[1] - h * .5];
+  }
+  if (type === 'ziggurat') {                            // Art Deco stepped crown
+    let base = y;
+    for (let i = 0; i < 3; i++) base = block(tw * (.8 - i * .24), h / 3, base);
+    return [cx + D / 2, base - D / 4];
+  }
+  g.fillStyle = body; g.beginPath();
+  if (type === 'antenna') g.rect(cx + D / 2 - u * .25, y - D / 4 - h, u * .5, h + D / 4);
+  else if (type === 'antenna2') { g.rect(cx - tw / 4 + D / 2 - u * .25, y - D / 4 - h, u * .5, h + D / 4); g.rect(cx + tw / 4 + D / 2 - u * .25, y - D / 4 - h * .8, u * .5, h * .8 + D / 4); g.fill(); return [cx - tw / 4 + D / 2, y - D / 4 - h]; }
+  else if (type === 'deco') {                         // Art Deco arched crown with a needle
     for (let i = 0; i < 3; i++) g.ellipse(cx, y - h * i * .18, tw * (.4 - i * .1), h * .22, 0, Math.PI, 2 * Math.PI);
     g.moveTo(cx - u * .3, y - h * .5); g.lineTo(cx, y - h); g.lineTo(cx + u * .3, y - h * .5);
   }
-  else {
-    const base = type === 'spire' ? Math.min(tw * .3, 3 * u) : tw, th = type === 'crown' ? h * .5 : h;
-    g.moveTo(cx - base / 2, y); g.lineTo(cx, y - th); g.lineTo(cx + base / 2, y);
-    if (type === 'crown') { g.moveTo(cx - u * .4, y - th * .8); g.lineTo(cx, y - h); g.lineTo(cx + u * .4, y - th * .8); }
-  }
   g.fill();
-  return [cx, y - h];
+  return type === 'antenna' ? [cx + D / 2, y - D / 4 - h] : [cx, y - h];
 }
 
 // Where a dome sits on a top tier tw wide whose front top edge is at y. With 3D detail it covers the whole roof, from the
@@ -1330,8 +1357,19 @@ function drawBuilding(g, b, cx, t) {
   const edge = S.detail ? '#2c2e3a' : null;
   let tip;
   if (b.lm) {
+    const lit = y => alphaFor(b, Math.floor(y / b.lm.h * b.floors)), lh = b.lm.h * u;
+    // 3D: with 3D detail, a solid landmark's own shape is drawn a few times stepping back and up to the right, in the side
+    // colour with its lights at half strength: a solid side and top whose windows continue round, like the buildings.
+    // Its base stays on the ground (each copy is stretched up, not lifted). Open structures (lm.flat) stay as drawn.
+    const d = b.lm.flat ? 0 : depthOf(b.lm.w * u), n = d ? Math.min(4, Math.ceil(d / 2.5)) : 0;   // steps of ~3 px: smooth, and cheap
+    for (let k = n; k >= 1; k--) {
+      const o = d * k / n;
+      g.save(); g.translate(cx + o, GY); g.scale(u, u * (1 + o / 2 / lh));
+      b.lm.draw?.(g, { body: T.side, edge: null, side: true, win: a => winStyle(c, a * .5), lit });
+      g.restore();
+    }
     g.save(); g.translate(cx, GY); g.scale(u, u);
-    b.lm.draw?.(g, { body, edge, win: a => winStyle(c, a), lit: y => alphaFor(b, Math.floor(y / b.lm.h * b.floors)) });
+    b.lm.draw?.(g, { body, edge, win: a => winStyle(c, a), lit });
     g.restore();
     tip = [cx, GY - b.lm.h * u];
   } else {
@@ -1397,7 +1435,7 @@ function drawBuilding(g, b, cx, t) {
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
-    tip = !b.roof ? [cx, y] : b.roof[0] === 'dome' ? dome(g, T, b.roof[1], cx, y + .5, top.w * u, b) : (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u));
+    tip = !b.roof ? [cx, y] : b.roof[0] === 'dome' ? dome(g, T, b.roof[1], cx, y + .5, top.w * u, b) : (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u, T));
   }
   if (T.drawExtras) T.drawExtras(g, b, cx, tip, E);
   if (S.search && b.search && T.searchlights) {
@@ -1900,15 +1938,18 @@ function registerCity(key, def) {
   CITIES[key] = def;
 }
 // A hand-drawn landmark, shaped like the LM entries; a spec refers to it as '@key'.
+for (const k of ['eiffel', 'tokyotower']) LM[k].flat = true;   // open lattices: no solid 3D side
 function registerLandmark(key, def) {
   if (typeof key !== 'string' || !key || !def || !(def.w > 0) || !(def.h > 0) || typeof def.draw !== 'function')
     return console.error(`City Pulse: landmark "${key}" ignored: it needs w, h and draw(g, L).`);
+  if (key in LM) return console.error(`City Pulse: landmark "${key}" ignored: that name is already taken.`);
   LM[key] = { ...def };
   guard(`landmark "${key}"`, LM[key], 'draw');
 }
 window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt, domeBase, collar, depthOf, FAR });
 
-// Cyberpunk: neon signs, hologram billboards, skybridges and flying cars in a rainy magenta haze.
+// Cyberpunk: neon signs, hologram billboards, rings of projected light round the towers, a giant hologram koi swimming
+// between them, ad drones, skybridges and flying cars in a rainy magenta haze.
 {
   // A neon sign with made-up glyphs, brightening with the building's music.
   const drawSign = (g, b, s, cx, E) => {
@@ -1927,20 +1968,115 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       for (let k = 0; k < 6; k++) if (E.hash(s.seed, i, k) < .45) g.fillRect(gx + (k % 2) * u * .45, gy + Math.floor(k / 2) * u * .3, u * .45, u * .18);
     }
   };
-  // A big hologram billboard that shows a live equalizer.
+  // A hologram billboard: a live equalizer, spinning rings, an oscilloscope wave or scrolling glyphs.
   const drawHolo = (g, b, cx, E) => {
-    const u = E.unit, w = b.wpx * .8, h = b.holo.h * u, x = cx - w / 2, y = E.GY - b.hU * u * b.holo.fy;
+    const u = E.unit, w = b.wpx * .8, h = b.holo.h * u, x = cx - w / 2, y = E.GY - b.hU * u * b.holo.fy, t = E.t;
     if (Math.random() < .02) return;                     // the occasional dropout flicker
     const gr = g.createLinearGradient(x, y, x + w, y + h);
     gr.addColorStop(0, 'rgba(60,230,255,.22)'); gr.addColorStop(1, 'rgba(255,60,200,.22)');
     g.fillStyle = gr; g.fillRect(x, y, w, h);
-    const sp = E.spectrum, n = sp.length, bw = w / n;
-    for (let i = 0; i < n; i++) {
-      const bh = h * .85 * Math.min(1, sp[i] * 1.1);
-      g.fillStyle = `hsla(${190 + i * 11},100%,65%,.75)`; g.fillRect(x + i * bw + bw * .15, y + h - bh, bw * .7, bh);
+    const sp = E.spectrum, n = sp.length, kind = b.holo.kind;
+    if (kind === 'rings') {                               // three rings spinning at different speeds, swelling with the bass
+      const r = Math.min(w, h) * (.32 + .1 * sp[0]);
+      for (let k = 0; k < 3; k++) {
+        g.strokeStyle = `hsla(${k ? 300 : 185},100%,68%,.8)`; g.lineWidth = Math.max(1, u * .2); g.beginPath();
+        g.ellipse(x + w / 2, y + h / 2, r * (1 - k * .22), r * (1 - k * .22) * Math.abs(Math.cos(t / (900 + k * 400))) + 1, k * .9 + t / 3000, 0, Math.PI * 2); g.stroke();
+      }
+      g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.arc(x + w / 2, y + h / 2, Math.max(1, u * .4), 0, Math.PI * 2); g.fill();
+    } else if (kind === 'wave') {                         // an oscilloscope trace drawn from the spectrum
+      g.strokeStyle = 'rgba(120,255,220,.9)'; g.lineWidth = Math.max(1, u * .22); g.beginPath();
+      for (let i = 0; i <= 40; i++) { const p = i / 40, a = sp[Math.min(n - 1, Math.floor(p * n))]; const yy = y + h / 2 + Math.sin(p * 18 + t / 140) * h * .4 * (.2 + a); i ? g.lineTo(x + p * w, yy) : g.moveTo(x + p * w, yy); }
+      g.stroke();
+    } else if (kind === 'glyph') {                        // rows of made-up glyphs scrolling past
+      g.fillStyle = 'rgba(255,120,230,.85)';
+      const gw = u * 1.1, rows = Math.max(2, Math.floor(h / (u * 1.6))), off = (t / 40) % gw;
+      for (let rI = 0; rI < rows; rI++) for (let gx = x - off + (rI % 2 ? gw / 2 : 0); gx < x + w - gw * .6; gx += gw) {
+        if (gx < x) continue;
+        const id = Math.floor((gx + t / 40) / gw) + rI * 97;
+        for (let k = 0; k < 4; k++) if (E.hash(id, b.id, k) < .5) g.fillRect(gx + (k % 2) * gw * .35, y + u * .4 + rI * u * 1.6 + Math.floor(k / 2) * u * .45, gw * .35, u * .25);
+      }
+    } else {
+      const bw = w / n;
+      for (let i = 0; i < n; i++) {
+        const bh = h * .85 * Math.min(1, sp[i] * 1.1);
+        g.fillStyle = `hsla(${190 + i * 11},100%,65%,.75)`; g.fillRect(x + i * bw + bw * .15, y + h - bh, bw * .7, bh);
+      }
     }
     g.fillStyle = 'rgba(255,255,255,.06)'; for (let sy = y; sy < y + h; sy += 3) g.fillRect(x, sy, w, 1);
     g.strokeStyle = 'rgba(120,240,255,.6)'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  };
+  // A ring of projected light circling a tower near its top: dim where it passes behind, bright in front, turning, and
+  // brighter with the building's music.
+  const drawRing = (g, b, cx, E) => {
+    const u = E.unit, y = E.GY - b.hU * u * b.ring.fy, rx = b.wpx * .82, ry = Math.max(u * .8, b.wpx * .13), a = .45 + .55 * Math.max(b.level, b.flash), ph = E.t / 1400 * b.ring.dir;
+    for (const [from, to, al] of [[Math.PI, Math.PI * 2, .3], [0, Math.PI, 1]]) {
+      g.strokeStyle = `hsla(${b.ring.hue},100%,65%,${al * a})`; g.lineWidth = Math.max(1, u * .3);
+      for (let k = 0; k < 10; k++) {                    // dashes, so you can see it turn
+        const a0 = from + ((k / 10 + ph) % 1 + 1) % 1 * (to - from), a1 = Math.min(to, a0 + (to - from) * .06);
+        g.beginPath(); g.ellipse(cx, y, rx, ry, 0, a0, a1); g.stroke();
+      }
+      g.strokeStyle = `hsla(${b.ring.hue},100%,70%,${.18 * al * a})`; g.lineWidth = Math.max(2, u * .9); g.beginPath(); g.ellipse(cx, y, rx, ry, 0, from, to); g.stroke();
+    }
+  };
+  // The giant hologram koi: translucent, scanlined, swimming slowly between the towers; it glitches into offset slices
+  // on a bass hit. An original design.
+  const koiPath = (g, L, sw) => {                         // body along +x (head at +L/2), tail swishing by sw
+    g.beginPath(); g.moveTo(L * .5, 0);
+    g.bezierCurveTo(L * .42, -L * .16, L * .05, -L * .2, -L * .22, -L * .1);
+    g.quadraticCurveTo(-L * .34, -L * .04 + sw * L * .05, -L * .38, sw * L * .06);
+    g.lineTo(-L * .58, -L * .17 + sw * L * .14); g.quadraticCurveTo(-L * .5, sw * L * .08, -L * .58, L * .17 + sw * L * .14);
+    g.lineTo(-L * .38, sw * L * .06);
+    g.quadraticCurveTo(-L * .34, L * .04 + sw * L * .05, -L * .22, L * .1);
+    g.bezierCurveTo(L * .05, L * .2, L * .42, L * .16, L * .5, 0); g.closePath();
+  };
+  const drawKoi = (g, E) => {
+    if (E.widget) return;
+    const { W, GY, t, bassFlash } = E, L = Math.min(W * .2, GY * .5), x = W * (.5 + .34 * Math.sin(t / 26000)), y = GY * (.33 + .07 * Math.sin(t / 9000));
+    const dir = Math.cos(t / 26000) >= 0 ? 1 : -1, sw = Math.sin(t / 520), glitch = bassFlash > .6;
+    const pa = g.globalAlpha;
+    for (let sl = 0; sl < (glitch ? 4 : 1); sl++) {       // on a hit, draw it as offset horizontal slices
+      g.save();
+      if (glitch) { g.beginPath(); g.rect(0, y - L * .3 + sl * L * .15, W, L * .15); g.clip(); g.translate((E.hash(sl, Math.floor(t / 80), 5) - .5) * L * .12, 0); }
+      g.translate(x, y); g.scale(dir, 1); g.rotate(Math.sin(t / 3000) * .08);
+      koiPath(g, L, sw);
+      g.globalAlpha = pa * .16; g.fillStyle = '#5ef0ff'; g.fill();
+      g.globalAlpha = pa * .75; g.strokeStyle = 'rgba(120,245,255,.9)'; g.lineWidth = Math.max(1, L * .006); g.stroke();
+      g.save(); g.clip();                                 // scanlines and scale pattern inside the body
+      g.globalAlpha = pa * .35; g.strokeStyle = 'rgba(255,90,220,.9)'; g.lineWidth = 1; g.beginPath();
+      for (let k = -4; k <= 4; k++) { const sx = k * L * .07; g.moveTo(sx, -L * .2); g.quadraticCurveTo(sx + L * .04, 0, sx, L * .2); }
+      g.stroke();
+      g.fillStyle = 'rgba(255,255,255,.12)'; for (let ly = -L * .2; ly < L * .2; ly += 3) g.fillRect(-L * .6, ly, L * 1.2, 1);
+      g.restore();
+      g.globalAlpha = pa * .6; g.fillStyle = '#ff70e0';   // fins and an eye
+      for (const s2 of [-1, 1]) { g.beginPath(); g.ellipse(L * .12, s2 * L * .16, L * .09, L * .035, s2 * .7 + sw * .2, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(L * .38, -L * .05, Math.max(1, L * .012), 0, Math.PI * 2); g.fill();
+      g.restore();
+    }
+    g.globalAlpha = pa;
+  };
+  // Ad drones: little hovering craft projecting a cone of coloured light with a floating glyph panel in it.
+  let drones = [];
+  const drawDrones = (g, E) => {
+    const { W, GY, unit: u, t, dt, scrollV } = E;
+    if (!drones.length) drones = [0, 1, 2].map(i => ({ x: W * (.15 + .35 * i), y: GY * (.22 + .12 * i), hue: NEON[i % NEON.length], ph: i * 2.1, seed: i * 31 + 7 }));
+    for (const d of drones) {
+      d.x += (Math.sin(t / 4000 + d.ph) * u * 2 - scrollV * .6) * dt;
+      if (d.x < -W * .1) d.x += W * 1.2; else if (d.x > W * 1.1) d.x -= W * 1.2;
+      const x = d.x, y = d.y + Math.sin(t / 900 + d.ph) * u * .8, cw = u * 9, ch = u * 12;
+      const cone = g.createLinearGradient(x, y, x, y + ch);
+      cone.addColorStop(0, `hsla(${d.hue},100%,65%,.35)`); cone.addColorStop(1, `hsla(${d.hue},100%,65%,0)`);
+      g.fillStyle = cone; g.beginPath(); g.moveTo(x - u * .4, y); g.lineTo(x - cw / 2, y + ch); g.lineTo(x + cw / 2, y + ch); g.lineTo(x + u * .4, y); g.fill();
+      const px = x - cw * .32, py = y + ch * .45, pw = cw * .64, ph = u * 2.6;   // the floating ad: a glowing panel of glyphs
+      if (Math.random() > .02) {
+        g.fillStyle = `hsla(${d.hue},100%,60%,.18)`; g.fillRect(px, py, pw, ph);
+        g.strokeStyle = `hsla(${d.hue},100%,70%,.7)`; g.lineWidth = 1; g.strokeRect(px + .5, py + .5, pw - 1, ph - 1);
+        g.fillStyle = `hsla(${d.hue},100%,80%,.85)`;
+        for (let i = 0; i < 5; i++) for (let k = 0; k < 4; k++) if (E.hash(d.seed, Math.floor(t / 2500) + i, k) < .5) g.fillRect(px + u * .5 + i * pw / 5.5 + (k % 2) * u * .4, py + u * .5 + Math.floor(k / 2) * u * .7, u * .4, u * .3);
+      }
+      g.fillStyle = '#0b0912'; g.beginPath(); g.ellipse(x, y, u * 1.4, u * .45, 0, 0, Math.PI * 2); g.fill();   // the drone
+      g.fillRect(x - u * 2, y - u * .55, u * 4, u * .2);
+      g.fillStyle = (Math.floor(t / 500 + d.ph) % 2) ? '#ff3355' : '#7fffd4'; g.fillRect(x - u * .2, y - u * .15, u * .4, u * .3);
+    }
   };
   // Flying cars: little light pairs gliding between the towers, some behind (layer 0), some in front (layer 1).
   let flyers = [];
@@ -1976,10 +2112,11 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       b.signs = [];
       const n = r() < .65 ? 1 + (r() < .4 ? 1 : 0) : 0;
       for (let i = 0; i < n; i++) b.signs.push({ vert: r() < .65, fy: .2 + .6 * r(), fx: r(), len: 5 + 7 * r(), hue: NEON[Math.floor(r() * NEON.length)], seed: Math.floor(r() * 1e6) });
-      if (b.tiers[0].w >= 9 && b.hU > 40 && r() < .3) b.holo = { fy: .45 + .3 * r(), h: 7 + 5 * r() };
+      if (b.tiers[0].w >= 8 && b.hU > 28 && r() < .55) b.holo = { fy: .45 + .3 * r(), h: 7 + 5 * r(), kind: ['eq', 'rings', 'wave', 'glyph'][Math.floor(r() * 4)] };
+      if (b.hU > 45 && r() < .35) b.ring = { fy: .78 + .14 * r(), hue: NEON[Math.floor(r() * NEON.length)], dir: r() < .5 ? -1 : 1 };
     },
     afterLayout(list, r) {                               // skybridges between neighbouring towers
-      flyers = [];
+      flyers = []; drones = [];
       for (let i = 0; i + 1 < list.length; i++) {
         const a = list[i], c = list[i + 1];
         if (!a.lm && !c.lm && r() < .35) a.bridge = { c, y: Math.min(a.hU, c.hU) * (.35 + .4 * r()) };
@@ -1988,6 +2125,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     drawBehind: (g, E) => drawFlyers(g, E, 0),
     drawExtras(g, b, cx, tip, E) {
       if (b.holo) drawHolo(g, b, cx, E);
+      if (b.ring) drawRing(g, b, cx, E);
       if (b.signs) for (const s of b.signs) drawSign(g, b, s, cx, E);
       if (b.bridge) {                                    // drawn with the left tower; nothing of the right one covers the gap
         const { c, y } = b.bridge, u = E.unit, x0 = cx + b.wpx / 2, x1 = cx + c.cx - b.cx - c.wpx / 2;
@@ -1998,7 +2136,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
         for (let x = x0 + u * .6; x < x1 - u * .6; x += u * 1.4) g.fillRect(x, by - u * .55, u * .7, u * .3);
       }
     },
-    drawFront: (g, E) => drawFlyers(g, E, 1),
+    drawFront(g, E) { drawKoi(g, E); drawDrones(g, E); drawFlyers(g, E, 1); },
   });
 }
 
@@ -2017,7 +2155,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     ['Q', .42, -.02, .2, .2],
     ['L', .14, .32], ['L', .05, .3], ['L', -.03, .34],                        // foot and tail membrane
   ];
-  let batSprite;
+  let batSprite, batAt = null;
   const getBatSprite = () => {                           // drawn once, opaque, so the two halves never show a seam
     if (batSprite) return batSprite;
     const c = document.createElement('canvas'); c.width = 400; c.height = 220;
@@ -2034,9 +2172,9 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     const r = Math.min(W, H) * .09;
     const tx = Math.min(W * .85, Math.max(W * .2, tip[0] + W * .18)) + Math.sin(t / 5200) * W * .015, ty = H * .17 + Math.sin(t / 4100) * H * .008;
     const beam = g.createLinearGradient(tip[0], tip[1], tx, ty);
-    beam.addColorStop(0, 'rgba(255,245,215,.26)'); beam.addColorStop(.55, 'rgba(255,245,215,.12)'); beam.addColorStop(1, 'rgba(255,245,215,0)');   // fades out into the pool: no hard end at the bat
+    beam.addColorStop(0, 'rgba(255,245,215,.42)'); beam.addColorStop(.6, 'rgba(255,245,215,.2)'); beam.addColorStop(1, 'rgba(255,245,215,0)');   // fades out into the pool: no hard end at the bat
     g.fillStyle = beam; g.beginPath();
-    g.moveTo(tip[0] - unit * .4, tip[1]); g.lineTo(tx - r * .8, ty + r * .5); g.lineTo(tx + r * .8, ty - r * .5); g.lineTo(tip[0] + unit * .4, tip[1]); g.fill();
+    g.moveTo(tip[0] - unit * .7, tip[1]); g.lineTo(tx - r * .8, ty + r * .5); g.lineTo(tx + r * .8, ty - r * .5); g.lineTo(tip[0] + unit * .7, tip[1]); g.fill();
     const pool = g.createRadialGradient(tx, ty, 0, tx, ty, r * 1.15);   // soft round pool of light on the clouds, no hard rim
     pool.addColorStop(0, 'rgba(255,244,210,.55)'); pool.addColorStop(.6, 'rgba(255,244,210,.3)'); pool.addColorStop(1, 'rgba(255,244,210,0)');
     g.fillStyle = pool; g.fillRect(tx - r * 1.15, ty - r * 1.15, r * 2.3, r * 2.3);
@@ -2049,12 +2187,14 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     side: '#0b0b0c', top: '#151515', win: c => ({ h: c.h, s: c.s * .3, m: c.m * .7 }),
     back: { h: 1.1, density: 1, body: '#0d0d0f', win: () => 'rgba(210,170,100,.16)' },
     searchlights: false,                                 // just the one light
-    afterLayout(list, r, E) {                            // one rooftop near the left third carries the bat spotlight
+    afterLayout(list, r, E) {                            // the spotlight stands behind a building near the left third
       const at = (touring(E.S.view) ? list[0].cx : 0) + E.W * .3;
       const cands = list.filter(b => !b.lm && b.floors > 12 && b.floors < 40);
-      (cands.length ? cands : list).reduce((a, b) => Math.abs(b.cx - at) < Math.abs(a.cx - at) ? b : a).bat = true;
+      batAt = (cands.length ? cands : list).reduce((a, b) => Math.abs(b.cx - at) < Math.abs(a.cx - at) ? b : a);
     },
-    drawExtras(g, b, cx, tip, E) { if (b.bat) drawBatSignal(g, tip, E); },
+    // Drawn behind the buildings from partway down that tower, so the beam rises from behind the rooftops and its
+    // source is never seen.
+    drawBehind(g, E) { if (batAt) drawBatSignal(g, [E.toScreen(batAt.cx), E.GY - batAt.hU * E.unit * .6], E); },
   });
 }
 
@@ -2133,9 +2273,13 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
   function mountains(E) {
     const k = E.W + 'x' + E.GY; if (st.mk === k) return st.mts; st.mk = k;
     const { W, GY, hash } = E, ranges = [];
-    for (const [amp, kk] of [[.2, 1], [.13, 2]]) {
+    for (const [amp, kk] of [[.78, 1], [.5, 2]]) {        // towering, jagged ranges: tallest toward the edges, low in the middle for the sun
       const pts = []; let x = -40, i = 0;
-      while (x < W + 40) { const mid = Math.abs(x - W / 2) < W * .14 ? .25 : 1; pts.push([x, GY * amp * (.25 + .75 * hash(i, kk, 71)) * mid]); x += W * (.035 + .05 * hash(i++, kk, 72)); }
+      while (x < W + 40) {
+        const c = Math.min(1, Math.abs(x - W / 2) / (W * .42)), rise = .12 + .88 * c ** 1.3;
+        pts.push([x, GY * amp * rise * (.45 + .55 * hash(i, kk, 71)) * (i % 2 ? .62 : 1)]);   // alternate peaks and saddles
+        x += W * (.025 + .035 * hash(i++, kk, 72));
+      }
       ranges.push(pts);
     }
     return st.mts = ranges;
@@ -2153,7 +2297,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       for (let i = 0; i < 8; i++) g.fillRect(cx - r, cy - r * .05 + i * r * .15, r * 2, 1 + i * r * (.018 + .012 * bass));
       g.restore();
       const [back, front] = mountains(E), shift = cx - W / 2;
-      for (const [pts, fill, col, w] of [[back, '#1a0630', 'rgba(0,240,255,.9)', 1.4], [front, '#12041f', 'rgba(255,60,220,.95)', 1.6]]) {
+      for (const [pts, fill, col, w] of [[back, '#1d0738', 'rgba(0,240,255,1)', 2], [front, '#14042a', 'rgba(255,60,220,1)', 2.2]]) {
         g.beginPath(); g.moveTo(-40 + shift, GY); for (const [x, h] of pts) g.lineTo(x + shift, GY - h); g.lineTo(W + 40 + shift, GY); g.closePath();
         g.fillStyle = fill; g.fill();
         g.beginPath(); pts.forEach(([x, h], i) => i ? g.lineTo(x + shift, GY - h) : g.moveTo(x + shift, GY - h)); glowStroke(g, col, w);
@@ -2183,17 +2327,6 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
         g.beginPath(); g.moveTo(vx - w0, y0); g.lineTo(vx + w0, y0); g.lineTo(vx + w1, y1); g.lineTo(vx - w1, y1); g.fill();
       }
       g.fillStyle = 'rgba(255,79,216,' + (.7 + .3 * bassFlash) + ')'; g.fillRect(0, GY - 1, W, 2 + 2 * bassFlash);   // the horizon flares on a hit
-      if (E.widget) return;
-      const M = 9;                                        // palms lining both sides, flowing past, far ones first
-      const list = [];
-      for (let i = 0; i < M; i++) list.push(((i + z * 1.2) % M) / M);
-      list.sort((a, b) => a - b);
-      for (const p of list) {
-        if (p < .04) continue;
-        // in perspective a palm's height is a fixed multiple of how far below the horizon its foot is: near ones tower
-        const d = p ** 2.2, y = GY + gh * d, off = 6 + rw * 1.25 * d, h = 1.8 * gh * d + gh * .04, s = h / 300;
-        palm(g, vx - off, y, h, 14 * s, 'rgba(255,90,200,1)', s); palm(g, vx + off, y, h, -14 * s, 'rgba(0,240,255,1)', s);
-      }
     } },
     drawTop(g, E) {                                       // the car, the big framing palms, and the VHS sheen
       step(E);

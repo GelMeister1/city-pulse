@@ -217,7 +217,7 @@
       },
       drawFront(g, E) {
         if (E.widget) return;
-        const { W, GY, unit: u, t } = E, cv = E.scene, sc = cv.width / W, band = Math.round(Math.max(8, GY * .13));   // the lowest floors waver; strongest at street level
+        const { W, GY, unit: u, t } = E, cv = E.scene, sc = cv.width / W, band = Math.round(Math.max(8, GY * .26));   // the lowest floors waver; strongest at street level
         const bw = cv.width, bh = Math.ceil(band * sc);
         if (tc.width !== bw || tc.height !== bh) { tc.width = bw; tc.height = bh; } else tcx.clearRect(0, 0, bw, bh);
         tcx.drawImage(cv, 0, Math.round((GY - band) * sc), bw, bh, 0, 0, bw, bh);
@@ -468,7 +468,7 @@
       g.globalAlpha *= .25; g.fillRect(-1.6, -69, 3.2, 66); g.globalAlpha /= .25;
     } });
     // An observation needle: three splayed legs, a slim shaft, a wide pod of stacked rings with a chasing light, and a spire.
-    registerLandmark('needle', { w: 14, h: 92, draw(g, L) {
+    registerLandmark('skyneedle', { w: 14, h: 92, draw(g, L) {
       g.fillStyle = L.body;
       g.beginPath(); g.moveTo(-5, 0); g.lineTo(-1.6, -14); g.lineTo(1.6, -14); g.lineTo(5, 0); g.lineTo(3.2, 0); g.lineTo(0, -9); g.lineTo(-3.2, 0); g.fill();
       g.fillRect(-1.6, -72, 3.2, 60);
@@ -488,7 +488,7 @@
       const a = Math.max(L.lit(30), .35), T = now();
       const beam = g.createLinearGradient(0, -34, 0, -260);
       beam.addColorStop(0, `rgba(235,245,255,${.55 * a})`); beam.addColorStop(1, 'rgba(235,245,255,0)');
-      g.fillStyle = beam; g.beginPath(); g.moveTo(-.5, -34); g.lineTo(-1.4 - .4 * Math.sin(T), -260); g.lineTo(1.4 + .4 * Math.sin(T), -260); g.lineTo(.5, -34); g.fill();
+      if (!L.side) { g.fillStyle = beam; g.beginPath(); g.moveTo(-.5, -34); g.lineTo(-1.4 - .4 * Math.sin(T), -260); g.lineTo(1.4 + .4 * Math.sin(T), -260); g.lineTo(.5, -34); g.fill(); }   // the beam once, not on the 3D side copies
       g.fillStyle = L.body; g.beginPath(); g.moveTo(-15, 0); g.lineTo(0, -34); g.lineTo(15, 0); g.fill();
       for (let y = 2; y < 31; y += 2.2) {                 // floors of slanted windows, narrowing to the tip
         const hw = 15 * (1 - (y + 1) / 34) - .8; g.fillStyle = L.win(L.lit(y));
@@ -497,7 +497,7 @@
       g.strokeStyle = L.win(a); g.lineWidth = .3; g.beginPath(); g.moveTo(-15, 0); g.lineTo(0, -34); g.lineTo(15, 0); g.stroke();
     } });
     // A giant observation wheel: an LED rim, spokes, turning cabins and an A-frame stand.
-    registerLandmark('wheel', { w: 36, h: 56, draw(g, L) {
+    registerLandmark('wheel', { flat: true, w: 36, h: 56, draw(g, L) {
       const R = 24, cy = 31, T = now() * .05, a = Math.max(L.lit(cy), .35);
       g.strokeStyle = L.body; g.lineWidth = 1.1; g.beginPath(); g.moveTo(-9, 0); g.lineTo(0, -cy); g.lineTo(9, 0); g.stroke();
       g.lineWidth = .18; g.beginPath(); for (let k = 0; k < 24; k++) { const an = T + k * Math.PI / 12; g.moveTo(0, -cy); g.lineTo(Math.cos(an) * R, -cy + Math.sin(an) * R); } g.stroke();
@@ -522,7 +522,7 @@
     } });
     registerTheme('strip', { name: 'Neon Strip',
       kit: { styles: ['wide', 'grid', 'ribbon', 'wide'], roofs: [null], tall: .12, shrink: .85, w0: 9, gaps: [.8, 2],
-        landmarks: ['resort', 'needle', 'pyramid', 'wheel', 'goldcurve'], lmChance: .22, lmScale: 2 },   // the big resorts tower over the low signs
+        landmarks: ['resort', 'skyneedle', 'pyramid', 'wheel', 'goldcurve'], lmChance: .22, lmScale: 2 },   // the big resorts tower over the low signs
       minF: .2, maxF: .5,
       sky: [[0, '#05030f'], [.55, '#140a2a'], [1, '#3a0f3c']],
       drawSky(g, { W, GY, bands }) {
