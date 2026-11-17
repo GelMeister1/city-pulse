@@ -1,7 +1,7 @@
 # Dependencies (Electron is ~300 MB; `npm install` restores it)
 node_modules/
 
-# Build output (for the future installer)
+# Build output (the installer and its update files)
 dist/
 out/
 
