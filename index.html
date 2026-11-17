@@ -803,10 +803,8 @@ const macAudio = inApp && cityPulse.platform === 'darwin', INPUT_KEY = 'cityPuls
 async function useInput(id) {
   await ensureAnalyser();
   const opt = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-  let s;
-  try { s = await navigator.mediaDevices.getUserMedia({ audio: id ? { ...opt, deviceId: { exact: id } } : opt }); }
-  catch (e) { if (!id) throw e; s = await navigator.mediaDevices.getUserMedia({ audio: opt }); }   // that device is gone: the default input
-  listenTo(s);
+  // No fallback when the chosen device is gone: the default input is usually the microphone, which nobody picked.
+  listenTo(await navigator.mediaDevices.getUserMedia({ audio: id ? { ...opt, deviceId: { exact: id } } : opt }));
 }
 async function macSources() {
   const id = localStorage.getItem(INPUT_KEY) || '';
