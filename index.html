@@ -64,6 +64,10 @@
   #cc select{font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:6px;width:100%;min-width:0}
   #cc .seg{display:flex;flex-wrap:wrap;gap:6px}
   #cc button{font-size:13px}
+  #cc button.more{margin-top:6px}
+  #panel .tourPick{display:grid;gap:3px}
+  #panel #tourList{display:grid;gap:2px;max-height:180px;overflow:auto;padding:4px 6px;border:1px solid #333a58;border-radius:4px;background:#05060c}
+  #panel #tourList b{font-size:11px;opacity:.6;margin-top:4px}
   #cc button.on{border-color:#7cf;color:#fff;background:#16305a}
   #cc .big{padding:10px;font-size:15px;font-weight:600}
   #cc .scr{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;align-items:center}
@@ -85,11 +89,11 @@
 <div id="cc">
   <h1>City Pulse</h1>
   <section><h2>Listen to</h2><select id="ccSource"></select></section>
-  <section><h2>Full screen</h2><div class="seg" id="ccFull"></div></section>
-  <section><h2>Live wallpaper</h2><div class="seg" id="ccWall"></div></section>
+  <section><h2>Full screen</h2><div class="seg" id="ccFull"></div><button id="ccFullSet" class="more">Full-screen settings…</button></section>
+  <section><h2>Live wallpaper</h2><div class="seg" id="ccWall"></div><button id="ccWallSet" class="more">Wallpaper settings…</button></section>
   <button id="ccTour" class="big">Tour on every screen</button>
   <section><h2>Screens</h2><div class="scr" id="ccScreens"></div>
-    <p class="note">Each screen's city is used when full screen or the wallpaper shows its own city on each screen.</p></section>
+    <p class="note">The settings buttons above cover one screen and the tour across all screens. Each screen's city is used when full screen or the wallpaper shows its own city on each screen.</p></section>
   <section><h2>Widget</h2><div class="seg"><button id="ccWidget">Show widget</button><button id="ccWidgetSet">Widget settings…</button></div></section>
 </div>
 <div id="panel" hidden>
@@ -105,6 +109,7 @@
       <option value="pan">Pan</option>
       <option value="tour">Tour</option>
     </select></label>
+    <div class="tourPick"><span>Tour cities</span><div id="tourList"></div></div>
     <label>Scroll speed <input type="range" id="scroll" min="1" max="100"></label>
     <label>Scroll direction <select id="scrollDir">
       <option value="rtl">Right to left</option>
@@ -207,7 +212,8 @@ const DEF = { city: 'generic', view: 'fit', scroll: 30, scrollDir: 'rtl', gap: 4
   ground: TARGET === 'widget' ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
   weather: 'none', wxAmt: 50,
   roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
-  search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true };
+  search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true,
+  tourOff: [] };                                          // city menu values left out of the tour
 let S;
 // Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
 const SHARED_KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
@@ -219,6 +225,7 @@ function loadSettings(json) {
   S = { ...DEF, ...JSON.parse(json) };
   if (!$('ground').querySelector(`[value="${S.ground}"]`)) S.ground = DEF.ground;   // settings saved by older versions
   if (S.preset === 'Background') S.preset = 'Lounge';
+  if (!Array.isArray(S.tourOff)) S.tourOff = [];
   savedView = S.view; if (spanMode) S.view = 'tour';
 }
 try { loadSettings(stored); } catch { loadSettings('{}'); }
@@ -615,7 +622,11 @@ function unitFor(w, h, s) {
 }
 // The tour's stops: every real city, with the themed ones spread evenly between them.
 function tourStops() {
-  const real = Object.values(CITIES), themed = Object.keys(THEMES), out = [];
+  const on = k => !S.tourOff.includes(k === 'none' ? 'generic' : k);
+  let real = Object.keys(CITIES).filter(on), themed = Object.keys(THEMES).filter(on);
+  if (!real.length && !themed.length) [real, themed] = [Object.keys(CITIES), Object.keys(THEMES)];   // never an empty tour
+  real = real.map(k => CITIES[k]);
+  const out = [];
   let placed = 0;
   real.forEach((c, j) => {
     out.push({ name: c.name, theme: 'none', b: c.b });
@@ -828,6 +839,8 @@ function refreshPanel() {
   hide('blinkSpeed', !S.roofLights || S.blinkBeat); hide('blinkSync', !S.roofLights || S.blinkBeat);
   hide('flickAmt', !S.flicker);
   hide('captions', S.view !== 'tour');
+  hide('tourList', S.view !== 'tour');
+  for (const el of $('tourList').querySelectorAll('input')) el.checked = !S.tourOff.includes(el.value);
   hide('traffic', !S.ground.startsWith('street'));
   hide('wxAmt', S.weather === 'none');
   hide('flyers', S.city !== 'cyber' && S.view !== 'tour');
@@ -835,7 +848,7 @@ function refreshPanel() {
   hide('drift', forWidget);
   for (const id of ['stars', 'shooting', 'skyBody', 'clouds', 'planes']) hide(id, forWidget);   // the widget has no sky
 }
-const RELAYOUT = ['city', 'view', 'gap', 'back', 'ground'];
+const RELAYOUT = ['city', 'view', 'gap', 'back', 'ground', 'tourOff'];
 const showSetting = k => { const el = $(k); if (el) el.type === 'checkbox' ? el.checked = S[k] : el.value = S[k]; };
 for (const k of Object.keys(DEF)) {
   const el = $(k); if (!el) continue;                  // pan is set by dragging, not a control
@@ -854,7 +867,7 @@ for (const k of Object.keys(DEF)) {
 
 // ---------- presets ----------
 // A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
-const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan'];
+const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff'];
 const lookOf = s => Object.fromEntries(Object.keys(DEF).filter(k => !PLACE.includes(k)).map(k => [k, s[k]]));
 const BUILTIN = Object.assign(Object.create(null), {
   'Lounge': { ...lookOf(DEF), mode: 'pulse', effect: 'fade', speed: 8, react: 8, bright: 55, peak: false, meter: false,
@@ -1887,6 +1900,8 @@ function startControl() {
   };
   $('ccWidget').onclick = () => C.setWidget(!(ccState && ccState.widgetShown));
   $('ccWidgetSet').onclick = () => C.openSettings('widget', null);
+  $('ccFullSet').onclick = () => C.openSettings('full', null);
+  $('ccWallSet').onclick = () => C.openSettings('wall', null);
   C.state().then(ccRender);
   C.onState(ccRender);
 }
@@ -1895,8 +1910,17 @@ function startControl() {
 function start() {
   for (const [k, c] of Object.entries(CITIES)) if (!c.b.every(okSpec)) { console.error(`City Pulse: city "${k}" ignored: it uses an unknown window style or landmark.`); delete CITIES[k]; }
   const opt = (k, name) => `<option value="${esc(k)}">${esc(name)}</option>`;
-  $('city').innerHTML = `<optgroup label="Themed">${opt('generic', 'Neon City')}${Object.keys(THEMES).filter(k => k !== 'none').map(k => opt(k, THEMES[k].name)).join('')}</optgroup>` +
-    `<optgroup label="Real cities">${Object.entries(CITIES).map(([k, c]) => opt(k, c.name)).join('')}</optgroup>`;
+  const groups = [['Real cities', Object.entries(CITIES).map(([k, c]) => [k, c.name])],
+    ['Themed', [['generic', 'Neon City'], ...Object.keys(THEMES).filter(k => k !== 'none').map(k => [k, THEMES[k].name])]]];
+  $('city').innerHTML = groups.map(([g, list]) => `<optgroup label="${g}">${list.map(([k, n]) => opt(k, n)).join('')}</optgroup>`).join('');
+  $('tourList').innerHTML = groups.map(([g, list]) => `<b>${g}</b>` +
+    list.map(([k, n]) => `<label class="row"><input type="checkbox" value="${esc(k)}"> ${esc(n)}</label>`).join('')).join('');
+  $('tourList').onchange = e => {
+    const k = e.target.value, off = new Set(S.tourOff);
+    e.target.checked ? off.delete(k) : off.add(k);
+    if (off.size >= $('city').options.length) { e.target.checked = true; return; }   // keep at least one city
+    S.tourOff = [...off]; save(); if (W && S.view === 'tour') layout();
+  };
   if (![...$('city').options].some(o => o.value === S.city)) S.city = 'generic';   // its plugin is gone
   showSetting('city'); refreshPanel();
   if (controlMode) return startControl();

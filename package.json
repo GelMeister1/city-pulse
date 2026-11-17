@@ -1,7 +1,7 @@
 {
   "name": "city-pulse",
   "productName": "City Pulse",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Music-reactive city skyline visualizer: desktop widget and full-screen TV mode",
   "author": "GelMeister1",
   "license": "MIT",

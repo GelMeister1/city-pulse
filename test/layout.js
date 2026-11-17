@@ -20,6 +20,14 @@ app.whenReady().then(async () => {
       if (!(n > 0)) fails.push(`${city} ${view} ${w}x${h}: ${n}`);
     }
   }
+  // The tour picker: any choice of cities, even a single one or none at all, still builds a tour.
+  for (const off of [cities.slice(1), cities, cities.filter((_, i) => i % 2)]) {
+    const n = await win.webContents.executeJavaScript(`(() => { S.view = 'tour'; S.tourOff = ${JSON.stringify(off)};
+      try { layout(); return buildings.length && tourStops().length; } catch (e) { return 'threw ' + e.message; } })()`);
+    if (!(n > 0)) fails.push(`tour leaving out ${off.length} cities: ${n}`);
+  }
+  const first = await win.webContents.executeJavaScript(`(S.tourOff = [], document.getElementById('city').options[0].parentElement.label)`);
+  if (first !== 'Real cities') fails.push('City menu should start with real cities, starts with ' + first);
   await new Promise(r => setTimeout(r, 500));            // let a few frames draw the last layout
   console.log(`${cities.length} cities x ${VIEWS.length} views x ${SIZES.length} sizes`);
   if (errors.length) fails.push(...errors.map(e => 'console: ' + e.slice(0, 200)));
