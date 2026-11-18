@@ -679,40 +679,46 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
   });
 }
 
-// Aurora Harbor: a snowy, low waterfront of warm-lit houses on a frozen bay under rippling auroras.
-// Music: the aurora drifts slowly on its own clock; the mids and highs gently swell its glow, most at the curtains' base.
-{
-  const rib = stops => mk(1, 128, (x, w, h) => { x.fillStyle = lin(x, 0, 0, 0, h, stops); x.fillRect(0, 0, w, h); });
-  const RIBS = [
+// Aurora curtains, shared with Christmas Village: en is how strongly the music swells them, t their own clock (ms), a the
+// overall strength (1 for Aurora Harbor's full sky).
+const rib = stops => mk(1, 128, (x, w, h) => { x.fillStyle = lin(x, 0, 0, 0, h, stops); x.fillRect(0, 0, w, h); });
+let RIBS = null;
+function curtains(g, E, en, t, a) {
+  RIBS = RIBS || [
     rib([[0, 'rgba(160,80,255,0)'], [.35, 'rgba(150,90,255,.3)'], [.75, 'rgba(70,255,170,.75)'], [.92, 'rgba(150,255,210,.95)'], [1, 'rgba(70,255,170,0)']]),
     rib([[0, 'rgba(255,80,200,0)'], [.4, 'rgba(200,90,255,.35)'], [.8, 'rgba(90,240,200,.6)'], [1, 'rgba(90,240,200,0)']]),
     rib([[0, 'rgba(60,255,160,0)'], [.5, 'rgba(60,255,160,.35)'], [.9, 'rgba(160,255,220,.6)'], [1, 'rgba(60,255,160,0)']]),
   ];
+  const { W, GY } = E, n = E.widget ? 50 : 150, step = W / n;
+  const a0 = g.globalAlpha, op = g.globalCompositeOperation;
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 3; i++) {
+    const R = RIBS[i], wgt = [1, .65, .5][i] * a;
+    for (let j = 0; j <= n; j++) {
+      const x = j * step, p = x / W;
+      const yc = GY * (.2 + .1 * i) + Math.sin(p * TAU * 1.3 + t / 4000 + i * 2) * GY * .06 + Math.sin(p * TAU * 3.1 - t / 2300 + i) * GY * .03;
+      const h = GY * (.18 + .06 * en) * (.55 + .45 * Math.sin(p * TAU * 2.2 + t / 1700 + i * 1.7));
+      const al = (.3 + .5 * en) * (.6 + .4 * Math.sin(p * TAU * 4.3 + t / 2600 + i)) * Math.min(1, p * 6, (1 - p) * 6 + .3) * wgt;
+      g.globalAlpha = a0 * Math.min(1, Math.max(0, al));
+      g.drawImage(R, x, yc - h, step + 1, h);
+    }
+  }
+  g.globalCompositeOperation = op; g.globalAlpha = a0;
+}
+// Aurora Harbor: a snowy, low waterfront of warm-lit houses on a frozen bay under rippling auroras.
+// Music: the aurora drifts slowly on its own clock; the mids and highs gently swell its glow, most at the curtains' base.
+{
   const st = { en: .5, ph: 0, list: [], ik: '', ice: null };
   registerTheme('aurora', { name: 'Aurora Harbor',
     kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'pairs'], roofs: [['pyramid', 4], ['pyramid', 5], ['pyramid', 3], null, ['pyramid', 6], ['antenna', 4]], tall: .15, shrink: .8, w0: 6, gaps: [.6, 1.2] },
     minF: .15, maxF: .45, weather: 'snow', widgetSky: true,
     sky: [[0, '#01040f'], [.55, '#061430'], [1, '#14304a']], skyToGround: true,
     drawSky(g, E) {
-      const { W, GY, dt, bands } = E;
+      const { dt, bands } = E;
       const en = .25 + .55 * avg(bands, 3, 5) + .45 * avg(bands, 6, 7);
       st.en += (en - st.en) * Math.min(1, dt * .7);        // a slow follow: the music swells it over a second or two, never jolts it
       st.ph += dt;
-      const t = st.ph * 1000 / 3, n = E.widget ? 50 : 150, step = W / n;   // its own steady clock, a third of real speed
-      const a0 = g.globalAlpha, op = g.globalCompositeOperation;
-      g.globalCompositeOperation = 'lighter';
-      for (let i = 0; i < 3; i++) {
-        const R = RIBS[i], wgt = [1, .65, .5][i];
-        for (let j = 0; j <= n; j++) {
-          const x = j * step, p = x / W;
-          const yc = GY * (.2 + .1 * i) + Math.sin(p * TAU * 1.3 + t / 4000 + i * 2) * GY * .06 + Math.sin(p * TAU * 3.1 - t / 2300 + i) * GY * .03;
-          const h = GY * (.18 + .06 * st.en) * (.55 + .45 * Math.sin(p * TAU * 2.2 + t / 1700 + i * 1.7));
-          const a = (.3 + .5 * st.en) * (.6 + .4 * Math.sin(p * TAU * 4.3 + t / 2600 + i)) * Math.min(1, p * 6, (1 - p) * 6 + .3) * wgt;
-          g.globalAlpha = a0 * Math.min(1, Math.max(0, a));
-          g.drawImage(R, x, yc - h, step + 1, h);
-        }
-      }
-      g.globalCompositeOperation = op; g.globalAlpha = a0;
+      curtains(g, E, st.en, st.ph * 1000 / 3, 1);         // its own steady clock, a third of real speed
     },
     stars: true, moon: false, cloud: CLEAR, fogRGB: '170,190,220',
     body: '#0c0f17', side: '#151925', top: '#1d2230',
@@ -917,7 +923,8 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     },
   });
 }
-// Christmas Village: snowy cottages and shops with string lights and wreaths, a little church, a great lit tree, a frozen river and a snowy
+// Christmas Village: snowy cottages and shops with string lights and wreaths, a little church, a toy workshop, gingerbread
+// cottages, a great lit tree, now and then a faint aurora with angels, a frozen river and a snowy
 // road. A great four-pointed star gleams in the top left. Every 30-90 s a sleigh crosses the sky behind a team of reindeer,
 // a glowing red nose in front (only one sleigh at a time). Three travellers on camels (green, red and blue robes, small gold
 // crowns) ride single file along the road from right to left; once they're gone, they set out again after 10-25 s.
@@ -940,7 +947,11 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
   const GIFTS = [['#c8202a', '#ffd23a'], ['#1f8a3a', '#ffffff'], ['#2a52c8', '#ffd23a'], ['#ffffff', '#e8202a']]
     .map(([b, y]) => PAL(['.y..y.', '..yy..', 'bbybbb', 'bbybbb', 'yyyyyy', 'bbybbb', 'bbybbb'], { b, y }));
   const BULBS = ['#ff3b3b', '#3bff6a', '#ffd23a', '#3b8bff'];
-  const st = { list: [], santa: null, nextSanta: 0, men: null, nextMen: 0, gapW: 0, last: -1, ik: '', ice: null };
+  const st = { list: [], santa: null, nextSanta: 0, men: null, nextMen: 0, au: null, nextAu: 0, gapW: 0, last: -1, ik: '', ice: null, tk: '', tree: null };
+  const ANGEL = [['......hh......', '.....h..h.....', '.....yffy.....', '.ww...ff...ww.', 'wwww.rrrr.wwww', '.wwwwrrrrwwww.', '..wwrrrrrrww..', '....rrrrrr....', '....rrggrr....', '...rrrrrrrr...', '...rrrrrrrr...', '..rrrrrrrrrr..'],
+    ['......hh......', '.....h..h.....', '.....yffy.....', '......ff......', '.....rrrr.....', '...wwrrrrww...', '.wwwrrrrrrwww.', 'wwww.rrrr.wwww', 'ww..rrggrr..ww', '...rrrrrrrr...', '...rrrrrrrr...', '..rrrrrrrrrr..']]
+    .map(rows => PAL(rows, { h: '#ffd23a', y: '#f2d27a', f: '#f0c8a0', w: '#cfe0ff', r: '#ffffff', g: '#e8c040' }));
+  const star5 = (g, x, y, R) => { g.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? R * .45 : R, an = -Math.PI / 2 + i * Math.PI / 5; g.lineTo(x + r * Math.cos(an), y + r * Math.sin(an)); } g.fill(); };
 
   // A little church: a gabled nave with tall arched windows, a square tower with a belfry, a spire and a cross.
   registerLandmark('chapel', { w: 16, h: 40, draw(g, L) {
@@ -958,6 +969,55 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       g.beginPath(); g.moveTo(-8.8, -14); g.lineTo(-2, -20); g.lineTo(4.8, -14); g.lineTo(3.6, -14.6); g.lineTo(-2, -19); g.lineTo(-7.6, -14.6); g.fill();
       g.beginPath(); g.moveTo(3.6, -25); g.lineTo(6.5, -36); g.lineTo(9.4, -25); g.lineTo(8.4, -25.8); g.lineTo(6.5, -33); g.lineTo(4.6, -25.8); g.fill();
     }
+  } });
+
+  // The toy workshop: a long factory hall under a sawtooth roof with lit skylights, candy-striped smokestacks puffing smoke,
+  // big open doors under a gold star, and a conveyor belt carrying wrapped presents out into the snow.
+  registerLandmark('workshop', { w: 30, h: 30, draw(g, L) {
+    const t = performance.now(), stacks = [[7, 27], [11.5, 23]];
+    for (const [sx, sh] of stacks) {
+      g.fillStyle = L.side ? L.body : '#f2f2f2'; g.fillRect(sx, -sh, 2.4, sh - 13);
+      if (!L.side) { g.fillStyle = '#d8202a'; for (let y = -sh; y < -13; y += 3) g.fillRect(sx, y, 2.4, 1.5); g.fillStyle = '#eef3fb'; g.fillRect(sx - .3, -sh - .6, 3, .8); }
+    }
+    g.fillStyle = L.body; g.fillRect(-15, -14, 30, 14);                                                  // the hall
+    for (let i = 0; i < 4; i++) {                                                                         // sawtooth roof
+      const x0 = -15 + i * 7.5;
+      g.fillStyle = L.body; g.beginPath(); g.moveTo(x0, -14); g.lineTo(x0, -19.5); g.lineTo(x0 + 7.5, -14); g.fill();
+      g.fillStyle = L.win(L.lit(17)); g.fillRect(x0 + .3, -19, .9, 4.6);                                  // a skylight on the steep face
+      if (!L.side) { g.fillStyle = '#eef3fb'; g.beginPath(); g.moveTo(x0, -19.5); g.lineTo(x0 + 7.5, -14); g.lineTo(x0 + 6.2, -14); g.lineTo(x0 + .2, -18.4); g.fill(); }
+    }
+    for (const y of [-11, -6.5]) for (const x of [-13.5, -10, -6.5, 4.3, 7.8, 11.3]) { g.fillStyle = L.win(L.lit(-y)); g.fillRect(x, y, 2.2, 3); }
+    g.fillStyle = L.win(Math.max(.4, L.lit(2))); g.fillRect(-3, -8, 6, 8); g.beginPath(); g.arc(0, -8, 3, Math.PI, 0); g.fill();   // the doors
+    if (L.side) return;
+    g.fillStyle = '#1f7a36'; g.fillRect(-15, -14.4, 30, .8);                                              // green eaves, a red ribbon band
+    g.fillStyle = '#c8202a'; g.fillRect(-15, -12.4, 11.6, .6); g.fillRect(3.4, -12.4, 11.6, .6);
+    g.strokeStyle = '#1f7a36'; g.lineWidth = .5; g.beginPath(); g.moveTo(-3, 0); g.lineTo(-3, -8); g.arc(0, -8, 3, Math.PI, 0); g.lineTo(3, 0); g.stroke();
+    g.fillStyle = '#ffd23a'; star5(g, 0, -12.6, 1.3);
+    g.fillStyle = '#3a3a48'; g.fillRect(3, -1.3, 12, .6);                                                 // the conveyor and its presents
+    for (let i = 0; i < 4; i++) {
+      const gx = 3.3 + ((t / 2400 + i / 4) % 1) * 10.4;
+      g.fillStyle = BULBS[i]; g.fillRect(gx, -2.7, 1.4, 1.4); g.fillStyle = '#fff'; g.fillRect(gx + .55, -2.7, .3, 1.4);
+    }
+    for (const [sx, sh] of stacks) for (let k = 0; k < 3; k++) {                                          // smoke curling away
+      const p = (t / 3200 + k / 3 + sx * .13) % 1;
+      g.fillStyle = `rgba(215,222,240,${.35 * (1 - p)})`; g.beginPath(); g.arc(sx + 1.2 + p * 3, -sh - 1 - p * 6, .8 + p * 1.6, 0, TAU); g.fill();
+    }
+  } });
+
+  // A gingerbread cottage: brown walls, a gable roof edged in white icing, candy buttons, a gumdrop on top, lit windows.
+  registerLandmark('ginger', { w: 12, h: 15, draw(g, L) {
+    const c = col => L.side ? L.body : col;
+    g.fillStyle = c('#7a4520'); g.fillRect(-5, -8, 10, 8);
+    g.fillStyle = c('#5a3014'); g.beginPath(); g.moveTo(-6.2, -7.6); g.lineTo(0, -14); g.lineTo(6.2, -7.6); g.fill();
+    for (const x of [-3.8, 2]) { g.fillStyle = L.win(L.lit(6)); g.fillRect(x, -6.3, 1.8, 1.8); }
+    g.fillStyle = L.win(Math.max(.3, L.lit(2))); g.fillRect(-.9, -3.6, 1.8, 3.6);
+    if (L.side) return;
+    g.strokeStyle = '#ffffff'; g.lineWidth = .7; g.beginPath(); g.moveTo(-6.2, -7.6); g.lineTo(0, -14); g.lineTo(6.2, -7.6); g.stroke();
+    g.lineWidth = .35; for (const x of [-3.8, 2]) g.strokeRect(x, -6.3, 1.8, 1.8);
+    for (let i = 0; i < 5; i++) { g.fillStyle = BULBS[i % 4]; g.beginPath(); g.arc(-3.6 + i * 1.8, -8.6 - (i % 2) * 1.6, .45, 0, TAU); g.fill(); }
+    g.fillStyle = '#ffffff'; for (let x = -4.6; x <= 4.6; x += 1.15) { g.beginPath(); g.arc(x, -8, .5, 0, Math.PI); g.fill(); }
+    g.fillStyle = '#e8202a'; g.beginPath(); g.arc(0, -14.2, .8, 0, TAU); g.fill();
+    for (const x of [-2.2, 1.6]) for (let y = -3; y < 0; y += 1) { g.fillStyle = y % 2 ? '#e8202a' : '#ffffff'; g.fillRect(x, y, .6, 1); }
   } });
 
   // The great star: four long pointed rays (the lower one longest), faint diagonal glints, a soft halo that gently gleams.
@@ -979,33 +1039,84 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
     g.stroke(); g.restore();
   }
 
-  // The great tree in the town square (bottom right, across from the star): snowy tiers, strings of bulbs that light up
-  // with the music, and a gold star on top that flares on the beat.
-  const BULB_RGB = ['255,59,59', '59,255,106', '255,210,58', '59,139,255'];
+  // The great tree in the town square (bottom right, across from the star). Six layered tiers of drooping, needled
+  // boughs with snow on the tips, gold tinsel, baubles, a skirt and presents underneath: drawn once per size. On top of that,
+  // every frame: strings of bulbs that each light up with their own part of the music, and a gold star that flares on the beat.
+  const BULB_RGB = ['255,59,59', '59,255,106', '255,210,58', '59,139,255'], ORN = ['#d8202a', '#e8c040', '#c8d0e0', '#2a6ad8', '#b03ad8'];
+  const tierOf = (i, h, w) => { const a = h * (.06 + i * .125), L = h * (.19 + i * .012); return { a, L, b: a + L, hw: w * .5 * (.3 + .7 * (i + 1) / 6) }; };
+  function treeBody(h, w) {                               // top of the tree at y 0, its trunk at x = width / 2
+    const d = dpr(), cw = w * 1.4, x = cw / 2;
+    return mk(cw * d, h * 1.06 * d, g => {
+      g.scale(d, d);
+      g.fillStyle = '#a3121c'; g.beginPath(); g.ellipse(x, h, w * .44, h * .03, 0, 0, TAU); g.fill();   // the skirt
+      g.strokeStyle = '#f4f4f4'; g.lineWidth = Math.max(1, h * .006); g.stroke();
+      g.fillStyle = '#4a2e18'; g.fillRect(x - w * .06, h * .88, w * .12, h * .12);                       // the trunk
+      const lw = Math.max(1, h * .004);
+      for (let i = 5; i >= 0; i--) {                       // bottom tier first, so each one above droops over the next
+        const { a, L, b, hw } = tierOf(i, h, w), n = 5 + i * 2, dr = L * .2, tx = j => x - hw + 2 * hw * j / n;
+        const shape = dy => { g.beginPath(); g.moveTo(x, a + dy); for (let j = n; j >= 0; j--) { g.lineTo(tx(j), b + dy); if (j) g.lineTo(tx(j) - hw / n, b - dr + dy); } g.closePath(); };
+        if (i < 5) { g.fillStyle = 'rgba(0,10,4,.45)'; shape(dr * 1.3); g.fill(); }   // its shadow on the tier below
+        g.fillStyle = '#0b3d20'; shape(0); g.fill();
+        g.fillStyle = '#145a2e'; g.beginPath(); g.moveTo(x, a); g.lineTo(x + hw, b); g.lineTo(x + hw * .12, b - dr); g.fill();   // the lit side
+        g.strokeStyle = '#1e7040'; g.lineWidth = lw; g.beginPath();                                       // needles fanning to the tips
+        for (let j = 0; j <= n; j++) { g.moveTo(x + (tx(j) - x) * .4, a + L * .45); g.lineTo(tx(j), b); }
+        g.stroke();
+        g.fillStyle = '#eef3fb';                           // snow lying on some of the tips, in clumps of different sizes
+        const sl = Math.atan2(dr, hw / n), half = Math.hypot(dr, hw / n) / 2;   // lying along each bough's upper edge
+        for (let j = 1; j <= n; j++) if (hash(i, j, 74) < .65) { g.beginPath(); g.ellipse(tx(j) - hw / n / 2, b - dr / 2 - h * .004, half * (.6 + .35 * hash(i, j, 75)), Math.max(1, h * .0045), sl, 0, TAU); g.fill(); }
+        if (i) {                                           // a gold tinsel swag across the tier
+          const y0 = a + L * .58, y1 = a + L * .72, l = x - hw * .58 * .95, r = x + hw * .72 * .95;
+          for (const [c, k] of [['#c8a030', 2.2], ['#fff0a0', .8]]) { g.strokeStyle = c; g.lineWidth = lw * k; g.beginPath(); g.moveTo(l, y0); g.quadraticCurveTo(x, a + L * (i % 2 ? .98 : .88), r, y1); g.stroke(); }
+        }
+        for (let j = 0; j < 1 + i; j++) {                  // baubles, each with a cap and a shine
+          const f = .52 + .38 * hash(i, j, 72), y = a + L * f, ox = x + (hash(i, j, 71) * 2 - 1) * hw * f * .78, r = Math.max(1.5, h * .016);
+          g.fillStyle = ORN[Math.floor(hash(i, j, 73) * ORN.length)]; g.beginPath(); g.arc(ox, y, r, 0, TAU); g.fill();
+          g.fillStyle = '#e8c040'; g.fillRect(ox - r * .3, y - r * 1.3, r * .6, r * .4);
+          g.fillStyle = 'rgba(255,255,255,.7)'; g.beginPath(); g.arc(ox - r * .35, y - r * .35, r * .3, 0, TAU); g.fill();
+        }
+      }
+      for (const [dx, bw, bh, c, rb] of [[-.4, .17, .13, '#c8202a', '#ffd23a'], [-.24, .13, .09, '#2a52c8', '#ffffff'], [.25, .15, .15, '#1f8a3a', '#e8202a'],
+        [.41, .12, .08, '#e8c040', '#c8202a'], [-.06, .11, .07, '#b03ad8', '#ffd23a'], [.1, .09, .06, '#ffffff', '#2a52c8']]) {   // presents
+        const W2 = w * bw, H2 = w * bh, px = x + dx * w - W2 / 2, py = h * 1.01 - H2;
+        g.fillStyle = c; g.fillRect(px, py, W2, H2);
+        g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(px + W2 * .7, py, W2 * .3, H2);
+        g.fillStyle = rb; g.fillRect(px + W2 * .44, py, W2 * .12, H2); g.fillRect(px, py + H2 * .4, W2, H2 * .14);
+        g.beginPath(); g.ellipse(px + W2 * .38, py - H2 * .08, W2 * .12, H2 * .1, -.5, 0, TAU); g.ellipse(px + W2 * .62, py - H2 * .08, W2 * .12, H2 * .1, .5, 0, TAU); g.fill();
+      }
+    });
+  }
   function tree(g, E) {
-    const { GY, H, t } = E, sw = E.right - E.left, sp = E.spectrum, base = GY + (H - GY) * .45 * .3;
-    const h = Math.min(GY * .62, sw * .5), w = h * .5, x = E.right - Math.min(sw, GY) * .22, top = base - h;
-    g.fillStyle = '#4a2e18'; g.fillRect(x - w * .06, base - h * .12, w * .12, h * .12);   // the trunk
+    const { GY, H, t } = E, sw = E.right - E.left, sp = E.spectrum, d = dpr(), base = GY + (H - GY) * .45 * .3;
+    const h = Math.round(Math.min(GY * .62, sw * .5)), w = h * .52, x = E.right - Math.min(sw, GY) * .22, top = base - h;
+    if (st.tk !== h + '|' + d) { st.tk = h + '|' + d; st.tree = treeBody(h, w); }
+    g.drawImage(st.tree, x - st.tree.width / d / 2, top, st.tree.width / d, st.tree.height / d);
     let k = 0;
-    for (let i = 0; i < 4; i++) {                         // four tiers, widest at the bottom, each overlapping the one above
-      const a = top + h * .06 + i * h * .19, L = h * .32, b = a + L, hw = w * .5 * (.45 + .55 * (i + 1) / 4);
-      g.fillStyle = '#0e4424'; g.beginPath(); g.moveTo(x, a); g.lineTo(x + hw, b); g.lineTo(x - hw, b); g.fill();
-      g.fillStyle = '#165c31'; g.beginPath(); g.moveTo(x, a); g.lineTo(x + hw, b); g.lineTo(x + hw * .1, b); g.fill();   // the lit side
-      g.fillStyle = '#eef3fb'; const n = 4 + i * 2, r = hw / n;   // snow on the branch tips
-      for (let j = 0; j < n; j++) { g.beginPath(); g.arc(x - hw + r * (2 * j + 1), b, r, 0, Math.PI); g.fill(); }
-      const m = 5 + i * 2;                                 // a sagging string of bulbs, each lit by its own part of the music
+    for (let i = 0; i < 6; i++) {                         // a sagging string of bulbs on each tier
+      const { a, L, hw } = tierOf(i, h, w), m = 4 + i * 2;
       for (let j = 0; j < m; j++, k++) {
-        const f = (j + .5) / m, y = a + L * (.6 + .2 * Math.sin(Math.PI * f)), bx = x + (2 * f - 1) * hw * (y - a) / L * .85;
-        const c = (k + Math.floor(t / 700)) % 4, lv = Math.min(1, (sp[(k * 5) % sp.length] || 0) * 1.3), br = Math.max(1.5, h * .011);
+        const f = (j + .5) / m, yf = .62 + .2 * Math.sin(Math.PI * f), y = top + a + L * yf, bx = x + (2 * f - 1) * hw * yf * .85;
+        const c = (k + Math.floor(t / 700)) % 4, lv = Math.min(1, (sp[(k * 5) % sp.length] || 0) * 1.3), br = Math.max(1.5, h * .01);
         glow(g, BULB_RGB[c], bx, y, br * 4, .15 + .5 * lv);
         withAlpha(g, .45 + .55 * lv, () => { g.fillStyle = BULBS[c]; g.beginPath(); g.arc(bx, y, br, 0, TAU); g.fill(); });
       }
     }
-    const R = h * .065 * (1 + .12 * E.bassFlash);          // the gold star on top
-    glow(g, '255,220,120', x, top + h * .04, R * 3, .45 + .4 * E.bassFlash);
-    g.fillStyle = '#ffd23a'; g.beginPath();
-    for (let i = 0; i < 10; i++) { const r = i % 2 ? R * .45 : R, an = -Math.PI / 2 + i * Math.PI / 5; g.lineTo(x + r * Math.cos(an), top + h * .04 + r * Math.sin(an)); }
-    g.fill();
+    const R = h * .065 * (1 + .12 * E.bassFlash), sy = top + h * .03;   // the star on top, with slowly turning rays
+    glow(g, '255,220,120', x, sy, R * 3.2, .45 + .4 * E.bassFlash);
+    g.strokeStyle = 'rgba(255,230,150,.5)'; g.lineWidth = Math.max(1, h * .003); g.beginPath();
+    for (let i = 0; i < 8; i++) { const an = t / 4000 + i * Math.PI / 4, l = R * (i % 2 ? 1.6 : 2.3); g.moveTo(x + Math.cos(an) * R * .6, sy + Math.sin(an) * R * .6); g.lineTo(x + Math.cos(an) * l, sy + Math.sin(an) * l); }
+    g.stroke();
+    g.fillStyle = '#ffd23a'; star5(g, x, sy, R); g.fillStyle = '#fff6c8'; star5(g, x, sy, R * .45);
+  }
+  // The aurora's strength now: it fades in and out over 2.5 s; 0 when it's away.
+  const auA = t => st.au ? Math.max(0, Math.min(1, (t - st.au.t0) / 2500, (st.au.t0 + st.au.dur - t) / 2500)) : 0;
+  // Pale angels gliding about the sky while the aurora is up, each on its own slow looping path.
+  function angels(g, E, a) {
+    const { GY, t } = E, sw = E.right - E.left, px = pxOf(E, .65);
+    for (let i = 0; i < 4; i++) {
+      const p = t / 5200 + i * 1.7, x = E.left + sw * (.3 + .16 * i) + Math.sin(p) * sw * .1, y = GY * (.16 + .09 * (i % 2)) + Math.sin(t / 3100 + i * 2.3) * GY * .07;
+      glow(g, '220,235,255', x, y, px * 9, .25 * a);
+      withAlpha(g, .55 * a, () => drawPix(g, ANGEL[Math.floor(t / 240 + i) % 2], px, x - spW(ANGEL[0], px) / 2, y - spH(ANGEL[0], px) / 2, Math.cos(p) < 0));
+    }
   }
 
   // Once a frame: the sleigh and the caravan move on, start or wait.
@@ -1020,6 +1131,11 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       const s = st.santa; s.x += s.dir * s.v * dt;
       if (s.x < -W * .6 || s.x > W * 1.6) { st.santa = null; st.nextSanta = t + 30000 + 60000 * Math.random(); }
     }
+    if (!st.au && t >= st.nextAu) {
+      if (!st.nextAu) st.nextAu = t + 15000 + 10000 * Math.random();
+      else st.au = { t0: t, dur: 10000 + 10000 * Math.random() };
+    }
+    if (st.au && t > st.au.t0 + st.au.dur) { st.au = null; st.nextAu = t + 60000 + 30000 * Math.random(); }
     if (!st.men && t >= st.nextMen) st.men = { x: W + u * 4 };   // they set out from just past the right edge
     if (st.men) {
       st.men.x -= (u * 3.2 + E.scrollV) * dt;            // a slow walk along the road, which scrolls with the town
@@ -1028,17 +1144,22 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
   }
 
   registerTheme('xmas', { name: 'Christmas Village',
-    kit: { styles: ['pairs', 'grid', 'wide', 'pairs'], roofs: [['pyramid', 4], ['pyramid', 3], ['pyramid', 5], ['pyramid', 4]],
-      tall: 0, shrink: .85, w0: 7, gaps: [.8, 1.8], landmarks: ['chapel'], lmChance: .07, lmScale: 3 },
+    kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'slim', 'pairs'], roofs: [['pyramid', 4], ['pyramid', 3], ['pyramid', 5.5], ['pyramid', 2.5], ['pyramid', 7], ['pyramid', 4]],
+      tall: 0, shrink: .85, w0: 6, gaps: [.6, 2.2], landmarks: ['workshop', 'chapel', 'ginger'], lmChance: .2, lmScale: 3 },
     minF: .25, maxF: .2, weather: 'snow', planes: false, roofLights: false, searchlights: false,
     sky: [[0, '#020615'], [.6, '#0a1838'], [1, '#1c3256']], skyToGround: true,
     stars: true, moon: false, cloud: 'rgba(160,180,220,.12)', fogRGB: '190,205,230',
     body: '#141019', side: '#1d1822', top: '#262030',
     win: c => ({ h: 30 + c.h / 360 * 20, s: 90, m: c.m }),   // warm candle-gold, still swelling with the music
     back: { h: .45, density: .6, body: '#0b1428', win: () => 'rgba(255,200,120,.3)' },
-    drawBehind(g, E) {                                    // the star and the sleigh, in front of the clouds, behind the rooftops
+    drawSky(g, E) {                                       // now and then, a faint aurora behind everything
+      step(E); const a = auA(E.t);
+      if (a > 0) curtains(g, E, .35 + .4 * avg(E.bands, 3, 7), E.t / 3, a * .45);
+    },
+    drawBehind(g, E) {                                    // the star, the angels and the sleigh, in front of the clouds, behind the rooftops
       step(E); if (E.widget) return;                 // the widget has no sky
       star(g, E);
+      const a = auA(E.t); if (a > 0) angels(g, E, a);
       const s = st.santa; if (!s) return;
       const px = pxOf(E, .42), flip = s.dir < 0, f = Math.floor(E.t / 160) % 2, bob = Math.sin(E.t / 500 + s.ph) * px * 3;
       const sw = spW(SLEIGH, px), dw = spW(LEAD[0], px), gap = dw * 1.15, sy = s.y + bob;
@@ -1061,11 +1182,26 @@ const avg = (bands, a, z) => { let s = 0; for (let k = a; k <= z; k++) s += band
       const u = E.unit, top = b.tiers[b.tiers.length - 1], tw = top.w * u, h = b.roof[1] * u, k = .5;
       g.fillStyle = '#eef3fb'; g.beginPath(); g.moveTo(tip[0], tip[1] - .5); g.lineTo(tip[0] - tw / 2 * k, tip[1] + h * k);
       g.lineTo(tip[0] - tw * .1, tip[1] + h * k * .8); g.lineTo(tip[0] + tw * .05, tip[1] + h * k); g.lineTo(tip[0] + tw / 2 * k, tip[1] + h * k); g.fill();
-      const ey = tip[1] + h, n = Math.max(3, Math.round(tw / (u * 1.4))), r = Math.max(1, u * .28);
-      for (let i = 0; i <= n; i++) {                       // the bulbs swap colours along the string, brighter on the beat
+      const ey = tip[1] + h, v = b.id % 5;
+      if (v === 0 || v === 2 || v === 3) {                  // a chimney, sometimes smoking
+        const chx = tip[0] - tw * .26, chy = tip[1] + h * .45;
+        g.fillStyle = '#141019'; g.fillRect(chx, chy - u * 2.4, u * 1.2, u * 2.4); g.fillStyle = '#eef3fb'; g.fillRect(chx - u * .15, chy - u * 2.6, u * 1.5, u * .4);
+        if (v !== 3 && !E.widget) for (let k = 0; k < 3; k++) {
+          const p = (E.t / 3400 + k / 3 + b.id * .37) % 1;
+          withAlpha(g, .3 * (1 - p), () => { g.fillStyle = '#d6dcec'; g.beginPath(); g.arc(chx + u * .6 + p * u * 2, chy - u * 3 - p * u * 5, u * (.4 + p * .8), 0, TAU); g.fill(); });
+        }
+      }
+      const n = Math.max(3, Math.round(tw / (u * 1.4))), r = Math.max(1, u * .28);
+      if (v <= 1) for (let i = 0; i <= n; i++) {           // coloured bulbs swapping along the string, brighter on the beat
         const x = cx - tw / 2 + tw * i / n, sag = (i % 2) * u * .25;
         const c = BULBS[(i + Math.floor(E.t / 700) + b.id) % 4];
         withAlpha(g, .55 + .45 * b.level, () => { g.fillStyle = c; g.beginPath(); g.arc(x, ey + sag, r, 0, TAU); g.fill(); });
+      } else if (v === 2) withAlpha(g, .5 + .5 * b.level, () => {   // warm white icicle lights
+        g.fillStyle = '#fff2c8';
+        for (let i = 0; i <= n * 2; i++) g.fillRect(cx - tw / 2 + tw * i / (n * 2), ey, Math.max(1, u * .2), u * (.4 + .5 * ((i * 7) % 3) / 2));
+      }); else if (v === 4) {                              // a candy-cane garland
+        const m = n * 2;
+        for (let i = 0; i < m; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#e8202a'; g.fillRect(cx - tw / 2 + tw * i / m, ey, tw / m + .5, Math.max(1, u * .35)); }
       }
       if (b.id % 3 === 0 && !E.widget) {                    // a wreath with a red bow
         const wy = ey + u * 3, wr = Math.max(2, u * 1.1);
