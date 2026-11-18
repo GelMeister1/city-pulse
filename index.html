@@ -195,6 +195,15 @@
       <option value="petals">Cherry blossoms</option>
       <option value="leaves">Autumn leaves</option>
     </select></label>
+    <label>Season <select id="season">
+      <option value="off">Off</option>
+      <option value="auto">Auto (today's date)</option>
+      <option value="spring">Spring</option>
+      <option value="summer">Summer</option>
+      <option value="fall">Fall</option>
+      <option value="winter">Winter</option>
+    </select></label>
+    <span id="seasonHint" class="wxStatus"></span>
     <label>Amount <input type="range" id="wxAmt" min="5" max="100"></label>
     <label>Live weather <select id="liveWx">
       <option value="off">Off</option>
@@ -259,7 +268,8 @@ const DEF = { city: 'nyc',                             // New York on a first ru
   tourOff: [],                                            // city menu values left out of the tour
   ownLights: false,
   wxAuto: false,
-  liveWx: 'off', wxName: '', wxLat: null, wxLon: null };   // live weather: off, this skyline's city, or a place you chose                                        // the weather was switched on by the city (e.g. Dark City's rain), not by you                                     // tour across all screens: this screen uses its own Lights settings
+  liveWx: 'off', wxName: '', wxLat: null, wxLon: null,
+  season: 'off' };                                        // off, auto (by date), spring, summer, fall, winter   // live weather: off, this skyline's city, or a place you chose                                        // the weather was switched on by the city (e.g. Dark City's rain), not by you                                     // tour across all screens: this screen uses its own Lights settings
 let S;
 // Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
 const SHARED_KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
@@ -270,6 +280,13 @@ const LIGHT = ['mode', 'peak', 'effect', 'color', 'speed', 'react', 'loudFill', 
 const KEY = perScreen ? `${SHARED_KEY}:${screenI}` : spanScreen ? OWN_KEY : SHARED_KEY;
 // A screen's own settings start as a copy of the shared ones; the wallpaper starts as a copy of the full-screen look.
 const stored = () => localStorage.getItem(KEY) || localStorage.getItem(SHARED_KEY) || (TARGET === 'wall' && localStorage.getItem('cityPulse:full')) || '{}';
+const SEASON_WX = { spring: 'petals', fall: 'leaves', winter: 'snow' };
+let seasonAt = -1, seasonAuto = 'winter';
+function seasonNow() {
+  if (S.season !== 'auto') return S.season === 'off' ? null : S.season;
+  if (Date.now() - seasonAt > 60e3) { seasonAt = Date.now(); seasonAuto = ['winter', 'spring', 'summer', 'fall'][Math.floor((new Date().getMonth() + 1) % 12 / 3)]; }
+  return seasonAuto;
+}
 let savedView;                                           // span mode forces the tour without overwriting the saved view
 let tourLights = null;                                   // span mode, own lights on: the tour's Lights settings, kept to save back
 function loadSettings(json) {
@@ -1078,7 +1095,10 @@ function refreshPanel() {
   for (const el of boxes) el.checked = !S.tourOff.includes(el.value);
   $('tourCount').textContent = boxes.length ? `${boxes.filter(el => el.checked).length} of ${boxes.length}` : '';
   hide('traffic', !S.ground.startsWith('street'));
-  hide('wxAmt', S.weather === 'none' || S.liveWx !== 'off');
+  hide('wxAmt', (S.weather === 'none' && !SEASON_WX[seasonNow()]) || S.liveWx !== 'off');
+  const sn = seasonNow(), held = SEASON_WX[sn] && (S.liveWx !== 'off' || (S.weather !== 'none' && !S.wxAuto));
+  $('seasonHint').textContent = !sn ? '' : (S.season === 'auto' ? `It's ${sn} now. ` : '') +
+    (held ? (S.liveWx !== 'off' ? 'Live weather is on, so the season only changes the look.' : 'Your Weather choice wins. Set it to Clear for the season’s weather.') : '');
   hide('wxPlaceIn', S.liveWx !== 'place'); if ($('wxPick').options.length) $('wxPick').hidden = S.liveWx !== 'place';
   $('weather').disabled = S.liveWx !== 'off'; showLive();
   hide('flyers', S.city !== 'cyber' && S.view !== 'tour');
@@ -1509,7 +1529,7 @@ function drawBuilding(g, b, cx, t) {
       };
       if (outline) { g.strokeStyle = outline; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); edges3d(); }   // e.g. Synthwave's neon outlines
       else if (edge && !widget) { g.strokeStyle = edge; g.lineWidth = 1; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); edges3d(); }
-      if (weatherNow() === 'snow') { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }
+      if (snowy()) { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
@@ -1586,7 +1606,12 @@ function showLive() {
     : S.liveWx === 'city' && !CITY_LL[S.city] ? 'Live weather follows real cities only'
     : S.liveWx === 'place' && !Number.isFinite(S.wxLat) ? 'Type a city and press Find' : 'Checking the weather…';
 }
-const weatherNow = () => theme.noWeather ? 'none' : live ? live.type : S.weather;
+// Season: its weather (spring blossoms, fall leaves, winter snow) only while the sky would otherwise be clear, or the clear
+// sky is just the city's own default; weather you pick and live weather win. Its look (snow on roofs and streets, the park
+// trees' colours) stays either way. Auto follows today's date (northern hemisphere), checked once a minute.
+const weatherNow = () => theme.noWeather ? 'none' : S.liveWx !== 'off' ? (live ? live.type : S.weather)
+  : (S.weather === 'none' || S.wxAuto) && SEASON_WX[seasonNow()] || S.weather;
+const snowy = () => seasonNow() === 'winter' || weatherNow() === 'snow';
 const wxAmtNow = () => live ? live.amt : S.wxAmt;
 // How much of the sky at screen x belongs to themes that pass test (blended where tour stretches meet).
 function skyShare(x, test) {
@@ -1668,17 +1693,18 @@ function drawSky(g, t, dt) {
 
 // Ground: street (or park) under the buildings, with streetlights and slow traffic; thin water at the very bottom.
 let cars = [], carsT = -1, travel = 0;
+const TREE_TINT = { spring: '#150a12', summer: '#04100a', fall: '#170b03', winter: '#0a0d12' };   // the park's trees at night, by season
 function drawGround(g, dt, scrollV) {
   if (S.ground === 'none') return;
   const u = unit, gh = GH, park = S.ground === 'parkWater';
   if (park) {
-    g.fillStyle = '#050d08'; g.fillRect(0, GY, W, gh);
+    g.fillStyle = snowy() ? '#d9e0ee' : '#050d08'; g.fillRect(0, GY, W, gh);   // in winter, a snowy park
     g.fillStyle = 'rgba(200,190,150,.08)'; g.fillRect(0, GY + gh * .55, W, Math.max(1, gh * .12));
     const sp = 9 * u;
     for (let k = Math.floor((travel - 6 * u) / sp); k * sp - travel < W + 6 * u; k++) {
       const x = k * sp - travel + hash(k, 1, 2) * sp * .6, r = (1.4 + hash(k, 3, 4) * 1.2) * u, top = GY + gh * .3;
       g.fillStyle = '#04080a'; g.fillRect(x - u * .2, top - u * 1.2, u * .4, u * 1.4);
-      g.fillStyle = '#030907'; g.beginPath(); g.arc(x, top - u * 1.2 - r * .6, r, 0, 7); g.arc(x + r * .6, top - u * 1.2 - r * .3, r * .7, 0, 7); g.fill();
+      g.fillStyle = TREE_TINT[seasonNow()] || '#030907'; g.beginPath(); g.arc(x, top - u * 1.2 - r * .6, r, 0, 7); g.arc(x + r * .6, top - u * 1.2 - r * .3, r * .7, 0, 7); g.fill();
     }
   } else {
     g.fillStyle = '#121219'; g.fillRect(0, GY, W, gh * .2);
@@ -1704,6 +1730,9 @@ function drawGround(g, dt, scrollV) {
       g.fillStyle = '#fff3c8'; g.fillRect(fx - c.dir * 1.5 - .75, cy - ch * .75, 1.5, Math.max(1, ch * .3));
       g.fillStyle = '#ff2a2a'; g.fillRect(bx - .75, cy - ch * .75, 1.5, Math.max(1, ch * .3));
     }
+  }
+  if (!park && snowy()) {                                // snow banked along the street's edges (the park's is under its trees)
+    g.fillStyle = 'rgba(228,235,250,.92)'; g.fillRect(0, GY, W, gh * .2); g.fillRect(0, GY + gh * .9, W, gh * .1);
   }
   const sp = 24 * u, lampH = Math.max(gh * 1.4, 4.5 * u), glow = sprite('255,200,120');
   for (let k = Math.floor(travel / sp) - 1; k * sp - travel < W + sp; k++) {

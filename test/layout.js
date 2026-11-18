@@ -54,6 +54,17 @@ app.whenReady().then(async () => {
   // Live weather ignores a saved place that isn't a real position (it would throw every minute)
   const badPlace = await win.webContents.executeJavaScript(`(() => { const k = [S.liveWx, S.wxLat, S.wxLon]; S.liveWx = 'place'; S.wxLat = '40'; S.wxLon = null; const w = liveWhere(); [S.liveWx, S.wxLat, S.wxLon] = k; return w; })()`);
   if (badPlace !== null) fails.push('live weather accepted a bad place');
+  // Season: its weather only while the sky is otherwise clear; weather you pick and live weather win; Auto follows the date
+  const season = await win.webContents.executeJavaScript(`(() => {
+    const keep = { ...S }; S.city = 'nyc'; layout(); S.liveWx = 'off'; S.wxAuto = false; const out = [];
+    for (const [season, weather, auto] of [['winter', 'none'], ['fall', 'none'], ['winter', 'rain'], ['winter', 'rain', true], ['summer', 'none'], ['off', 'fog']]) {
+      S.season = season; S.weather = weather; S.wxAuto = !!auto; out.push(weatherNow());
+    }
+    S.season = 'winter'; S.weather = 'none'; S.liveWx = 'city'; out.push(weatherNow());
+    S.season = 'auto'; out.push(['winter', 'spring', 'summer', 'fall'].includes(seasonNow()));
+    Object.assign(S, keep); layout(); return out.join(',');
+  })()`);
+  if (season !== 'snow,leaves,rain,snow,none,fog,none,true') fails.push('season vs weather: ' + season);
   await new Promise(r => setTimeout(r, 500));            // let a few frames draw the last layout
   console.log(`${cities.length} cities x ${VIEWS.length} views x ${SIZES.length} sizes`);
   if (errors.length) fails.push(...errors.map(e => 'console: ' + e.slice(0, 200)));

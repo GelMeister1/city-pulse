@@ -33,7 +33,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Loudness meter:** on Windows, tops out at your Windows volume, so at 50% volume it peaks halfway.
 - **Skylines:**
   - **14 real cities** with hand-drawn landmarks: Charlotte, Chicago, Dubai, Hong Kong, London, New York, Paris, San Francisco, Seattle, Shanghai, Sydney, Tampa, Tokyo and Toronto. New York is the first one you see.
-  - **14 themed cities**: Abyssal City, Aero, Atlantis, Aurora Harbor, Brasshaven, Cyberpunk, Dark City, Desert Mirage, The Grid, Lantern District, Lunar Colony, Neon City, Neon Strip and Synthwave. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
+  - **15 themed cities**: Abyssal City, Aero, Atlantis, Aurora Harbor, Brasshaven, Christmas Village, Cyberpunk, Dark City, Desert Mirage, The Grid, Lantern District, Lunar Colony, Neon City, Neon Strip and Synthwave. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
 - **Light styles:**
   - **Floors:** an equalizer that climbs each building, with a falling peak marker.
   - **Pulse:** each building's windows follow the volume.
@@ -46,6 +46,8 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - a street with traffic, a park, or a thin river with reflections
   - a hazy back skyline and 3D building detail
 - **Weather:** rain, snow, thunderstorms (lightning on the bass), fog, cherry blossoms and autumn leaves.
+- **Seasons:** Spring, Summer, Fall or Winter, or Auto to follow today's date. A season brings its weather (cherry blossoms, autumn leaves, snow) while the Weather setting is Clear; a weather you pick, or live weather, always wins. Winter also puts snow on the rooftops, streets and parks, and each season tints the park trees.
+- **Christmas Village:** snowy cottages with string lights and wreaths, a little church, candy canes and presents along a snowy road, and a frozen river. A great four-pointed star gleams in the top left, a big Christmas tree in the bottom right lights up with the music under a gold star, a sleigh pulled by reindeer (a glowing red nose in front) crosses the sky every 30 to 90 seconds, and three travellers on camels, in green, red and blue robes with small gold crowns, ride single file along the road from right to left.
 - **Live weather (optional):** mirror the real current weather of the skyline's city, or of any city you type, refreshed every 15 minutes from [Open-Meteo](https://open-meteo.com) (free, no account). City Pulse never looks up where you are: only the name you search for, and then that place's rounded coordinates, are sent. It's always night in City Pulse, so a sunny day shows as a clear night.
 - **Ambient motion:** each item can be switched on or off: blinking roof lights, windows switching on and off, searchlights, stars, shooting stars, moon, clouds, planes and flying cars.
 - **Views:**
