@@ -2,6 +2,7 @@
 //   volume  -> master volume (0..1), mute and the default output device's id
 //   outputs, inputs -> active output / input devices [{ id, name, default }]
 //   wallpaper(hwnd, x, y, w, h) -> put a window behind the desktop icons; refreshWallpaper() repaints the normal wallpaper
+//   unwall(hwnd) -> hide such a window and take it back out of Explorer's layer, so closing it doesn't wait on Explorer
 // Requests are answered one JSON line each, in order. If PowerShell isn't available every call resolves to null; if it exits it restarts.
 const { spawn } = require('child_process');
 
@@ -81,6 +82,7 @@ public static class CP {
   [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] static extern IntPtr GetWindowLongPtr(IntPtr h, int i);
   [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] static extern IntPtr SetWindowLongPtr(IntPtr h, int i, IntPtr v);
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
   [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int hh, uint flags);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SystemParametersInfo(uint a, uint b, StringBuilder c, uint d);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SystemParametersInfo(uint a, uint b, string c, uint d);
@@ -101,6 +103,15 @@ public static class CP {
     SetWindowLongPtr(win, -16, new IntPtr(style | 0x40000000L));                             // WS_CHILD: the frame would eat a border
     SetParent(win, worker);
     SetWindowPos(new IntPtr(hwnd), IntPtr.Zero, x, y, w, h, 0x0040 | 0x0004 | 0x0020);     // SHOWWINDOW | NOZORDER | FRAMECHANGED, relative to the layer
+    return "{\"ok\":true}";
+  }
+
+  public static string Unwall(long hwnd) {
+    var win = new IntPtr(hwnd);
+    ShowWindow(win, 0);                                                                       // SW_HIDE
+    long style = GetWindowLongPtr(win, -16).ToInt64();
+    SetWindowLongPtr(win, -16, new IntPtr((style & ~0x40000000L) | 0x80000000L));            // a top-level popup again, not WS_CHILD
+    SetParent(win, IntPtr.Zero);
     return "{\"ok\":true}";
   }
 
@@ -127,6 +138,7 @@ while ($true) {
       'outputs'   { [Console]::Out.WriteLine([CP]::Outputs()) }
       'inputs'    { [Console]::Out.WriteLine([CP]::Inputs()) }
       'wallpaper' { [Console]::Out.WriteLine([CP]::Wallpaper([long]$p[1], [int]$p[2], [int]$p[3], [int]$p[4], [int]$p[5])) }
+      'unwall'    { [Console]::Out.WriteLine([CP]::Unwall([long]$p[1])) }
       'refresh'   { [CP]::RefreshWallpaper(); [Console]::Out.WriteLine('{"ok":true}') }
       default     { [Console]::Out.WriteLine('null') }
     }
@@ -169,5 +181,6 @@ module.exports = {
   outputs: () => call('outputs'),
   inputs: () => call('inputs'),
   wallpaper: (hwnd, b) => call(`wallpaper ${BigInt(hwnd)} ${int(b.x)} ${int(b.y)} ${int(b.width)} ${int(b.height)}`),
+  unwall: hwnd => call(`unwall ${BigInt(hwnd)}`),
   refreshWallpaper: () => call('refresh'),
 };

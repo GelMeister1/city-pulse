@@ -111,11 +111,19 @@ function raise(w) { if (alive(fulls).length) w.setAlwaysOnTop(true, 'screen-save
 // Calls run one at a time: a second call during the old windows' teardown would otherwise build a set nobody tracks.
 let wallJob = Promise.resolve();
 const setWallpaper = cfg => (wallJob = wallJob.catch(() => {}).then(() => applyWallpaper(cfg)));
+// Take the wallpaper windows down. They are child windows of Explorer's desktop layer, and destroying them there makes this
+// process wait on Explorer (the Control Center stops painting meanwhile), so the helper first hands each one back as a
+// hidden top-level window. Then the normal wallpaper is repainted. Neither step may hold things up for long.
+async function releaseWalls() {
+  const old = alive(walls); walls = [];
+  if (!old.length) return;
+  const hwnd = w => w.getNativeWindowHandle().readBigUInt64LE(0), soon = ms => new Promise(r => setTimeout(r, ms));
+  if (!MAC) await Promise.race([Promise.all(old.map(w => win32.unwall(hwnd(w)))), soon(2000)]);
+  old.forEach(w => { if (!w.isDestroyed()) w.destroy(); });
+  await Promise.race([win32.refreshWallpaper(), soon(3000)]);
+}
 async function applyWallpaper(cfg) {
-  if (alive(walls).length) {
-    alive(walls).forEach(w => w.destroy()); walls = [];
-    await Promise.race([win32.refreshWallpaper(), new Promise(r => setTimeout(r, 3000))]);
-  }
+  await releaseWalls();
   prefs.wall = cfg; savePrefs();
   const one = cfg.mode === 'one' && screen.getAllDisplays().find(x => x.id === cfg.display);
   if (cfg.mode === 'off' || (cfg.mode === 'one' && !one)) return updateTray();
@@ -362,9 +370,7 @@ app.on('before-quit', e => {
   stopCapture?.(); clearTimeout(retry);
   if (alive(walls).length) {
     e.preventDefault();
-    alive(walls).forEach(w => w.destroy()); walls = [];
-    // never let a slow wallpaper repaint hold up quitting
-    Promise.race([win32.refreshWallpaper(), new Promise(r => setTimeout(r, 3000))]).finally(() => { win32.stop(); app.quit(); });
+    releaseWalls().finally(() => { win32.stop(); app.quit(); });   // each step is capped, so quitting is never held up long
   } else win32.stop();
 });
 app.on('window-all-closed', () => {});                     // keep running in the tray

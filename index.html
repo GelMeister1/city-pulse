@@ -190,6 +190,7 @@
       <option value="none">Clear</option>
       <option value="rain">Rain</option>
       <option value="snow">Snow</option>
+      <option value="blizzard">Blizzard</option>
       <option value="storm">Thunderstorm</option>
       <option value="fog">Fog</option>
       <option value="petals">Cherry blossoms</option>
@@ -1529,7 +1530,7 @@ function drawBuilding(g, b, cx, t) {
       };
       if (outline) { g.strokeStyle = outline; g.lineWidth = 1.2; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); edges3d(); }   // e.g. Synthwave's neon outlines
       else if (edge && !widget) { g.strokeStyle = edge; g.lineWidth = 1; g.strokeRect(x0 + .5, y - th + .5, tw - 1, th); edges3d(); }
-      if (snowy()) { g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - Math.max(1, u * .35), tw, Math.max(1, u * .35)); }
+      if (snowy()) { const sd = Math.max(1, u * .35 * snowCap()); g.fillStyle = 'rgba(232,238,255,.85)'; g.fillRect(x0, y - th - sd, tw, sd); }
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
@@ -1581,7 +1582,7 @@ const wmo = c => c >= 95 ? ['storm', 80]
   : (c >= 71 && c <= 77) || c === 85 || c === 86 ? ['snow', c === 75 || c === 86 ? 90 : c === 73 ? 60 : 35]
   : (c >= 51 && c <= 67) || (c >= 80 && c <= 82) ? ['rain', c <= 57 ? 25 : c === 61 || c === 80 ? 40 : c === 63 || c === 66 || c === 81 ? 65 : 90]
   : c === 45 || c === 48 ? ['fog', 60] : ['none', 0];
-const WX_WORDS = { none: 'clear', rain: 'rain', snow: 'snow', storm: 'thunderstorm', fog: 'fog' };
+const WX_WORDS = { none: 'clear', rain: 'rain', snow: 'snow', blizzard: 'blizzard', storm: 'thunderstorm', fog: 'fog' };
 function liveWhere() {
   if (S.liveWx === 'city') { const ll = CITY_LL[S.city]; return ll && CITIES[S.city] && { lat: ll[0], lon: ll[1], name: CITIES[S.city].name }; }
   if (S.liveWx === 'place' && Number.isFinite(S.wxLat) && Number.isFinite(S.wxLon)) return { lat: S.wxLat, lon: S.wxLon, name: String(S.wxName || '') };
@@ -1611,7 +1612,9 @@ function showLive() {
 // trees' colours) stays either way. Auto follows today's date (northern hemisphere), checked once a minute.
 const weatherNow = () => theme.noWeather ? 'none' : S.liveWx !== 'off' ? (live ? live.type : S.weather)
   : (S.weather === 'none' || S.wxAuto) && SEASON_WX[seasonNow()] || S.weather;
-const snowy = () => seasonNow() === 'winter' || weatherNow() === 'snow';
+const blizzard = () => weatherNow() === 'blizzard';
+const snowy = () => seasonNow() === 'winter' || weatherNow() === 'snow' || blizzard();
+const snowCap = () => blizzard() ? 2.4 : 1;                // how much deeper the snow lies on roofs and streets
 const wxAmtNow = () => live ? live.amt : S.wxAmt;
 // How much of the sky at screen x belongs to themes that pass test (blended where tour stretches meet).
 function skyShare(x, test) {
@@ -1637,7 +1640,7 @@ function drawSky(g, t, dt) {
       flashA *= Math.pow(.02, dt);
     }
   }
-  const clearSky = !['rain', 'storm', 'fog'].includes(wxNow);   // smog and rain clouds hide the stars, and so do some themes' skies
+  const clearSky = !['rain', 'storm', 'fog', 'blizzard'].includes(wxNow);   // smog and rain clouds hide the stars, and so do some themes' skies
   if (clearSky && S.stars) for (const s of stars) {
     const a = skyShare(s.x, starry) * (.25 + .55 * (.5 + .5 * Math.sin(t / 700 * s.sp + s.ph)));
     if (a > .01) { g.fillStyle = `rgba(255,255,255,${a})`; g.fillRect(s.x, s.y, s.s, s.s); }
@@ -1732,7 +1735,8 @@ function drawGround(g, dt, scrollV) {
     }
   }
   if (!park && snowy()) {                                // snow banked along the street's edges (the park's is under its trees)
-    g.fillStyle = 'rgba(228,235,250,.92)'; g.fillRect(0, GY, W, gh * .2); g.fillRect(0, GY + gh * .9, W, gh * .1);
+    const k = blizzard() ? 1.8 : 1;                     // a blizzard drifts it deep over the curbs
+    g.fillStyle = 'rgba(228,235,250,.92)'; g.fillRect(0, GY, W, gh * .2 * k); g.fillRect(0, GY + gh * (1 - .1 * k), W, gh * .1 * k);
   }
   const sp = 24 * u, lampH = Math.max(gh * 1.4, 4.5 * u), glow = sprite('255,200,120');
   for (let k = Math.floor(travel / sp) - 1; k * sp - travel < W + sp; k++) {
@@ -1789,7 +1793,7 @@ function drawWeather(g, t, dt) {
   const key = wxNow + wxAmtNow() + W + H;
   if (key !== wxKey) {
     wxKey = key;
-    const per = { rain: 1100, snow: 3200, petals: 13000, leaves: 13000 }[type];   // pixels of screen per particle
+    const per = { rain: 1100, snow: 3200, blizzard: 750, petals: 13000, leaves: 13000 }[type];   // pixels of screen per particle
     const n = per ? Math.round(W * H / per * amt * (wxNow === 'storm' ? 1.6 : 1)) : 0;
     wx = Array.from({ length: n }, () => ({ x: Math.random() * W * 1.2, y: Math.random() * H, s: Math.random(), rot: Math.random() * 6, spin: (Math.random() - .5) * 3 }));
   }
@@ -1809,6 +1813,23 @@ function drawWeather(g, t, dt) {
       if (p.y > H) { p.y = -5 - Math.random() * H * .3; p.x = Math.random() * W; p.s = Math.random(); }
       const r = 1 + p.s * 1.8; g.fillRect(p.x, p.y, r, r);
     }
+  } else if (type === 'blizzard') {
+    const gust = .6 + .4 * Math.sin(t / 2300) + .25 * Math.sin(t / 700), wind = W * .13 * gust;   // px/s, leftward, in gusts
+    const haze = g.createLinearGradient(0, GY * .2, 0, H);   // the whiteout: thickest low down, breathing with the gusts
+    haze.addColorStop(0, 'rgba(215,225,245,0)'); haze.addColorStop(1, `rgba(215,225,245,${(.2 + .14 * gust) * (.4 + .6 * amt)})`);
+    g.fillStyle = haze; g.fillRect(0, GY * .2, W, H - GY * .2);
+    g.strokeStyle = 'rgba(240,244,255,.85)'; g.lineWidth = 2.2; g.lineCap = 'round'; g.beginPath();
+    for (const p of wx) {
+      const vy = 70 + p.s * 110, vx = -(wind * (.6 + p.s * .8)) + Math.sin(t / 500 + p.rot) * 20;
+      p.y += vy * dt; p.x += vx * dt;
+      if (p.y > H || p.x < -20) {                        // back in from the top or the windward edge
+        if (Math.random() < .5) { p.y = -5 - Math.random() * H * .2; p.x = Math.random() * W * 1.3; } else { p.x = W + Math.random() * 40; p.y = Math.random() * H; }
+        p.s = Math.random();
+      }
+      const len = .012 + p.s * .022;                     // fast flakes blur a little along their path
+      g.moveTo(p.x, p.y); g.lineTo(p.x - vx * len, p.y - vy * len);
+    }
+    g.stroke(); g.lineCap = 'butt';
   } else if (type === 'petals' || type === 'leaves') {
     const cols = type === 'petals' ? ['#ffb7d5', '#ff9ec4', '#ffd1e3'] : ['#d2691e', '#b5651d', '#e0a030', '#a0371c'];
     g.globalAlpha = .85;
@@ -1877,21 +1898,23 @@ function perStretch(g, layer, has = () => true, own = false) {   // own: the lay
   if (!bands.length) {                                   // one stretch (or one city) fills the screen
     const p = same ? ps[0] : ps.find(p => p.b <= 0 && p.c >= W);
     if (!p || !has(p.T)) return;
-    if (!own) return layer(g, p.T);
-    layG.save(); layG.clearRect(0, 0, W, H); layer(layG, p.T); layG.restore(); blit(g, lay, 0, W);
+    if (!same) { E.from = p.b; E.to = p.c; }
+    if (!own) layer(g, p.T);
+    else { layG.save(); layG.clearRect(0, 0, W, H); layer(layG, p.T); layG.restore(); blit(g, lay, 0, W); }
+    E.from = 0; E.to = W;
     return;
   }
   for (const p of bands) accG.clearRect(Math.max(0, p.a), 0, Math.min(W, p.b) - Math.max(0, p.a), H);
   for (const p of ps) {
     const ea = Math.max(0, p.a), ez = Math.min(W, p.d), ca = Math.max(0, p.b), cz = Math.min(W, p.c);
     if (ez <= ea || !has(p.T)) continue;
-    E.left = ea; E.right = ez;
+    E.left = ea; E.right = ez; E.from = p.b; E.to = p.c;
     layG.save(); layG.clearRect(ea, 0, ez - ea, H); layG.beginPath(); layG.rect(ea, 0, ez - ea, H); layG.clip(); layer(layG, p.T); layG.restore();
     if (cz > ca) blit(g, lay, ca, cz);
     fadeAdd(p.a, p.b, 0, 1); fadeAdd(p.c, p.d, 1, 0);
   }
   for (const p of bands) blit(g, acc, Math.max(0, p.a), Math.min(W, p.b));
-  E.left = 0; E.right = W;
+  E.left = 0; E.right = W; E.from = 0; E.to = W;
 }
 function groundLayer(g, T, t, dt, scrollV) {            // a theme's own ground, or the street/park with its river
   if (T.ground) { if (T.ground.draw) T.ground.draw(g, E); return; }
@@ -1961,11 +1984,11 @@ function frame(t) {
       g.drawImage(bc, x, 0);
       if (cut) g.restore();
     } };
-    if (!tour) row(g);
+    if (!tour) { if (!theme.noBack) row(g); }
     else perStretch(g, (g, T) => {                       // each stretch adds its body colour to the colourless row, then trims to the row's shape
       row(g); g.globalCompositeOperation = 'lighter'; g.fillStyle = T.back.body; g.fillRect(0, 0, W, GY);
       g.globalCompositeOperation = 'destination-in'; row(g, true); g.globalCompositeOperation = 'source-over';
-    }, undefined, true);
+    }, T => !T.noBack, true);
   }
   perStretch(g, (g, T) => T.drawBehind(g, E), T => T.drawBehind);
 
@@ -2029,7 +2052,7 @@ const E = { hash, sprite, pixelArt, bands, widget, wallMode, scene: cv, sky: nul
     return x - W / 2 > worldW / 2 ? x - worldW : x;
   } };
 function env(t, dt, scrollV) {
-  Object.assign(E, { W, H, GY, WY, GH, unit, t, dt, off, worldW, travel, scrollV, spectrum, bassFlash, S, wrapK: touring(S.view) ? WRAP2 : WRAP1, left: 0, right: W });
+  Object.assign(E, { W, H, GY, WY, GH, unit, t, dt, off, worldW, travel, scrollV, spectrum, bassFlash, S, snowCap: snowCap(), wrapK: touring(S.view) ? WRAP2 : WRAP1, left: 0, right: W, from: 0, to: W });
 }
 // Crisp pixel sprite: rows of palette keys ('.' or ' ' = clear), top-left at (x, y), each pixel px CSS px, snapped to whole pixels.
 function pixelArt(g, rows, palette, x, y, px) {
@@ -2065,12 +2088,12 @@ const newKey = k => typeof k === 'string' && !!k && k !== 'none' && k !== 'gener
 //   stars, moon: allow stars and shooting stars / the moon · planes: false = no passing plane · overcast: always a low cloud deck
 //   cloud, rain, fogRGB ('r,g,b') · body, side, top: building faces · outline(b) → colour or null
 //   win({h, s, m}, b) → {h, s, m}: window colour transform · roofLights: false = no red warning lights on its buildings
-//   back {h, density, body, win(r 0..1) → colour}: the hazy back row · ground {h: share of H, draw(g, E)}: replaces street and water
+//   back {h, density, body, win(r 0..1) → colour}: the hazy back row · noBack: no back row (the theme draws its own) · ground {h: share of H, draw(g, E)}: replaces street and water
 //   searchlights: false = none · decorate(b, r, E): per generated building at layout · afterLayout(list, r, E): once, this theme's buildings
 //   drawBehind(g, E): after the back row · drawExtras(g, b, cx, tip, E): after each of its buildings · drawFront(g, E): after all buildings
 //   drawTop(g, E): after the ground and water, before the weather (things standing in front of the ground)
 // In the tour, the sky (gradient + drawSky), ground.draw, drawBehind, drawFront and drawTop are drawn for the theme's own stretch,
-// E.left..E.right on screen (0..W elsewhere), and faded into the neighbour's where they meet, possibly via a spare canvas:
+// E.snowCap: 1, or more in a blizzard (draw snow on your scenery that much deeper). E.left..E.right on screen (0..W elsewhere; E.from..E.to is the stretch's whole span, partly off screen), and faded into the neighbour's where they meet, possibly via a spare canvas:
 // draw on the g you're given and read the scene from E.scene.
 function registerTheme(key, def) {
   if (!newKey(key) || key in CITIES || !def || typeof def.name !== 'string' || !okKit(def.kit) || (def.ground && !(def.ground.h > 0)))
@@ -2469,16 +2492,25 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
 let ccState = null;
 const cc = { what: 'widget', which: null };              // what you're customising, and which screen: its index, 'tour', or null
 function ccSeg(el, items) {                              // a row of buttons: [label, current?, action]
-  el.innerHTML = items.map(([label, on], i) => `<button data-i="${i}"${on ? ' class="on"' : ''}>${esc(label)}</button>`).join('');
-  el.onclick = e => { const b = e.target.closest('button'); if (b) items[+b.dataset.i][2](); };
+  const labels = items.map(([label]) => label).join('\n');
+  if (el.dataset.labels !== labels) {                    // rebuilt only when the choices change, so a state push mid-click keeps the button
+    el.dataset.labels = labels;
+    el.innerHTML = items.map(([label], i) => `<button data-i="${i}">${esc(label)}</button>`).join('');
+  }
+  items.forEach(([, on], i) => el.children[i].classList.toggle('on', !!on));
+  el.onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    for (const x of el.children) x.classList.toggle('on', x === b);   // shows the choice at once; the app's next state confirms it
+    items[+b.dataset.i][2]();
+  };
 }
 function ccRender(st) {
-  const C = cityPulse.control, name = x => x.label || `Screen ${x.index + 1}`;
+  const C = cityPulse.control;
   ccState = st;
   ccSeg($('ccFull'), [['Off', st.fullMode === 'off', () => C.setFull('off')], ['On the widget’s screen', st.fullMode === 'one', () => C.setFull('one')],
     ['All screens: own city each', st.fullMode === 'per', () => C.setFull('per')], ['All screens: one tour across', st.fullMode === 'span', () => C.setFull('span')]]);
   ccSeg($('ccWall'), [['Off', st.wallMode === 'off', () => C.setWall('off')],
-    ...st.screens.map(x => [`${name(x)} only`, st.wallMode === 'one' && st.wallScreen === x.index, () => C.setWall('one', x.index)]),
+    ...st.screens.map(x => [`Screen ${x.index + 1} only`, st.wallMode === 'one' && st.wallScreen === x.index, () => C.setWall('one', x.index)]),
     ['All screens: own city each', st.wallMode === 'per', () => C.setWall('per')], ['All screens: one tour across', st.wallMode === 'span', () => C.setWall('span')]]);
   $('ccWidget').textContent = st.widgetShown ? 'Hide widget' : 'Show widget';
   $('ccWidget').classList.toggle('on', !!st.widgetShown);

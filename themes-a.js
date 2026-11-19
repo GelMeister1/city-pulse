@@ -728,7 +728,7 @@ function curtains(g, E, en, t, a) {
     afterLayout(list) { st.list = list; },
     drawExtras(g, b, cx, tip, E) {
       if (b.lm || !b.roof || b.roof[0] !== 'pyramid') return;
-      const tw = b.tiers[b.tiers.length - 1].w * E.unit, h = b.roof[1] * E.unit, k = .5;
+      const tw = b.tiers[b.tiers.length - 1].w * E.unit, h = b.roof[1] * E.unit, k = Math.min(.85, .5 * (1 + (E.snowCap - 1) * .5));   // deeper in a blizzard
       g.fillStyle = '#e6edf8'; g.beginPath(); g.moveTo(tip[0], tip[1] - .5); g.lineTo(tip[0] - tw / 2 * k, tip[1] + h * k); g.lineTo(tip[0] - tw * .1, tip[1] + h * k * .8); g.lineTo(tip[0] + tw * .05, tip[1] + h * k); g.lineTo(tip[0] + tw / 2 * k, tip[1] + h * k); g.fill();
     },
     ground: { h: .12, draw(g, E) {
@@ -973,7 +973,8 @@ function curtains(g, E, en, t, a) {
 
   // The toy workshop: a long factory hall under a sawtooth roof with lit skylights, candy-striped smokestacks puffing smoke,
   // big open doors under a gold star, and a conveyor belt carrying wrapped presents out into the snow.
-  registerLandmark('workshop', { w: 30, h: 30, draw(g, L) {
+  registerLandmark('workshop', { w: 45, h: 45, draw(g, L) {
+    g.scale(1.5, 1.5);                                                                                    // drawn on a 30-unit plan, shown half again as big
     const t = performance.now(), stacks = [[7, 27], [11.5, 23]];
     for (const [sx, sh] of stacks) {
       g.fillStyle = L.side ? L.body : '#f2f2f2'; g.fillRect(sx, -sh, 2.4, sh - 13);
@@ -1022,19 +1023,21 @@ function curtains(g, E, en, t, a) {
 
   // The great star: four long pointed rays (the lower one longest), faint diagonal glints, a soft halo that gently gleams.
   function star(g, E) {
-    const R = Math.min(E.W, E.GY) * .085, x = E.left + Math.min(E.W, E.GY) * .2, y = E.GY * .2;
-    const gl = .85 + .15 * Math.sin(E.t / 1400) + .08 * E.bassFlash, s = R * (1 + .03 * Math.sin(E.t / 900));
-    glow(g, '255,236,170', x, y, R * 3.2 * gl, .35 * gl);
-    glow(g, '255,250,220', x, y, R * 1.2, .7 * gl);
+    const R = Math.min(E.W, E.GY) * .075, x = E.left + Math.min(E.W, E.GY) * .2, y = E.GY * .2;
+    const gl = .85 + .15 * Math.sin(E.t / 1400) + .06 * E.bassFlash, s = R * (1 + .03 * Math.sin(E.t / 900));
+    glow(g, '255,236,170', x, y, R * 3.4 * gl, .2 * gl);
+    glow(g, '255,250,220', x, y, R * 1.3, .38 * gl);
     g.save(); g.translate(x, y);
-    g.fillStyle = 'rgba(255,248,215,.9)';
+    const fill = g.createRadialGradient(0, 0, 0, 0, 0, s * 1.7);                          // bright at the heart, fading to the tips
+    fill.addColorStop(0, 'rgba(255,252,235,.85)'); fill.addColorStop(.35, 'rgba(255,244,210,.45)'); fill.addColorStop(1, 'rgba(255,236,190,.08)');
+    g.fillStyle = fill;
     // one path through the four tips (up, right, down the longest, left), each side curving in past the centre: sharp points
     const tips = [[0, -s * 1.1], [s * .85, 0], [0, s * 1.7], [-s * .85, 0]], k = s * .09;
     g.beginPath(); g.moveTo(...tips[0]);
     for (let i = 1; i <= 4; i++) { const [a, b] = tips[i - 1], [c, d] = tips[i % 4]; g.quadraticCurveTo(Math.sign(a + c) * k, Math.sign(b + d) * k, c, d); }
     g.fill();
-    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(0, 0, s * .1, 0, TAU); g.fill();
-    g.strokeStyle = `rgba(255,245,210,${.35 * gl})`; g.lineWidth = Math.max(1, s * .025); g.beginPath();   // diagonal glints
+    g.fillStyle = 'rgba(255,255,255,.75)'; g.beginPath(); g.arc(0, 0, s * .08, 0, TAU); g.fill();
+    g.strokeStyle = `rgba(255,245,210,${.2 * gl})`; g.lineWidth = Math.max(1, s * .025); g.beginPath();   // diagonal glints
     for (const [dx, dy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { g.moveTo(dx * s * .08, dy * s * .08); g.lineTo(dx * s * .45 * gl, dy * s * .45 * gl); }
     g.stroke(); g.restore();
   }
@@ -1086,8 +1089,9 @@ function curtains(g, E, en, t, a) {
     });
   }
   function tree(g, E) {
-    const { GY, H, t } = E, sw = E.right - E.left, sp = E.spectrum, d = dpr(), base = GY + (H - GY) * .45 * .3;
-    const h = Math.round(Math.min(GY * .62, sw * .5)), w = h * .52, x = E.right - Math.min(sw, GY) * .22, top = base - h;
+    const { W, GY, H, t } = E, sp = E.spectrum, d = dpr(), base = GY + (H - GY) * .45 * .3;
+    const h = Math.round(Math.min(GY * .62, W * .5)), w = h * .52, x = E.to - Math.min(W, GY) * .22, top = base - h;
+    if (x + w < E.left || x - w > E.right) return;       // still off screen in the tour
     if (st.tk !== h + '|' + d) { st.tk = h + '|' + d; st.tree = treeBody(h, w); }
     g.drawImage(st.tree, x - st.tree.width / d / 2, top, st.tree.width / d, st.tree.height / d);
     let k = 0;
@@ -1111,12 +1115,48 @@ function curtains(g, E, en, t, a) {
   const auA = t => st.au ? Math.max(0, Math.min(1, (t - st.au.t0) / 2500, (st.au.t0 + st.au.dur - t) / 2500)) : 0;
   // Pale angels gliding about the sky while the aurora is up, each on its own slow looping path.
   function angels(g, E, a) {
-    const { GY, t } = E, sw = E.right - E.left, px = pxOf(E, .65);
+    const { GY, t } = E, sw = E.to - E.from, px = pxOf(E, .65);
     for (let i = 0; i < 4; i++) {
-      const p = t / 5200 + i * 1.7, x = E.left + sw * (.3 + .16 * i) + Math.sin(p) * sw * .1, y = GY * (.16 + .09 * (i % 2)) + Math.sin(t / 3100 + i * 2.3) * GY * .07;
+      const p = t / 5200 + i * 1.7, x = E.from + sw * (.3 + .16 * i) + Math.sin(p) * sw * .1, y = GY * (.16 + .09 * (i % 2)) + Math.sin(t / 3100 + i * 2.3) * GY * .07;
       glow(g, '220,235,255', x, y, px * 9, .25 * a);
       withAlpha(g, .55 * a, () => drawPix(g, ANGEL[Math.floor(t / 240 + i) % 2], px, x - spW(ANGEL[0], px) / 2, y - spH(ANGEL[0], px) / 2, Math.cos(p) < 0));
     }
+  }
+
+  // Behind the village, two screens wide and seamless: far snow-capped mountains, then a dark ridge of snow-dusted pines
+  // with a few cabin windows lit. Drawn once per size.
+  function hills(W, GY) {
+    const d = dpr(), w = W * 2;
+    return mk(w * d, GY * d, g => {
+      g.scale(d, d);
+      for (let i = 0; i < 16; i++) {                       // the mountains, each drawn again one tile over so the seam doesn't show
+        const ph = GY * (.22 + .2 * hash(i, 1, 81)), hw = ph * (1 + .7 * hash(i, 2, 81)), top = GY * .82 - ph;
+        for (const o of [-w, 0, w]) {
+          const px = hash(i, 3, 81) * w + o;
+          if (px + hw < 0 || px - hw > w) continue;
+          g.fillStyle = lin(g, 0, top, 0, GY * .85, [[0, '#2c3f66'], [1, '#141f36']]);
+          g.beginPath(); g.moveTo(px - hw, GY * .85); g.lineTo(px, top); g.lineTo(px + hw, GY * .85); g.fill();
+          g.fillStyle = 'rgba(205,220,245,.75)'; g.beginPath(); g.moveTo(px, top);   // the snowcap, with a ragged edge
+          const c = .32, sx = hw * c, sy = ph * c;
+          g.lineTo(px + sx, top + sy); g.lineTo(px + sx * .4, top + sy * .8); g.lineTo(px, top + sy * 1.05); g.lineTo(px - sx * .5, top + sy * .75); g.lineTo(px - sx, top + sy); g.fill();
+        }
+      }
+      const ridge = x => GY * (.86 + .035 * Math.sin(x / w * TAU * 2) + .02 * Math.sin(x / w * TAU * 5 + 1));
+      g.fillStyle = '#0a1426'; g.beginPath(); g.moveTo(0, GY);
+      for (let x = 0; x <= w; x += w / 120) g.lineTo(x, ridge(x));
+      g.lineTo(w, GY); g.fill();
+      const s = GY * .045;                                 // the pines along the ridge
+      for (let i = 0, x = 0; x < w; i++, x += s * (.45 + .5 * hash(i, 4, 82))) {
+        const th = s * (.7 + .8 * hash(i, 5, 82)), y = ridge(x) + s * .3, tw = th * .42;
+        g.fillStyle = '#081020'; g.beginPath(); g.moveTo(x, y - th); g.lineTo(x + tw, y); g.lineTo(x - tw, y); g.fill();
+        g.fillStyle = 'rgba(220,232,250,.55)'; g.beginPath(); g.moveTo(x, y - th); g.lineTo(x + tw * .35, y - th * .62); g.lineTo(x - tw * .35, y - th * .62); g.fill();
+      }
+      for (let i = 0; i < 9; i++) {                        // a few cabins with warm windows
+        const x = hash(i, 6, 83) * w, y = ridge(x) + s * .25;
+        g.fillStyle = '#060c18'; g.fillRect(x - s * .3, y - s * .35, s * .6, s * .35);
+        g.fillStyle = 'rgba(255,190,110,.85)'; g.fillRect(x - s * .15, y - s * .25, s * .12, s * .12); g.fillRect(x + s * .05, y - s * .25, s * .12, s * .12);
+      }
+    });
   }
 
   // Once a frame: the sleigh and the caravan move on, start or wait.
@@ -1145,13 +1185,19 @@ function curtains(g, E, en, t, a) {
 
   registerTheme('xmas', { name: 'Christmas Village',
     kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'slim', 'pairs'], roofs: [['pyramid', 4], ['pyramid', 3], ['pyramid', 5.5], ['pyramid', 2.5], ['pyramid', 7], ['pyramid', 4]],
-      tall: 0, shrink: .85, w0: 6, gaps: [.6, 2.2], landmarks: ['workshop', 'chapel', 'ginger'], lmChance: .2, lmScale: 3 },
-    minF: .25, maxF: .2, weather: 'snow', planes: false, roofLights: false, searchlights: false,
+      tall: .12, shrink: .82, w0: 6, gaps: [.6, 1.6], landmarks: ['workshop', 'chapel', 'ginger'], lmChance: .2, lmScale: 1.6 },
+    minF: .16, maxF: .42, weather: 'snow', noBack: true, planes: false, roofLights: false, searchlights: false,
     sky: [[0, '#020615'], [.6, '#0a1838'], [1, '#1c3256']], skyToGround: true,
     stars: true, moon: false, cloud: 'rgba(160,180,220,.12)', fogRGB: '190,205,230',
     body: '#141019', side: '#1d1822', top: '#262030',
     win: c => ({ h: 30 + c.h / 360 * 20, s: 90, m: c.m }),   // warm candle-gold, still swelling with the music
     back: { h: .45, density: .6, body: '#0b1428', win: () => 'rgba(255,200,120,.3)' },
+    drawFar(g, E) {                                       // snowy mountains and a pine ridge, sliding slower than the town
+      const { W, GY } = E, d = dpr(), k = `${W},${GY},${d}`;
+      if (st.hk !== k) { st.hk = k; st.hills = hills(W, GY); }
+      const w = W * 2, ox = ((E.travel * .3) % w + w) % w;
+      g.drawImage(st.hills, -ox, 0, w, GY); g.drawImage(st.hills, w - ox, 0, w, GY);
+    },
     drawSky(g, E) {                                       // now and then, a faint aurora behind everything
       step(E); const a = auA(E.t);
       if (a > 0) curtains(g, E, .35 + .4 * avg(E.bands, 3, 7), E.t / 3, a * .45);
@@ -1179,7 +1225,7 @@ function curtains(g, E, en, t, a) {
     },
     drawExtras(g, b, cx, tip, E) {                        // snow on the roofs, string lights along the eaves, wreaths
       if (b.lm || !b.roof) return;
-      const u = E.unit, top = b.tiers[b.tiers.length - 1], tw = top.w * u, h = b.roof[1] * u, k = .5;
+      const u = E.unit, top = b.tiers[b.tiers.length - 1], tw = top.w * u, h = b.roof[1] * u, k = Math.min(.85, .5 * (1 + (E.snowCap - 1) * .5));
       g.fillStyle = '#eef3fb'; g.beginPath(); g.moveTo(tip[0], tip[1] - .5); g.lineTo(tip[0] - tw / 2 * k, tip[1] + h * k);
       g.lineTo(tip[0] - tw * .1, tip[1] + h * k * .8); g.lineTo(tip[0] + tw * .05, tip[1] + h * k); g.lineTo(tip[0] + tw / 2 * k, tip[1] + h * k); g.fill();
       const ey = tip[1] + h, v = b.id % 5;
@@ -1192,16 +1238,19 @@ function curtains(g, E, en, t, a) {
         }
       }
       const n = Math.max(3, Math.round(tw / (u * 1.4))), r = Math.max(1, u * .28);
-      if (v <= 1) for (let i = 0; i <= n; i++) {           // coloured bulbs swapping along the string, brighter on the beat
-        const x = cx - tw / 2 + tw * i / n, sag = (i % 2) * u * .25;
-        const c = BULBS[(i + Math.floor(E.t / 700) + b.id) % 4];
-        withAlpha(g, .55 + .45 * b.level, () => { g.fillStyle = c; g.beginPath(); g.arc(x, ey + sag, r, 0, TAU); g.fill(); });
-      } else if (v === 2) withAlpha(g, .5 + .5 * b.level, () => {   // warm white icicle lights
+      const lit = b.level * (n + 1), head = (E.t / 120 + b.id * 3) % (n + 1);   // how many are lit, and a chaser running along
+      if (v <= 1) for (let i = 0; i <= n; i++) {           // coloured bulbs filling along the string with the music, a chaser on top
+        const x = cx - tw / 2 + tw * i / n, sag = (i % 2) * u * .25, c = BULBS[(i + Math.floor(E.t / 700) + b.id) % 4];
+        const on = Math.max(.25, Math.min(1, lit - i + .5), 1 - Math.min(Math.abs(i - head), 2) / 2);
+        if (on > .6 && !E.widget) glow(g, BULB_RGB[(i + Math.floor(E.t / 700) + b.id) % 4], x, ey + sag, r * 4, .35 * on);
+        withAlpha(g, on, () => { g.fillStyle = c; g.beginPath(); g.arc(x, ey + sag, r, 0, TAU); g.fill(); });
+      } else if (v === 2) withAlpha(g, .35 + .65 * b.level, () => {   // warm white icicle lights, twinkling
         g.fillStyle = '#fff2c8';
-        for (let i = 0; i <= n * 2; i++) g.fillRect(cx - tw / 2 + tw * i / (n * 2), ey, Math.max(1, u * .2), u * (.4 + .5 * ((i * 7) % 3) / 2));
+        for (let i = 0; i <= n * 2; i++) if ((i * 5 + Math.floor(E.t / 300)) % 7 || b.level > .6) g.fillRect(cx - tw / 2 + tw * i / (n * 2), ey, Math.max(1, u * .2), u * (.4 + .5 * ((i * 7) % 3) / 2));
       }); else if (v === 4) {                              // a candy-cane garland
         const m = n * 2;
-        for (let i = 0; i < m; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#e8202a'; g.fillRect(cx - tw / 2 + tw * i / m, ey, tw / m + .5, Math.max(1, u * .35)); }
+        const sh = Math.floor(E.t / 400);               // the stripes march along
+        for (let i = 0; i < m; i++) { g.fillStyle = (i + sh) % 2 ? '#ffffff' : '#e8202a'; g.fillRect(cx - tw / 2 + tw * i / m, ey, tw / m + .5, Math.max(1, u * .35)); }
       }
       if (b.id % 3 === 0 && !E.widget) {                    // a wreath with a red bow
         const wy = ey + u * 3, wr = Math.max(2, u * 1.1);
