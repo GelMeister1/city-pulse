@@ -24,7 +24,7 @@
     }
   };
   // The stepped temple: five terraces, a steep central stair, carved panels, a shrine with a torchlit doorway and a roof comb.
-  registerLandmark('steptemple', { w: 36, h: 28, draw(g, L) {
+  function templeArt(g, L) {
     const c = col => L.side ? L.body : col, T = [[18, 0, 4], [15, 4, 4], [12, 8, 4], [9, 12, 4], [6.5, 16, 3.6]];
     for (const [hw, y0, h] of T) { g.fillStyle = c('#3a3d31'); g.fillRect(-hw, -y0 - h, hw * 2, h); }
     g.fillStyle = c('#34372c'); g.fillRect(-4.6, -25.6, 9.2, 6); g.fillRect(-3.2, -28, 6.4, 2.4);   // the shrine and its roof comb
@@ -43,8 +43,19 @@
     g.fillStyle = 'rgba(0,0,0,.35)'; for (let x = -2.6; x < 3; x += 1.3) g.fillRect(x, -27.4, .6, 1.2);   // openings in the comb
     for (const [x, y, l, s] of [[-14, -8, 3.6, 1], [-9.5, -16, 4, 2], [8, -12, 5, 3], [13.6, -4, 3, 4], [-5.6, -19.6, 2.6, 5], [4.2, -25.6, 3.4, 6]]) ivyU(g, x, y, l, s);
     const fl = .8 + .2 * Math.sin(performance.now() / 150);
-    for (const s of [-1, 1]) { glow(g, '255,150,60', s * 3.2, -21.5, 2.6, .55 * fl); g.fillStyle = '#ffb040'; g.fillRect(s * 3.2 - .2, -22, .4, .7); }
-  } });
+    for (const s of [-1, 1]) { if (!L.far) glow(g, '255,150,60', s * 3.2, -21.5, 2.6, .55 * fl); g.fillStyle = '#ffb040'; g.fillRect(s * 3.2 - .2, -22, .4, .7); }   // far off, the glow is added live
+  }
+  // The great stepped temple in the background, 36 x 28 units at s px a unit: drawn once, hazy with distance.
+  function bigTemple(s) {
+    const d = dpr(), w = 40 * s, h = 30 * s;
+    return mk(w * d, h * d, x => {
+      x.scale(d * s, d * s); x.translate(20, 29);
+      templeArt(x, { body: '#3a3d31', win: a => `rgba(255,160,70,${a * .55})`, lit: () => .4, far: true });
+      x.setTransform(1, 0, 0, 1, 0, 0); x.globalCompositeOperation = 'source-atop';
+      x.fillStyle = 'rgba(60,110,95,.32)'; x.fillRect(0, 0, w * d, h * d);
+    });
+  }
+  const templeS = E => Math.min(E.W * .55 / 36, E.GY * .85 / 28);   // big enough that its upper steps rise over the rooftops
   // A great carved stone head, half swallowed by the jungle: a banded headdress, heavy brows, broad nose, glowing eyes.
   registerLandmark('stonehead', { w: 15, h: 16, draw(g, L) {
     const c = col => L.side ? L.body : col;
@@ -560,7 +571,7 @@
 
   registerTheme('jungle', { name: 'Jungle City',
     kit: { styles: ['temple', 'tall', 'temple', 'pairs', 'temple'], roofs: [['ziggurat', 4], null, ['ziggurat', 6], null, ['ziggurat', 3]],
-      tall: .3, shrink: .8, w0: 7, gaps: [.5, 1.5], setbacks: true, landmarks: ['steptemple', 'stonehead'], lmChance: .25, lmScale: 1.6 },
+      tall: .3, shrink: .8, w0: 7, gaps: [.5, 1.5], setbacks: true, landmarks: ['stonehead'], lmChance: .1, lmScale: 1.6 },
     minF: .3, maxF: .86, noBack: true, planes: false, roofLights: false, searchlights: false,
     sky: [[0, '#020c0a'], [.55, '#0a2620'], [1, '#1b4436']], skyToGround: true,
     stars: true, moon: true, cloud: 'rgba(120,170,150,.1)', fogRGB: '150,190,170', rain: 'rgba(170,210,190,.4)',
@@ -572,6 +583,15 @@
       if (st.skullB) { shapeSkull(list, st.skullB, E); st.skullB.roof = null; st.skullB.blink = false; st.skullB.door = true; }
       if (ex.ph !== 'away') { ex.ph = 'away'; ex.q = []; ex.until = 0; ex.carry = false; ex.heist = false; }   // the city changed under him: start over
       st.boulder = null; st.quake = 0;
+      // The background temple goes where the rooftops in front of its upper steps are lowest, clear of the skull tower.
+      const ts = templeS(E), half = 10 * ts; let best = null, low = Infinity;
+      for (const c of list) {
+        const x = E.toScreen(c.cx); if (x < E.W * .15 || x > E.W * .85) continue;
+        if (st.skullB && Math.abs(c.cx - st.skullB.cx) < half + st.skullB.wpx / 2) continue;
+        let m = 0; for (const o of list) if (Math.abs(o.cx - c.cx) < half + o.wpx / 2) m = Math.max(m, o.hU);
+        if (m < low) { low = m; best = c.cx; }
+      }
+      st.temple = best;
       if (!st.skullOn && ped.s === 'up') st.skullOn = true;
     },
     explorerState: () => ({ ph: ex.ph, at: ex.at, carry: ex.carry, ped: ped.s, skull: st.skullOn, heistAt: ex.heistAt, x: ex.x, heist: ex.heist, bSkull: ex.b === st.skullB, boulder: !!st.boulder,
@@ -593,7 +613,18 @@
       }
       jaguar(g, E, ox, w);
     },
-    drawBehind(g, E) { if (!E.widget) birds(g, E); },     // in front of the hills, behind the towers
+    drawBehind(g, E) {                                    // the great temple and the macaws: in front of the hills, behind the towers
+      if (st.temple !== null && st.temple !== undefined) {
+        const ts = templeS(E), k = ts.toFixed(2) + ',' + dpr(), x = E.toScreen(st.temple);
+        if (st.tk !== k) { st.tk = k; st.tImg = bigTemple(ts); }
+        if (x > -ts * 22 && x < E.W + ts * 22) {
+          g.drawImage(st.tImg, x - 20 * ts, E.GY - 29 * ts, 40 * ts, 30 * ts);
+          const fl = .8 + .2 * Math.sin(E.t / 150);       // its torches, flickering
+          for (const sd of [-1, 1]) glow(g, '255,150,60', x + sd * 3.2 * ts, E.GY - 21.5 * ts, 1.1 * ts, .4 * fl);
+        }
+      }
+      if (!E.widget) birds(g, E);
+    },
     drawFront(g, E) {                                     // low mist drifting between the towers
       const { W, GY, t, unit: u } = E;
       for (let i = 0; i < 5; i++) {
@@ -665,11 +696,45 @@
       if (b !== st.skullB) return;
       // The shrine on the skull tower: two carved columns under a stepped lintel, the pedestal and its skull between them.
       const ty = tip[1], sw = shrineW(b, E), colW = u * 1.1, sh = u * 9.5;   // tall enough for him to stand inside
+      const beat = E.bassFlash || 0, lv = b.level || 0, on = st.skullOn && ped.s !== 'down';
+      if (on && !E.widget) {                              // a shaft of golden light rising from the skull, brighter on the beat
+        const bw = sw * .5;
+        g.fillStyle = lin(g, 0, ty - sh * 4, 0, ty - sh * .3, [[0, 'rgba(255,210,110,0)'], [1, `rgba(255,210,110,${.1 + .12 * beat})`]]);
+        g.beginPath(); g.moveTo(cx - bw * .35, ty - sh * .3); g.lineTo(cx - bw, ty - sh * 4); g.lineTo(cx + bw, ty - sh * 4); g.lineTo(cx + bw * .35, ty - sh * .3); g.fill();
+        glow(g, '255,200,100', cx, ty - sh * .45, sw * .9, .25 + .2 * beat);   // the back wall glowing gold
+      }
       g.fillStyle = '#3e4134';
       for (const s of [-1, 1]) g.fillRect(cx + s * sw / 2 - colW / 2, ty - sh, colW, sh);
       g.fillRect(cx - sw / 2 - u, ty - sh - u * 1.2, sw + u * 2, u * 1.2); g.fillRect(cx - sw / 2, ty - sh - u * 2.2, sw, u); g.fillRect(cx - sw * .3, ty - sh - u * 3, sw * .6, u * .8);
       g.fillStyle = 'rgba(0,0,0,.3)'; for (const s of [-1, 1]) for (let k = 1; k < 6; k++) g.fillRect(cx + s * sw / 2 - colW / 2, ty - sh * k / 6, colW, 1);
       for (const s of [-1, 1]) for (let k = 0; k < 5; k++) { g.fillStyle = LEAF[k % 4]; g.fillRect(cx + s * sw / 2 + Math.sin(k) * u * .3, ty - sh + k * u * .6, u * .5, u * .4); }
+      g.fillStyle = '#c9a040';                            // gold trim along the lintel
+      g.fillRect(cx - sw / 2 - u, ty - sh - u * .25, sw + u * 2, u * .25); g.fillRect(cx - sw / 2, ty - sh - u * 1.4, sw, u * .2);
+      const dy = ty - sh - u * 1.75;                      // a gold sun disk set in the lintel
+      glow(g, '255,200,90', cx, dy, u * (2.2 + beat), .3 + .25 * beat);
+      g.fillStyle = '#e8b840'; g.beginPath(); g.arc(cx, dy, u * .55, 0, TAU); g.fill();
+      g.strokeStyle = '#d8a838'; g.lineWidth = Math.max(1, u * .14); g.beginPath();
+      for (let k = 0; k < 8; k++) { const a = k * TAU / 8; g.moveTo(cx + Math.cos(a) * u * .75, dy + Math.sin(a) * u * .75); g.lineTo(cx + Math.cos(a) * u * 1.05, dy + Math.sin(a) * u * 1.05); }
+      g.stroke();
+      g.fillStyle = '#8a6420'; g.fillRect(cx - u * .25, dy - u * .12, u * .14, u * .14); g.fillRect(cx + u * .11, dy - u * .12, u * .14, u * .14);
+      for (const s of [-1, 1]) for (let k = 0; k < 4; k++) {   // carved glyphs down the columns, glowing with the music
+        const gx = cx + s * sw / 2 - u * .25, gy = ty - sh * (.18 + k * .2), a = .3 + .55 * (E.spectrum[(k * 2 + (s > 0 ? 1 : 0)) % E.spectrum.length] || 0);
+        glow(g, '90,255,220', gx + u * .25, gy, u * 1.1, a * .45);
+        g.fillStyle = `rgba(150,255,235,${a})`; g.fillRect(gx, gy - u * .25, u * .5, u * .14); g.fillRect(gx + (k % 2 ? u * .36 : 0), gy - u * .25, u * .14, u * .5);
+      }
+      const topHalf = b.tiers[b.tiers.length - 1].w * u / 2;
+      if (!E.widget) for (const s of [-1, 1]) {           // fire braziers either side, flaring with the music
+        const bx = cx + s * Math.min(sw / 2 + u * 1.6, topHalf - u * .9), fl = .75 + .25 * Math.sin(E.t / 90 + s * 2) * Math.sin(E.t / 37 + s);
+        g.fillStyle = '#3a3226'; g.fillRect(bx - u * .2, ty - u * 2.2, u * .4, u * 2.2);
+        g.fillStyle = '#6a5634'; g.beginPath(); g.moveTo(bx - u * .9, ty - u * 2.6); g.lineTo(bx + u * .9, ty - u * 2.6); g.lineTo(bx + u * .5, ty - u * 2); g.lineTo(bx - u * .5, ty - u * 2); g.fill();
+        glow(g, '255,140,50', bx, ty - u * 3.4, u * (3 + 2 * lv), (.45 + .3 * lv) * fl);
+        g.fillStyle = '#ff8a2a'; g.beginPath(); g.moveTo(bx - u * .6, ty - u * 2.6); g.quadraticCurveTo(bx, ty - u * (4.4 + fl + lv), bx + u * .6, ty - u * 2.6); g.fill();
+        g.fillStyle = '#ffe080'; g.beginPath(); g.moveTo(bx - u * .3, ty - u * 2.6); g.quadraticCurveTo(bx, ty - u * (3.4 + fl * .6), bx + u * .3, ty - u * 2.6); g.fill();
+      }
+      if (on && !E.widget) for (let k = 0; k < 6; k++) {   // gold motes drifting up out of the shrine
+        const p2 = (E.t / 2600 + k / 6) % 1, mx = cx + Math.sin(k * 2.3 + E.t / 700) * sw * .3, my = ty - u * 4 - p2 * sh * .8;
+        g.fillStyle = `rgba(255,230,150,${.8 * Math.sin(p2 * Math.PI)})`; g.fillRect(mx, my, Math.max(1, u * .2), Math.max(1, u * .2));
+      }
       const pw = u * 1.8, ph = u * 3, p = ped.s === 'sinking' ? clamp01((E.t - ped.t0) / 4000) : ped.s === 'down' ? 1 : ped.s === 'rising' ? 1 - clamp01((E.t - ped.t0) / 4000) : 0;
       if (p >= 1) return;
       g.save(); g.beginPath(); g.rect(cx - sw, ty - sh * 2, sw * 2, sh * 2); g.clip();   // it sinks into the roof, fading as it goes
