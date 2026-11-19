@@ -66,21 +66,25 @@ app.whenReady().then(async () => {
   })()`);
   if (season !== 'snow,leaves,rain,snow,none,fog,none,true') fails.push('season vs weather: ' + season);
   // Jungle City, on a simulated clock: the explorer looks around for at least 2 minutes before he steals the skull, and the
-  // pedestal brings it back about 2 minutes after the theft.
+  // pedestal brings it back about 2 minutes after the theft. He never searches the skull tower before the heist, and the
+  // boulder rolls after him, gaining, but never catches him.
   const heist = await win.webContents.executeJavaScript(`(() => {
     const keep = { ...S }, E0 = { ...E }, T = THEMES.jungle; S.city = 'jungle'; S.view = 'fit'; layout();
-    let t = E.t + 1, enter = 0, stole = 0, back = 0;
+    let t = E.t + 1, enter = 0, stole = 0, back = 0, shrine = 0, rolled = false, caught = 0;
     for (let i = 0; i < 9000 && !back; i++) {            // up to 7.5 minutes in 50 ms steps
       t += 50; Object.assign(E, { t, dt: .05 }); T.drawTop(ctx, E);
       const s = T.explorerState();
       if (!enter && s.ph !== 'away') enter = t;
+      if (!s.heist && s.bSkull && ['look', 'turn', 'fade', 'inside'].includes(s.ph)) shrine++;
+      if (s.boulder) rolled = true;
+      if (s.ph === 'run' && s.gap < 0) caught++;
       if (enter && !stole && !s.skull) stole = t;
       if (stole && s.skull && s.ped === 'up') back = t;
     }
     Object.assign(E, E0); Object.assign(S, keep); layout();
-    return { found: (stole - enter) / 1000, back: (back - stole) / 1000 };
+    return { found: (stole - enter) / 1000, back: (back - stole) / 1000, shrine, rolled, caught };
   })()`);
-  if (!(heist.found >= 120 && heist.back >= 120 && heist.back < 135)) fails.push('jungle heist timing: ' + JSON.stringify(heist));
+  if (!(heist.found >= 120 && heist.back >= 120 && heist.back < 135 && !heist.shrine && heist.rolled && !heist.caught)) fails.push('jungle heist timing: ' + JSON.stringify(heist));
   // A window whose saved settings have live weather on starts up (the panel reads the live weather while the page loads).
   // Uses a screen's own key that nothing else uses, removed afterwards; the hidden window is left open (closing it quits).
   const LW = 'cityPulse:full:7';

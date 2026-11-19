@@ -2038,7 +2038,10 @@ function frame(t) {
   // shows the city, not a dark band.
   if (INSET) ctx.drawImage(cv, 0, Math.floor((H - 2) * dpr), cv.width, Math.max(1, Math.round(2 * dpr)), 0, H, W, INSET + 1);
   // TV burn-in protection: the whole picture creeps at most 3 px, one pixel every minute or so (a full cycle takes ~20 min).
-  const tf = S.drift && !widget ? `translate(${Math.round(Math.sin(t / 190000) * 3)}px,${Math.round(Math.sin(t / 140000) * 2)}px)` : '';
+  // E.quake ([x, y] px), set by a theme for this frame, shakes the whole picture (Jungle City's temple shuddering).
+  const q = E.quake || [0, 0], dr = S.drift && !widget; E.quake = null;
+  const qx = Math.round((dr ? Math.sin(t / 190000) * 3 : 0) + q[0]), qy = Math.round((dr ? Math.sin(t / 140000) * 2 : 0) + q[1]);
+  const tf = qx || qy ? `translate(${qx}px,${qy}px)` : '';
   if (tf !== cv.style.transform) cv.style.transform = tf;   // only touch the style when it actually moves
 
   if (lineShown()) {

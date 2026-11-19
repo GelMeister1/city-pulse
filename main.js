@@ -287,6 +287,7 @@ async function watchDefault() {
 }
 
 function openControl() {
+  if (MAC) app.focus({ steal: true });                    // a menu-bar app isn't the active app, so its windows would open behind others
   if (control && !control.isDestroyed()) { control.show(); return control.focus(); }
   const d = displayOf(widget), wa = d.workArea, b = prefs.controlBounds;
   const onScreen = b && screen.getAllDisplays().some(x => b.x >= x.workArea.x && b.y >= x.workArea.y && b.x < x.workArea.x + x.workArea.width && b.y < x.workArea.y + x.workArea.height);
@@ -333,7 +334,9 @@ ipcMain.on('control-wall', (e, mode, idx) => {
 });
 ipcMain.on('control-widget', (e, shown) => { if (fromUs(e)) { shown ? widget.show() : widget.hide(); updateTray(); } });
 
-app.on('second-instance', () => { widget?.show(); openControl(); updateTray(); });
+const reopen = () => { widget?.show(); openControl(); updateTray(); };
+app.on('second-instance', reopen);
+app.on('activate', () => { if (tray) reopen(); });         // Mac: opening the app again from Finder or Launchpad
 
 app.whenReady().then(() => {
   try { prefs = JSON.parse(fs.readFileSync(prefsFile(), 'utf8')); } catch { prefs = {}; }
@@ -344,9 +347,12 @@ app.whenReady().then(() => {
 
   win32.start();
   createWidget();
-  tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
+  // A Mac menu-bar app: no Dock icon (LSUIElement covers the built app, this covers `npm start`), and a black-and-alpha
+  // "Template" glyph that macOS tints for light and dark menu bars. A click there opens the menu, as Mac users expect.
+  if (MAC) app.dock?.hide();
+  tray = new Tray(MAC ? path.join(__dirname, 'assets', 'trayTemplate.png') : nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }));
   tray.setToolTip('City Pulse');
-  tray.on('click', openControl);
+  if (!MAC) tray.on('click', openControl);
   startCapture();
   watchDefault(); setInterval(watchDefault, 500);
   widget.on('show', updateTray); widget.on('hide', updateTray);

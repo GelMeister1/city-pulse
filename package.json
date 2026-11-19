@@ -29,6 +29,8 @@
       "winhelper.js",
       "audiocap.js",
       "assets/icon.png",
+      "assets/trayTemplate.png",
+      "assets/trayTemplate@2x.png",
       "package.json"
     ],
     "directories": {
