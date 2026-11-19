@@ -9,6 +9,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "predist": "node -e \"const fs=require('fs');for(const f of fs.existsSync('dist')?fs.readdirSync('dist'):[])if(/^City-Pulse-Setup-.*[.]exe([.]blockmap)?$/.test(f))fs.rmSync('dist/'+f)\"",
     "dist": "electron-builder --win --publish never",
     "release": "electron-builder --win --publish always",
     "test": "node --test test/isours.test.js && electron test/layout.js && electron test/control.js",

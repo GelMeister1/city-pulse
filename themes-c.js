@@ -190,7 +190,10 @@
     const most = (E.GY - E.H * .08) / u - SHRINE_H - 2;
     if (b.hU > most && most > 10) { const q = most / b.hU; for (const tr of b.tiers) tr.h *= q; b.hU = most; }
   }
-  const onScreen = (b, E) => { const x = E.toScreen(b.cx); return x > E.W * .06 && x < E.W * .94; };
+  // The part of the screen this city owns this frame: its own stretch of the tour, else the whole screen. The explorer and
+  // the boulder stay inside it, locked to the city's ground, and fade out at its edge.
+  const stage = E => [Math.max(0, E.from), Math.min(E.W, E.to)];
+  const onScreen = (b, E) => { const [L, R] = stage(E), x = E.toScreen(b.cx), m = (R - L) * .06; return x > L + m && x < R - m; };
   function pickBuilding(E) {                              // never the skull tower: he only goes in there for the heist
     const ok = st.list.filter(b => b.door && b !== st.skullB && b !== ex.last);
     const seen = ok.filter(b => onScreen(b, E)), pool = seen.length ? seen : ok;
@@ -198,7 +201,8 @@
   }
   const R01 = (a, b) => a + (b - a) * Math.random();
   // The rooms he searches: a window on one floor after another going up, now and then skipping a floor or trying a second
-  // room on the same one. Each is { dx (from the building's middle), y, w, h }. top: how far up he goes (share of floors).
+  // room on the same one, then back down the same floors with a fresh room on each. Each room is { dx (from the building's
+  // middle), y, w, h }. top: how far up he goes (share of floors).
   function rooms(b, E, n, top = 1) {
     const u = E.unit, sy = b.st, floors = []; let y = E.GY;
     for (const tr of b.tiers) {
@@ -211,56 +215,65 @@
       }
       y -= th;
     }
-    if (floors.length < 2) return [];
-    const last = Math.max(1, Math.ceil(floors.length * top) - 1), by = Math.max(1, Math.round(last / Math.max(1, n - 1))), out = [];
-    for (let f = 1; f <= last; f += by + (Math.random() < .25 ? 1 : 0)) {   // from the floor above his door
-      const row = floors[f], pick = () => row[Math.floor(Math.random() * row.length)];
-      out.push(pick()); if (row.length > 1 && Math.random() < .2) out.push(pick());
+    const px = exPx(E), doorTop = E.GY - Math.min(32 * px, b.tiers[0].h * u * .7) - px * 3;
+    const first = floors.findIndex(row => row[0].y + row[0].h < doorTop);   // the first floor clear of his doorway
+    if (first < 0 || first >= floors.length - 1) return { up: [], down: [] };
+    const last = Math.max(first, Math.ceil(floors.length * top) - 1), by = Math.max(1, Math.round((last - first) / Math.max(1, n - 1)));
+    const pick = f => floors[f][Math.floor(Math.random() * floors[f].length)], up = [], seen = [];
+    for (let f = first; f <= last; f += by + (Math.random() < .25 ? 1 : 0)) {
+      seen.push(f); up.push(pick(f)); if (floors[f].length > 1 && Math.random() < .2) up.push(pick(f));
     }
-    return out;
+    return { up, down: seen.slice(0, -1).reverse().map(pick) };
   }
-  // What he does next: a look at a building or a search inside it (its rooms lighting up one by one), a stroll if there's
-  // nowhere to search, or, once two to three minutes have passed, the heist.
+  // What he does next: a look at a building or a search inside it (its rooms lit one by one, up and back down), a stroll if
+  // there's nowhere to search, or, once two to three minutes have passed, the heist.
   function plan(E) {
     const t = E.t, q = ex.q;
     if (st.skullB && st.skullOn && ped.s === 'up' && t >= ex.heistAt) {
-      const b = st.skullB, up = rooms(b, E, 6), down = up.slice().reverse().filter((_, i) => i % 2 === 0);
+      const b = st.skullB, { up, down } = rooms(b, E, 6);
       ex.b = b; ex.heist = true;
       q.push({ ph: 'walk', tx: b.cx }, { ph: 'look', dur: 5500, shade: true }, { ph: 'turn', dur: 600 }, { ph: 'fade', dir: -1, at: 'street', dur: 700 },
         { ph: 'inside', rooms: up, per: 1300, dur: up.length * 1300 + 400 }, { ph: 'fade', dir: 1, at: 'top', dur: 700 }, { ph: 'top', dur: 2200 },
         { ph: 'reach', dur: 1300, steal: true }, { ph: 'top', dur: 4800 }, { ph: 'fade', dir: -1, at: 'top', dur: 700 },
         { ph: 'inside', rooms: down, per: 500, dur: down.length * 500 + 300 }, { ph: 'fade', dir: 1, at: 'street', dur: 700 }, { ph: 'idle', dur: 900 },
-        { ph: 'boulder', dur: 250 }, { ph: 'run' });
+        { ph: 'boulder', dur: 250 }, { ph: 'run' });     // down in a hurry with the skull
       return;
     }
     const b = pickBuilding(E);
-    if (!b) { q.push({ ph: 'walk', tx: E.off + E.W * R01(.15, .85) }, { ph: 'idle', dur: R01(2000, 4000) }); return; }
+    if (!b) { const [L, R] = stage(E); q.push({ ph: 'walk', tx: ex.x + L + (R - L) * R01(.15, .85) - E.toScreen(ex.x) }, { ph: 'idle', dur: R01(2000, 4000) }); return; }
     ex.b = b; ex.last = b;
     q.push({ ph: 'walk', tx: b.cx });                   // to its door
     if (Math.random() < .35) q.push({ ph: 'look', dur: R01(3000, 6500), shade: Math.random() < .4 }, { ph: 'idle', dur: R01(1200, 3000) });
     else {
-      const rs = rooms(b, E, 3 + Math.floor(Math.random() * 4), R01(.5, 1));
+      const { up, down } = rooms(b, E, 3 + Math.floor(Math.random() * 4), R01(.5, 1)), rs = up.concat(down);   // as slowly down as up
       q.push({ ph: 'look', dur: R01(1800, 3500), shade: Math.random() < .3 }, { ph: 'turn', dur: 600 }, { ph: 'fade', dir: -1, at: 'street', dur: 700 },
         { ph: 'inside', rooms: rs, per: 2000, dur: rs.length * 2000 + R01(800, 1600) }, { ph: 'fade', dir: 1, at: 'street', dur: 700 }, { ph: 'idle', dur: R01(1000, 2500) });
     }
   }
+  // The explorer's day. Edges of the city's stretch that are on screen fade him (and the boulder) out; off screen, they just
+  // go past them.
   function step(E) {
     if (st.lastT === E.t) return; st.lastT = E.t;
-    const t = E.t, dt = E.dt, px = exPx(E), W = E.W;
+    const t = E.t, dt = E.dt, px = exPx(E), W = E.W, [L, R] = stage(E), wd = px * 9;   // wd: his width, the chase's yardstick
+    const inScreen = (dir) => dir > 0 ? R < W : L > 0;  // is that edge of the stretch on screen?
+    const fadeAt = (sx, dir, w) => inScreen(dir) ? clamp01(dir * ((dir > 0 ? R : L) - sx) / w) : 1;
+    const gone = (sx, dir, m) => dir > 0 ? sx > R + m : sx < L - m;
     if (ped.s === 'sinking' && t - ped.t0 > 4000) { ped.s = 'down'; ped.t0 = t; }
     else if (ped.s === 'down' && t - ped.t0 > 120000) { ped.s = 'rising'; ped.t0 = t; st.skullOn = true; }
     else if (ped.s === 'rising' && t - ped.t0 > 4000) { ped.s = 'up'; if (ex.ph === 'away') ex.until = t + R01(3000, 8000); }
-    const bo = st.boulder;                                // the boulder rolls on at one steady speed until it's gone
+    const bo = st.boulder;                                // rolling on at one steady speed, locked to the ground, until it's gone
     if (bo) {
       bo.x += bo.dir * bo.v * dt; bo.a += bo.dir * bo.v * dt / bo.r;
       const sx = E.toScreen(bo.x);
-      if (t - bo.t0 > 25000 || (bo.dir > 0 ? sx > W + bo.r * 2 : sx < -bo.r * 2)) st.boulder = null;
+      bo.alpha = fadeAt(sx, bo.dir, bo.r * 2);
+      const off = sx < -bo.r * 2 || sx > W + bo.r * 2;   // panning along with it keeps it going: it only ends past an edge
+      if (gone(sx, bo.dir, bo.r * 2) || (inScreen(bo.dir) && bo.alpha <= 0) || (off && t - bo.t0 > 40000)) st.boulder = null;
     }
     if (ex.ph === 'away') {
       if (!ex.until) ex.until = t + R01(2000, 5000);
-      if (t < ex.until || ped.s !== 'up' || !st.list.length) return;
-      const side = Math.random() < .5 ? -1 : 1;           // in from one edge of the screen
-      ex.x = (side < 0 ? -px * 12 : W + px * 12) + E.off; ex.face = -side; ex.carry = false; ex.heist = false; ex.alpha = 1; ex.at = 'street';
+      if (t < ex.until || ped.s !== 'up' || !st.list.length || R - L < W * .3) return;   // and only with room to wander
+      const side = Math.random() < .5 ? -1 : 1;           // in from one edge of the city's stretch
+      ex.x = ex.x - E.toScreen(ex.x) + (side < 0 ? L - px * 12 : R + px * 12); ex.face = -side; ex.carry = false; ex.heist = false; ex.alpha = 1; ex.at = 'street';
       ex.heistAt = t + R01(120000, 180000); ex.q = []; ex.ph = 'go';
     }
     if (!ex.q.length) plan(E);
@@ -269,23 +282,29 @@
     ex.ph = s.ph;
     if (s.ph === 'boulder' && !s.go) {                    // it rolls in from behind him, toward the farther edge
       s.go = true;
-      const sx = E.toScreen(ex.x), dir = E.toScreen(st.skullB ? st.skullB.cx : ex.x) < W / 2 ? 1 : -1, r = E.unit * 7, v = W / 5.5, m = px * 14;
-      st.boulder = { dir, r, v, x: (dir > 0 ? -r : W + r) + E.off, a: 0, t0: t, foot: px * 3 };
-      const ahead = dir > 0 ? sx : W - sx;                 // how far he is in front of it as it comes into view
-      s.dur = Math.max(0, Math.min(250, (ahead - r * .3) / v * 1000 - 60));   // a moment's surprise, cut short if it's close
-      // He runs a little slower than it, so it's visibly gaining, but just fast enough to leave the screen a step ahead of it.
-      const toGo = (dir > 0 ? W - sx : sx) + m, room = W + m - W * .05 - v * s.dur / 1000;
-      ex.face = -dir; if (ex.q[1]) Object.assign(ex.q[1], { dir, v: v * Math.max(.9, toGo / room) });
+      const sx = E.toScreen(ex.x), dir = E.toScreen(st.skullB ? st.skullB.cx : ex.x) < (L + R) / 2 ? 1 : -1, r = E.unit * 10, v = W / 5.5;   // twenty units across: over twice his height
+      // It comes in at the stretch's edge behind him, or, if he's off screen (panned away), a few of his widths behind him.
+      const front = dir > 0 ? Math.min(L, sx - wd * 8) : Math.max(R, sx + wd * 8), ahead = dir * (sx - front);
+      st.boulder = { dir, r, v, x: ex.x - sx + front - dir * r, a: 0, t0: t, foot: px * 3, alpha: 1 };
+      s.dur = Math.max(0, Math.min(250, (ahead - wd * 4) / v * 1000));   // a moment's surprise, cut short if it's already close
+      // Slower than the boulder, so it gains on him all the way: he reaches the edge with it five of his widths behind.
+      const toGo = Math.max(0, dir > 0 ? R - sx : sx - L), k = toGo / Math.max(1, toGo + ahead - wd * 5 - v * s.dur / 1000);
+      ex.face = -dir; if (ex.q[1]) Object.assign(ex.q[1], { dir, v: v * Math.max(.3, Math.min(1.6, k)) });
     }
     if (s.ph === 'walk' || s.ph === 'exit' || s.ph === 'run') {
-      const v = s.ph === 'run' ? s.v || W / 5.5 : px * 15, sx = E.toScreen(ex.x);
+      let v = s.ph === 'run' ? s.v || W / 5.5 : px * 15;
+      const b2 = st.boulder, sx = E.toScreen(ex.x);
+      if (s.ph === 'run' && b2 && b2.dir * (ex.x - b2.x) - b2.r <= wd * 4) v = b2.v;   // it never closes in further than four of his widths
       let tx = s.tx;
-      if (s.ph !== 'walk') { if (s.dir === undefined) s.dir = sx < W / 2 ? -1 : 1; tx = ex.x + s.dir * W; }
+      if (s.ph !== 'walk') { if (s.dir === undefined) s.dir = sx < (L + R) / 2 ? -1 : 1; tx = ex.x + s.dir * 1e9; }   // on until he passes an edge, however far you pan along with him
       const d = tx - ex.x, mv = v * dt;
       if (Math.abs(d) > 1e-3) ex.face = Math.sign(d);    // always facing the way he walks
       ex.walk += mv / (px * (s.ph === 'run' ? 5 : 3.5));
       ex.glance = s.ph === 'run' && Math.floor((t - s.t0) / 650) % 3 === 1;   // running, a look back at the boulder
-      if (s.ph !== 'walk' && (sx < -px * 14 || sx > W + px * 14)) { ex.q = []; ex.ph = 'away'; ex.glance = false; ex.until = ped.s === 'up' ? t + R01(3000, 8000) : Infinity; return; }
+      if (s.ph !== 'walk') {
+        ex.alpha = fadeAt(sx, s.dir, wd * 2);
+        if (gone(sx, s.dir, px * 14) || ex.alpha <= 0) { ex.q = []; ex.ph = 'away'; ex.glance = false; ex.until = ped.s === 'up' ? t + R01(3000, 8000) : Infinity; return; }
+      }
       if (Math.abs(d) <= mv) { ex.x = tx; ex.q.shift(); } else ex.x += Math.sign(d) * mv;
       return;
     }
@@ -317,36 +336,53 @@
       }
     });
   }
-  // The boulder: a huge carved stone ball rolling along the causeway, its groove, moss and cracks turning as it goes, dust
-  // kicked up behind it.
+  // The boulder: a huge, ancient stone ball, chipped and lumpy at the rim, split by jagged cracks and patched with moss,
+  // all turning as it rolls, dust kicked up behind it.
   function boulder(g, E) {
-    const bo = st.boulder; if (!bo) return;
+    const bo = st.boulder; if (!bo || bo.alpha <= 0) return;
     const r = bo.r, x = E.toScreen(bo.x), foot = E.GY + bo.foot, y = foot - r;
     if (x < -r * 2 || x > E.W + r * 2) return;
-    g.fillStyle = 'rgba(0,0,0,.4)'; g.beginPath(); g.ellipse(x, foot, r * .95, r * .14, 0, 0, TAU); g.fill();
-    for (let i = 0; i < 5; i++) {
-      const k = (E.t / 300 + i / 5) % 1;
-      glow(g, '150,135,105', x - bo.dir * (r * .5 + k * r * 1.8), foot - r * (.1 + .4 * k), r * (.3 + .5 * k), .4 * (1 - k));
-    }
-    g.save(); g.translate(x, y);
-    g.fillStyle = '#4c4c3e'; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
-    g.save(); g.clip(); g.rotate(bo.a);
-    g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = r * .07;             // a carved band round it
-    g.beginPath(); g.ellipse(0, 0, r * 1.02, r * .3, 0, 0, TAU); g.stroke();
-    g.lineWidth = Math.max(1, r * .025);
-    for (let i = 0; i < 6; i++) {                        // block seams and cracks
-      const a = i * TAU / 6 + hash(i, 1, 80); g.beginPath(); g.moveTo(Math.cos(a) * r * .3, Math.sin(a) * r * .3);
-      g.lineTo(Math.cos(a + .2) * r * .7, Math.sin(a + .2) * r * .7); g.lineTo(Math.cos(a + .1) * r, Math.sin(a + .1) * r); g.stroke();
-    }
-    for (let i = 0; i < 7; i++) {                        // moss patches
-      const a = hash(i, 2, 80) * TAU, d = r * (.35 + .55 * hash(i, 3, 80));
-      g.fillStyle = i % 2 ? 'rgba(70,110,50,.7)' : 'rgba(50,85,40,.7)'; g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * .18, r * .1, a, 0, TAU); g.fill();
-    }
-    g.restore();
-    const sh = g.createRadialGradient(-r * .35, -r * .4, r * .1, 0, 0, r);   // lit from above, dark underneath
-    sh.addColorStop(0, 'rgba(255,245,210,.22)'); sh.addColorStop(.6, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.6)');
-    g.fillStyle = sh; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
-    g.restore();
+    withAlpha(g, bo.alpha, () => {
+      g.fillStyle = 'rgba(0,0,0,.4)'; g.beginPath(); g.ellipse(x, foot, r * .95, r * .14, 0, 0, TAU); g.fill();
+      for (let i = 0; i < 5; i++) {
+        const k = (E.t / 300 + i / 5) % 1;
+        glow(g, '150,135,105', x - bo.dir * (r * .5 + k * r * 1.8), foot - r * (.1 + .4 * k), r * (.3 + .5 * k), .4 * (1 - k));
+      }
+      g.save(); g.translate(x, y); g.rotate(bo.a);
+      const rim = () => {                                 // the worn outline: lumps, flats and chips
+        g.beginPath();
+        for (let i = 0; i < 30; i++) { const a = i / 30 * TAU, k = .93 + .07 * hash(i, 4, 80) - (hash(i, 5, 80) < .18 ? .07 : 0); g.lineTo(Math.cos(a) * r * k, Math.sin(a) * r * k); }
+        g.closePath();
+      };
+      rim(); g.fillStyle = '#4c4c3e'; g.fill();
+      g.save(); g.clip();
+      for (let i = 0; i < 6; i++) {                       // weathered blotches
+        const a = hash(i, 6, 80) * TAU, d = r * .6 * hash(i, 7, 80);
+        g.fillStyle = i % 2 ? 'rgba(0,0,0,.14)' : 'rgba(255,250,220,.06)'; g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * (.2 + .25 * hash(i, 8, 80)), r * (.12 + .15 * hash(i, 9, 80)), a, 0, TAU); g.fill();
+      }
+      g.lineWidth = Math.max(1, r * .03); g.lineJoin = 'miter';
+      for (let i = 0; i < 7; i++) {                       // jagged cracks wandering across it, branching now and then
+        let a = hash(i, 1, 80) * TAU, cx = Math.cos(a) * r * (.2 + .7 * hash(i, 10, 80)), cy = Math.sin(a) * r * (.2 + .7 * hash(i, 11, 80));
+        g.strokeStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.moveTo(cx, cy);
+        for (let k = 0; k < 6; k++) {
+          a += (hash(i, k, 81) - .5) * 1.6; const l = r * (.1 + .12 * hash(i, k, 82));
+          cx += Math.cos(a) * l; cy += Math.sin(a) * l; g.lineTo(cx, cy);
+          if (hash(i, k, 83) < .2) { g.lineTo(cx + Math.cos(a + 1.2) * l * .7, cy + Math.sin(a + 1.2) * l * .7); g.moveTo(cx, cy); }
+        }
+        g.stroke();
+      }
+      for (let i = 0; i < 9; i++) {                       // pits, and moss in the hollows
+        const a = hash(i, 2, 80) * TAU, d = r * (.25 + .65 * hash(i, 3, 80)), mossy = i % 3 !== 0;
+        g.fillStyle = mossy ? (i % 2 ? 'rgba(70,110,50,.7)' : 'rgba(50,85,40,.7)') : 'rgba(0,0,0,.35)';
+        g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d, r * (mossy ? .16 : .06), r * (mossy ? .09 : .05), a, 0, TAU); g.fill();
+      }
+      g.restore();
+      g.rotate(-bo.a);                                    // light from above, dark underneath, not turning with it
+      const sh = g.createRadialGradient(-r * .35, -r * .4, r * .1, 0, 0, r);
+      sh.addColorStop(0, 'rgba(255,245,210,.2)'); sh.addColorStop(.6, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.6)');
+      g.rotate(bo.a); rim(); g.rotate(-bo.a); g.fillStyle = sh; g.fill();
+      g.restore();
+    });
   }
 
   // ---------- scenery ----------
@@ -479,14 +515,14 @@
   function monkey(g, E) {                                 // swinging hand over hand from vine to vine, like a pendulum
     const { W, GY, t } = E, px = Math.max(1, Math.round(E.unit * .5)), L = GY * .2, th = .7, gap = 2 * L * Math.sin(th);
     if (!st.nextMonkey) st.nextMonkey = t + 20000 + 20000 * Math.random();
-    if (!st.mk && t > st.nextMonkey) { const dir = Math.random() < .5 ? 1 : -1; st.mk = { dir, t0: t, x0: dir > 0 ? -gap : W + gap }; }
+    if (!st.mk && t > st.nextMonkey) { const dir = Math.random() < .5 ? 1 : -1; st.mk = { dir, t0: t, x0: (dir > 0 ? -gap : W + gap) + E.off }; }   // x0 on the ground, so it moves with the city
     const m = st.mk; if (!m) return;
     const p = (t - m.t0) / 1150, k = Math.floor(p), sw = p - k, ease = (1 - Math.cos(Math.PI * sw)) / 2;
-    const ax = m.x0 + m.dir * (k + .5) * gap, a = m.dir * (-th + 2 * th * ease), hx = ax + Math.sin(a) * L, hy = Math.cos(a) * L;
+    const ax = E.toScreen(m.x0 + m.dir * (k + .5) * gap), a = m.dir * (-th + 2 * th * ease), hx = ax + Math.sin(a) * L, hy = Math.cos(a) * L;
     g.strokeStyle = '#0c2412'; g.lineWidth = Math.max(1, px * .7); g.beginPath(); g.moveTo(ax, 0); g.lineTo(hx, hy); g.stroke();
     const sp = MONKEY[sw > .9 || sw < .1 ? 1 : 0];        // both arms out as he lets go and catches the next vine
     rowsAt(g, sp, MON_PAL, Math.round(hx - (m.dir > 0 ? 5.5 : 3.5) * px), Math.round(hy), px, m.dir < 0);
-    if (hx < -gap * 2 || hx > W + gap * 2) { st.mk = null; st.nextMonkey = t + 40000 + 40000 * Math.random(); }
+    if ((m.dir > 0 ? hx > W + gap * 2 : hx < -gap * 2) || t - m.t0 > 60000) { st.mk = null; st.nextMonkey = t + 40000 + 40000 * Math.random(); }
   }
   function butterflies(g, E) {                            // hovering over the ferns along the bottom, now and then drifting to the next clump
     const { W, H, GY, t, unit: u, travel } = E, gh = H - GY, fs = u * 5;
@@ -538,7 +574,7 @@
       st.boulder = null; st.quake = 0;
       if (!st.skullOn && ped.s === 'up') st.skullOn = true;
     },
-    explorerState: () => ({ ph: ex.ph, at: ex.at, carry: ex.carry, ped: ped.s, skull: st.skullOn, heistAt: ex.heistAt, heist: ex.heist, bSkull: ex.b === st.skullB, boulder: !!st.boulder,
+    explorerState: () => ({ ph: ex.ph, at: ex.at, carry: ex.carry, ped: ped.s, skull: st.skullOn, heistAt: ex.heistAt, x: ex.x, heist: ex.heist, bSkull: ex.b === st.skullB, boulder: !!st.boulder,
       gap: st.boulder ? st.boulder.dir * (ex.x - st.boulder.x) - st.boulder.r : null }),   // for the tests
     drawFar(g, E) {
       const { W, GY, t } = E, d = dpr(), k = `${W},${GY},${d}`;
@@ -603,14 +639,14 @@
         }
         y = top;
       }
-      if (b === ex.b && ex.ph === 'inside' && ex.q[0]?.rooms) {   // the room he's searching blazes with light, one after another
+      if (b === ex.b && ex.ph === 'inside' && ex.q[0]?.rooms) {   // torchlight in the room he's searching, one after another
         const s = ex.q[0], k = (E.t - s.t0) / s.per, i = Math.floor(k), p = k - i, rm = s.rooms[i];
         if (rm) {
-          const a = Math.max(0, Math.min(1, p / .15, (1 - p) / .25)), x = cx + rm.dx;
-          glow(g, '255,200,110', x + rm.w / 2, rm.y + rm.h / 2, Math.max(rm.w, rm.h) * 5, a);   // light pouring out over the stone
-          glow(g, '255,245,215', x + rm.w / 2, rm.y + rm.h / 2, Math.max(rm.w, rm.h) * 2.2, a);
-          g.fillStyle = `rgba(255,240,190,${a})`; g.fillRect(x, rm.y, rm.w, rm.h);
-          g.fillStyle = `rgba(255,255,245,${a})`; g.fillRect(x + rm.w * .2, rm.y + rm.h * .2, rm.w * .6, rm.h * .6);
+          const fl = .8 + .12 * Math.sin(E.t / 63 + i * 2) + .08 * Math.sin(E.t / 27 + i * 5);   // a carried torch's flicker
+          const a = Math.max(0, Math.min(1, p / .2, (1 - p) / .25)) * fl, x = cx + rm.dx;
+          glow(g, '255,135,45', x + rm.w / 2, rm.y + rm.h * .6, Math.max(rm.w, rm.h) * 3.4, .85 * a);   // warm light spilling over the stone
+          glow(g, '255,190,100', x + rm.w / 2, rm.y + rm.h * .6, Math.max(rm.w, rm.h) * 1.5, .6 * a);
+          g.fillStyle = lin(g, 0, rm.y, 0, rm.y + rm.h, [[0, `rgba(255,175,80,${a})`], [1, `rgba(255,232,150,${a})`]]); g.fillRect(x, rm.y, rm.w, rm.h);
         }
       }
       if (!b.door) return;                                // the skull tower always has one
