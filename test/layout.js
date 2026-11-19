@@ -85,6 +85,12 @@ app.whenReady().then(async () => {
     return { found: (stole - enter) / 1000, back: (back - stole) / 1000, shrine, rolled, caught };
   })()`);
   if (!(heist.found >= 120 && heist.back >= 120 && heist.back < 135 && !heist.shrine && heist.rolled && !heist.caught)) fails.push('jungle heist timing: ' + JSON.stringify(heist));
+  // A machine that can't keep up at Retina density drops to one pixel per point; a pause (hidden window) doesn't count.
+  const slowDrop = await win.webContents.executeJavaScript(`(() => {
+    const run = ms => { scaleCap = 4; slow = 0; dpr = 2; for (let i = 0; i < 40; i++) frame(last + ms); return scaleCap; };
+    const paused = run(500), slowed = run(50); scaleCap = 4; slow = 0; layout(); return paused === 4 && slowed === 1;
+  })()`);
+  if (!slowDrop) fails.push('slow frames should lower the drawing resolution, pauses should not');
   // A window whose saved settings have live weather on starts up (the panel reads the live weather while the page loads).
   // Uses a screen's own key that nothing else uses, removed afterwards; the hidden window is left open (closing it quits).
   const LW = 'cityPulse:full:7';

@@ -863,7 +863,7 @@ function tourStops() {
 }
 
 function layout() {
-  dpr = devicePixelRatio || 1;
+  dpr = Math.min(devicePixelRatio || 1, scaleCap);
   W = innerWidth; H = Math.max(1, innerHeight - INSET);   // the wallpaper lays the city out above the taskbar
   const tour = touring(S.view);
   for (const c of [cv, lay, acc]) {                      // the blend buffers are only used by the tour
@@ -1946,8 +1946,12 @@ function groundLayer(g, T, t, dt, scrollV) {            // a theme's own ground,
   drawGround(g, dt, scrollV);
   if (WY < H) drawWater(g, t);
 }
+let scaleCap = 4, slow = 0;                               // see frame(): drops to 1 on a machine that can't keep up
 function frame(t) {
-  const dt = Math.min(.1, (t - last) / 1000); last = t;
+  const raw = (t - last) / 1000, dt = Math.min(.1, raw); last = t;
+  // A machine that can't keep up at the screen's full pixel density (an older Mac at Retina) lags and stutters: when most
+  // frames take longer than 1/40 s, draw at one pixel per point instead, a quarter of the work. Pauses (hidden) don't count.
+  if (dpr > 1 && raw < .25) { slow = slow * .97 + (raw > 1 / 40 ? .03 : 0); if (slow > .5) { scaleCap = 1; slow = 0; layout(); } }
   if (noCity) return;                                    // settings and control windows draw no city
   if (!buildings.length) { if (innerWidth && innerHeight) layout(); return; }   // window had no size yet
   phase += dt * S.speed / 25;

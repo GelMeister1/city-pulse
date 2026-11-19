@@ -137,7 +137,8 @@ async function applyWallpaper(cfg) {
     load(w, { full: '1', wall: '1', ...query });
     w.once('ready-to-show', async () => {
       if (w.isDestroyed()) return;
-      if (MAC) { w.setVisibleOnAllWorkspaces(true); return w.showInactive(); }   // type 'desktop' already sits behind the icons
+      // skipTransformProcessType: otherwise Electron turns the menu-bar app into a Dock app to do this (and blinks it)
+      if (MAC) { w.setVisibleOnAllWorkspaces(true, { skipTransformProcessType: true }); return w.showInactive(); }   // type 'desktop' already sits behind the icons
       const hwnd = w.getNativeWindowHandle().readBigUInt64LE(0), pb = phys(d.bounds), rel = { x: pb.x - vx, y: pb.y - vy, width: pb.width, height: pb.height };
       const res = await win32.wallpaper(hwnd, rel);
       if (w.isDestroyed() || !walls.includes(w) || !res) return;   // replaced meanwhile, or the helper restarted (it isn't a "no")
