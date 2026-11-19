@@ -1,7 +1,7 @@
 // Small Windows helper: one long-lived PowerShell process with a few C# calls into Windows' audio and window APIs.
 //   volume  -> master volume (0..1), mute and the default output device's id
 //   outputs, inputs -> active output / input devices [{ id, name, default }]
-//   wallpaper(hwnd, x, y, w, h) -> put a window behind the desktop icons; refreshWallpaper() repaints the normal wallpaper
+//   wallpaper(hwnd, {x, y, width, height}) -> put a window behind the desktop icons; refreshWallpaper() repaints the normal wallpaper
 //   unwall(hwnd) -> hide such a window and take it back out of Explorer's layer, so closing it doesn't wait on Explorer
 // Requests are answered one JSON line each, in order. If PowerShell isn't available every call resolves to null; if it exits it restarts.
 const { spawn } = require('child_process');

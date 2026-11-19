@@ -70,7 +70,6 @@
   #cc select{font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:6px;width:100%;min-width:0}
   #cc .seg{display:flex;flex-wrap:wrap;gap:6px}
   #cc button{font-size:13px}
-  #cc button.more{margin-top:6px}
   #panel #tourPick{display:grid;gap:4px;border:1px solid #333a58;border-radius:6px;padding:4px}
   #panel #tourPick > summary{background:none;font-weight:500;color:#cfe6ff;padding:3px 4px;font-size:inherit}
   #panel #tourPick > summary b{font-weight:400;color:#7f93b8;margin-left:4px}
@@ -206,6 +205,12 @@
     </select></label>
     <span id="seasonHint" class="wxStatus"></span>
     <label>Amount <input type="range" id="wxAmt" min="5" max="100"></label>
+    <label>Wind <select id="wind">
+      <option value="auto">Auto (shifts now and then)</option>
+      <option value="none">None: straight down</option>
+      <option value="right">Left to right</option>
+      <option value="left">Right to left</option>
+    </select></label>
     <label>Live weather <select id="liveWx">
       <option value="off">Off</option>
       <option value="city">This skyline's city</option>
@@ -255,22 +260,22 @@ const spanMode = !settingsMode && qs.get('mode') === 'span';
 // The wallpaper sits behind the taskbar, so it keeps the city above it: the strip underneath is just dark.
 const INSET = wallMode ? Math.min(300, Math.max(0, parseInt(qs.get('inset'), 10) || 0)) : 0;
 const perScreen = qs.has('screen') && (qs.get('mode') === 'per' || (settingsMode && qs.get('mode') !== 'span'));
-const spanScreen = settingsMode && qs.get('mode') === 'span' && qs.has('screen');
-const spanTour = settingsMode && qs.get('mode') === 'span' && !qs.has('screen');   // a settings page for the tour across all screens   // a settings window for one screen's lights in the tour
+const spanScreen = settingsMode && qs.get('mode') === 'span' && qs.has('screen');   // a settings window for one screen's lights in the tour
+const spanTour = settingsMode && qs.get('mode') === 'span' && !qs.has('screen');   // a settings page for the tour across all screens
 
 // ---------- settings (remembered between launches) ----------
 const DEF = { city: 'nyc',                             // New York on a first run; saved settings keep their own city
   view: 'fit', scroll: 30, scrollDir: 'rtl', gap: 40, pan: .5,
   mode: 'floors', peak: true, effect: 'rainbow', color: '#00e5ff', speed: 30, react: 60, loudFill: false, cityLine: false, lineH: 70, bright: 100, meter: true,
   ground: TARGET === 'widget' ? 'street' : 'streetWater', traffic: 35, detail: true, back: true, captions: true, drift: false,
-  weather: 'none', wxAmt: 50,
+  weather: 'none', wxAmt: 50, wind: 'auto',             // which way rain and snow blow: auto, none, right (left to right), left
   roofLights: true, blinkSpeed: 40, blinkSync: false, blinkBeat: false, blinkColor: '#ff3030', flicker: true, flickAmt: 20,
   search: false, flyers: true, stars: true, shooting: true, skyBody: true, clouds: true, planes: true,
   tourOff: [],                                            // city menu values left out of the tour
-  ownLights: false,
-  wxAuto: false,
-  liveWx: 'off', wxName: '', wxLat: null, wxLon: null,
-  season: 'off' };                                        // off, auto (by date), spring, summer, fall, winter   // live weather: off, this skyline's city, or a place you chose                                        // the weather was switched on by the city (e.g. Dark City's rain), not by you                                     // tour across all screens: this screen uses its own Lights settings
+  ownLights: false,                                       // tour across all screens: this screen uses its own Lights settings
+  wxAuto: false,                                          // the weather was switched on by the city (e.g. Dark Night City's rain), not by you
+  liveWx: 'off', wxName: '', wxLat: null, wxLon: null,    // live weather: off, this skyline's city, or a place you chose
+  season: 'off' };                                        // off, auto (by date), spring, summer, fall, winter   // live weather: off, this skyline's city, or a place you chose                                        // the weather was switched on by the city (e.g. Dark Night City's rain), not by you                                     // tour across all screens: this screen uses its own Lights settings
 let S;
 // Widget, full screen and wallpaper each keep their own settings; presets are shared by all.
 const SHARED_KEY = { widget: 'cityPulse', full: 'cityPulse:full', wall: 'cityPulse:wall' }[TARGET];
@@ -1102,6 +1107,7 @@ function refreshPanel() {
   $('tourCount').textContent = boxes.length ? `${boxes.filter(el => el.checked).length} of ${boxes.length}` : '';
   hide('traffic', !S.ground.startsWith('street'));
   hide('wxAmt', (S.weather === 'none' && !SEASON_WX[seasonNow()]) || S.liveWx !== 'off');
+  hide('wind', S.liveWx === 'off' && !['rain', 'storm', 'snow', 'blizzard'].includes(S.weather) && seasonNow() !== 'winter');
   const sn = seasonNow(), held = SEASON_WX[sn] && (S.liveWx !== 'off' || (S.weather !== 'none' && !S.wxAuto));
   $('seasonHint').textContent = !sn ? '' : (S.season === 'auto' ? `It's ${sn} now. ` : '') +
     (held ? (S.liveWx !== 'off' ? 'Live weather is on, so the season only changes the look.' : 'Your Weather choice wins. Set it to Clear for the season’s weather.') : '');
@@ -1121,7 +1127,7 @@ for (const k of Object.keys(DEF)) {
     S[k] = el.type === 'checkbox' ? el.checked : el.type === 'range' ? +el.value : el.value;
     S.preset = ''; $('preset').value = '';             // a hand-made change means you're no longer on a preset
     if (spanScreen && LIGHT.includes(k)) { S.ownLights = true; showSetting('ownLights'); }   // changing a light means this screen has its own
-    if (k === 'city') { cityWeather(S); showSetting('weather'); }   // e.g. Cyberpunk and Dark City rain by default
+    if (k === 'city') { cityWeather(S); showSetting('weather'); }   // e.g. Cyberpunk and Dark Night City rain by default
     if (k === 'weather') S.wxAuto = false;            // your own choice: keep it
     save();
     if (RELAYOUT.includes(k) && W) layout();
@@ -1149,7 +1155,7 @@ showRecentColors();
 // ---------- presets ----------
 // A preset is a "look": everything except which skyline, view, spacing and pan position you're on.
 const PLACE = ['city', 'view', 'scroll', 'scrollDir', 'gap', 'pan', 'tourOff', 'ownLights', 'wxAuto', 'liveWx', 'wxName', 'wxLat', 'wxLon'];
-// A city with its own weather (Cyberpunk and Dark City rain) brings it when the sky is clear; leaving for a city without one
+// A city with its own weather (Cyberpunk and Dark Night City rain) brings it when the sky is clear; leaving for a city without one
 // takes it away again. Weather you picked yourself is never touched.
 function cityWeather(s) {
   const T = THEMES[themeKey(s.city)];
@@ -1455,9 +1461,9 @@ function dome(g, T, hU, cx, y, tw, b) {
 }
 
 function drawBuilding(g, b, cx, t) {
-  const T = THEMES[b.theme], u = unit, body = T.body;
+  const T = THEMES[b.theme], u = unit, body = b.body || T.body;   // decorate() may give a building its own walls
   let c = colorOf(b, phase, t);
-  if (T.win) c = T.win(c, b) || c;                          // e.g. Dark City: washed-out, dimmer window colours
+  if (T.win) c = T.win(c, b) || c;                          // e.g. Dark Night City: washed-out, dimmer window colours
   const edge = S.detail ? '#2c2e3a' : null;
   let tip;
   if (b.lm) {
@@ -1501,8 +1507,10 @@ function drawBuilding(g, b, cx, t) {
         const fh = th / tr.f;                           // floor pitch, stretched to fill the tier
         const cols = st.cw ? Math.max(1, Math.floor((tw - u) / (st.cw * u))) : 0;
         const cw = st.cw * u, left = cx - cols * cw / 2, ww = Math.max(1, cw * st.ww);
+        let pa = -1, style;
         for (let f = 0; f < tr.f; f++) {
-          const gf = tr.base + f, a = alphaFor(b, gf), style = winStyle(c, a);
+          const gf = tr.base + f, a = alphaFor(b, gf);
+          if (a !== pa) { pa = a; style = winStyle(c, a); }
           const wy = y - (f + 1) * fh + fh * (1 - st.wh) / 2, wh = Math.max(1, fh * st.wh);
           g.fillStyle = style;
           if (sideWins) {                               // the same floor round the side, half as bright: the shaded face
@@ -1539,7 +1547,7 @@ function drawBuilding(g, b, cx, t) {
       y -= th;
     }
     const top = b.tiers[b.tiers.length - 1];
-    tip = !b.roof ? [cx, y] : b.roof[0] === 'dome' ? dome(g, T, b.roof[1], cx, y + .5, top.w * u, b) : (g.fillStyle = body, roof(g, b.roof, cx, y + .5, top.w * u, T));
+    tip = !b.roof ? [cx, y] : b.roof[0] === 'dome' ? dome(g, T, b.roof[1], cx, y + .5, top.w * u, b) : (g.fillStyle = T.body, roof(g, b.roof, cx, y + .5, top.w * u, T));
   }
   if (T.drawExtras) T.drawExtras(g, b, cx, tip, E);
   if (S.search && b.search && T.searchlights) {
@@ -1617,6 +1625,15 @@ const blizzard = () => weatherNow() === 'blizzard';
 const snowy = () => seasonNow() === 'winter' || weatherNow() === 'snow' || blizzard();
 const snowCap = () => blizzard() ? 2.4 : 1;                // how much deeper the snow lies on roofs and streets
 const wxAmtNow = () => live ? live.amt : S.wxAmt;
+// The wind now: -1 blows rain and snow right to left, 0 lets it fall straight, 1 blows it left to right. Auto picks a new
+// direction every 75 s from the clock (so every screen agrees) and swings round to it over 10 s.
+function windNow() {
+  const set = { none: 0, right: 1, left: -1 }[S.wind];
+  if (set !== undefined) return set;
+  const k = Date.now() / 75000, i = Math.floor(k), dir = j => [-1, 0, 1][Math.floor(hash(j, 5, 91) * 3)];
+  const f = Math.min(1, (k - i) * 7.5);                  // the first 10 s of each stretch
+  return dir(i - 1) + (dir(i) - dir(i - 1)) * f * f * (3 - 2 * f);
+}
 // How much of the sky at screen x belongs to themes that pass test (blended where tour stretches meet).
 function skyShare(x, test) {
   if (!tourRuns.length) return test(theme) ? 1 : 0;
@@ -1642,9 +1659,13 @@ function drawSky(g, t, dt) {
     }
   }
   const clearSky = !['rain', 'storm', 'fog', 'blizzard'].includes(wxNow);   // smog and rain clouds hide the stars, and so do some themes' skies
-  if (clearSky && S.stars) for (const s of stars) {
-    const a = skyShare(s.x, starry) * (.25 + .55 * (.5 + .5 * Math.sin(t / 700 * s.sp + s.ph)));
-    if (a > .01) { g.fillStyle = `rgba(255,255,255,${a})`; g.fillRect(s.x, s.y, s.s, s.s); }
+  if (clearSky && S.stars) {
+    g.fillStyle = '#fff';
+    for (const s of stars) {
+      const a = skyShare(s.x, starry) * (.25 + .55 * (.5 + .5 * Math.sin(t / 700 * s.sp + s.ph)));
+      if (a > .01) { g.globalAlpha = a; g.fillRect(s.x, s.y, s.s, s.s); }
+    }
+    g.globalAlpha = 1;
   }
   if (clearSky && S.shooting) {
     if (!shoot && t > nextShoot) shoot = { x: W * (.1 + .7 * Math.random()), y: H * (.03 + .2 * Math.random()), life: 0 };
@@ -1664,7 +1685,7 @@ function drawSky(g, t, dt) {
     g.globalAlpha = 1;
   }
   perStretch(g, (g, T) => T.drawFar(g, E), T => T.drawFar);   // far scenery in front of the stars (Lantern District's Fuji)
-  // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Dark City.
+  // Clouds: a scattered sky normally; a heavy, low overcast for rain, storms and overcast themes like Dark Night City.
   const over = theme.overcast || ['rain', 'storm'].includes(wxNow), key = `${over},${W},${H}`;
   if (key !== cloudKey) {
     cloudKey = key;
@@ -1727,9 +1748,7 @@ function drawGround(g, dt, scrollV) {
       if (step) c.x += (c.dir * c.v - scrollV) * dt;
       if (c.x > W + 60) c.x = -60; else if (c.x < -60) c.x = W + 60;
       const cy = c.dir > 0 ? GY + gh * .82 : GY + gh * .42, fx = c.x + c.dir * L / 2, bx = c.x - c.dir * L / 2;
-      const beam = g.createLinearGradient(fx, 0, fx + c.dir * L * 2.2, 0);
-      beam.addColorStop(0, 'rgba(255,240,200,.22)'); beam.addColorStop(1, 'rgba(255,240,200,0)');
-      g.fillStyle = beam; g.fillRect(Math.min(fx, fx + c.dir * L * 2.2), cy - ch * .5, L * 2.2, ch * .6);
+      g.drawImage(strip('rgba(255,240,200,.22)', 'rgba(255,240,200,0)', c.dir), c.dir > 0 ? fx : fx - L * 2.2, cy - ch * .5, L * 2.2, ch * .6);   // headlight beam
       g.fillStyle = '#14141c'; g.fillRect(c.x - L / 2, cy - ch, L, ch); g.fillRect(c.x - L * .25, cy - ch * 1.5, L * .5, ch * .6);
       g.fillStyle = '#fff3c8'; g.fillRect(fx - c.dir * 1.5 - .75, cy - ch * .75, 1.5, Math.max(1, ch * .3));
       g.fillStyle = '#ff2a2a'; g.fillRect(bx - .75, cy - ch * .75, 1.5, Math.max(1, ch * .3));
@@ -1798,33 +1817,36 @@ function drawWeather(g, t, dt) {
     const n = per ? Math.round(W * H / per * amt * (wxNow === 'storm' ? 1.6 : 1)) : 0;
     wx = Array.from({ length: n }, () => ({ x: Math.random() * W * 1.2, y: Math.random() * H, s: Math.random(), rot: Math.random() * 6, spin: (Math.random() - .5) * 3 }));
   }
+  const wd = windNow(), startX = () => Math.random() * W * 1.2 - W * .1 * (1 + wd);   // new drops start upwind, so the edge never runs dry
   if (type === 'rain') {
     g.strokeStyle = theme.rain; g.lineWidth = 1; g.beginPath();
     for (const p of wx) {
       const sp = H * (1.1 + p.s * .6), len = 10 + p.s * 14;
-      p.y += sp * dt; p.x -= sp * .15 * dt;
-      if (p.y > H) { p.y = -20 - Math.random() * H * .4; p.x = Math.random() * W * 1.2; p.s = Math.random(); }   // a random restart: drops never line up into sheets
-      g.moveTo(p.x, p.y); g.lineTo(p.x + len * .15, p.y - len);
+      p.y += sp * dt; p.x += sp * .15 * wd * dt;
+      if (p.y > H) { p.y = -20 - Math.random() * H * .4; p.x = startX(); p.s = Math.random(); }   // a random restart: drops never line up into sheets
+      g.moveTo(p.x, p.y); g.lineTo(p.x - len * .15 * wd, p.y - len);
     }
     g.stroke();
   } else if (type === 'snow') {
     g.fillStyle = 'rgba(235,240,255,.8)';
     for (const p of wx) {
-      p.y += (18 + p.s * 30) * dt; p.x += Math.sin(t / 1300 + p.rot) * 12 * dt;
-      if (p.y > H) { p.y = -5 - Math.random() * H * .3; p.x = Math.random() * W; p.s = Math.random(); }
+      p.y += (18 + p.s * 30) * dt; p.x += (Math.sin(t / 1300 + p.rot) * 12 + wd * (14 + p.s * 16)) * dt;
+      if (p.y > H) { p.y = -5 - Math.random() * H * .3; p.x = startX(); p.s = Math.random(); }
+      if (p.x < -10) p.x += W + 20; else if (p.x > W + 10) p.x -= W + 20;   // blown off one side, back in at the other
       const r = 1 + p.s * 1.8; g.fillRect(p.x, p.y, r, r);
     }
   } else if (type === 'blizzard') {
-    const gust = .6 + .4 * Math.sin(t / 2300) + .25 * Math.sin(t / 700), wind = W * .13 * gust;   // px/s, leftward, in gusts
+    const gust = .6 + .4 * Math.sin(t / 2300) + .25 * Math.sin(t / 700), wind = W * .13 * gust * wd;   // px/s, in gusts
     const haze = g.createLinearGradient(0, GY * .2, 0, H);   // the whiteout: thickest low down, breathing with the gusts
     haze.addColorStop(0, 'rgba(215,225,245,0)'); haze.addColorStop(1, `rgba(215,225,245,${(.2 + .14 * gust) * (.4 + .6 * amt)})`);
     g.fillStyle = haze; g.fillRect(0, GY * .2, W, H - GY * .2);
     g.strokeStyle = 'rgba(240,244,255,.85)'; g.lineWidth = 2.2; g.lineCap = 'round'; g.beginPath();
     for (const p of wx) {
-      const vy = 70 + p.s * 110, vx = -(wind * (.6 + p.s * .8)) + Math.sin(t / 500 + p.rot) * 20;
+      const vy = 70 + p.s * 110, vx = wind * (.6 + p.s * .8) + Math.sin(t / 500 + p.rot) * 20;
       p.y += vy * dt; p.x += vx * dt;
-      if (p.y > H || p.x < -20) {                        // back in from the top or the windward edge
-        if (Math.random() < .5) { p.y = -5 - Math.random() * H * .2; p.x = Math.random() * W * 1.3; } else { p.x = W + Math.random() * 40; p.y = Math.random() * H; }
+      if (p.y > H || p.x < -20 || p.x > W + 20) {        // back in from the top or the windward edge
+        if (Math.abs(wd) < .2 || Math.random() < .5) { p.y = -5 - Math.random() * H * .2; p.x = startX(); }
+        else { p.x = wd < 0 ? W + Math.random() * 40 : -Math.random() * 40; p.y = Math.random() * H; }
         p.s = Math.random();
       }
       const len = .012 + p.s * .022;                     // fast flakes blur a little along their path
@@ -2090,12 +2112,13 @@ const newKey = k => typeof k === 'string' && !!k && k !== 'none' && k !== 'gener
 //   cloud, rain, fogRGB ('r,g,b') · body, side, top: building faces · outline(b) → colour or null
 //   win({h, s, m}, b) → {h, s, m}: window colour transform · roofLights: false = no red warning lights on its buildings
 //   back {h, density, body, win(r 0..1) → colour}: the hazy back row · noBack: no back row (the theme draws its own) · ground {h: share of H, draw(g, E)}: replaces street and water
-//   searchlights: false = none · decorate(b, r, E): per generated building at layout · afterLayout(list, r, E): once, this theme's buildings
+//   searchlights: false = none · decorate(b, r, E): per generated building at layout (b.body: its own wall colour) · afterLayout(list, r, E): once, this theme's buildings
 //   drawBehind(g, E): after the back row · drawExtras(g, b, cx, tip, E): after each of its buildings · drawFront(g, E): after all buildings
 //   drawTop(g, E): after the ground and water, before the weather (things standing in front of the ground)
 // In the tour, the sky (gradient + drawSky), ground.draw, drawBehind, drawFront and drawTop are drawn for the theme's own stretch,
-// E.snowCap: 1, or more in a blizzard (draw snow on your scenery that much deeper). E.left..E.right on screen (0..W elsewhere; E.from..E.to is the stretch's whole span, partly off screen), and faded into the neighbour's where they meet, possibly via a spare canvas:
+// E.left..E.right on screen (0..W elsewhere; E.from..E.to is the stretch's whole span, partly off screen), and faded into the neighbour's where they meet, possibly via a spare canvas:
 // draw on the g you're given and read the scene from E.scene.
+// E.snowCap: 1, or more in a blizzard (draw snow on your scenery that much deeper).
 function registerTheme(key, def) {
   if (!newKey(key) || key in CITIES || !def || typeof def.name !== 'string' || !okKit(def.kit) || (def.ground && !(def.ground.h > 0)))
     return console.error(`City Pulse: theme "${key}" ignored: it needs a new key, a name, a kit shaped like the KITS entries and, for a ground, a height.`);
@@ -2124,7 +2147,15 @@ function registerLandmark(key, def) {
   LM[key] = { ...def };
   guard(`landmark "${key}"`, LM[key], 'draw');
 }
-window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, KITS, taper, hash, rng, sprite, NEON, BAND_NAMES, pixelArt, domeBase, collar, depthOf, FAR });
+// Drawing helpers shared by the theme files: an offscreen canvas, a temporary alpha, a soft glow, a linear gradient.
+const mk = (w, h, draw) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); draw(c.getContext('2d'), c.width, c.height); return c; };
+const withAlpha = (g, a, fn) => { const a0 = g.globalAlpha; g.globalAlpha = a0 * Math.max(0, Math.min(1, a)); fn(); g.globalAlpha = a0; };
+const glow = (g, rgb, x, y, r, a) => { if (a > .01 && r > 0) withAlpha(g, a, () => g.drawImage(sprite(rgb), x - r, y - r, 2 * r, 2 * r)); };
+const lin = (g, x0, y0, x1, y1, stops) => { const gr = g.createLinearGradient(x0, y0, x1, y1); for (const [p, c] of stops) gr.addColorStop(p, c); return gr; };
+// A horizontal fade from c0 to c1, made once and stretched with drawImage (headlight beams, light trails). dir -1: c0 on the right.
+const strips = {};
+const strip = (c0, c1, dir = 1) => strips[c0 + c1 + dir] ??= mk(64, 4, (x, w, h) => { x.fillStyle = lin(x, 0, 0, w, 0, dir > 0 ? [[0, c0], [1, c1]] : [[0, c1], [1, c0]]); x.fillRect(0, 0, w, h); });
+window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark, STY, hash, sprite, mk, withAlpha, glow, lin, strip, pixelArt, domeBase, collar, depthOf });
 
 // Cyberpunk: neon signs, hologram billboards, rings of projected light round the towers, ad drones, skybridges and
 // flying cars in a rainy magenta haze.
@@ -2232,9 +2263,8 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       f.x += (f.dir * f.v - scrollV * (layer ? 1 : .5)) * dt;
       if (f.x > W + 60) f.x = -60; else if (f.x < -60) f.x = W + 60;
       const front = f.x + f.dir * u * 1.1, back = f.x - f.dir * u * 1.1;
-      const tr = g.createLinearGradient(back, 0, back - f.dir * u * 8, 0);
-      tr.addColorStop(0, `hsla(${f.hue},100%,60%,.35)`); tr.addColorStop(1, `hsla(${f.hue},100%,60%,0)`);
-      g.fillStyle = tr; g.fillRect(Math.min(back, back - f.dir * u * 8), f.y - u * .12, u * 8, u * .24);
+      f.trail ??= strip(`hsla(${f.hue},100%,60%,.35)`, `hsla(${f.hue},100%,60%,0)`, -f.dir);   // its light trail, brightest at the tail
+      g.drawImage(f.trail, Math.min(back, back - f.dir * u * 8), f.y - u * .12, u * 8, u * .24);
       g.fillStyle = '#0a0a12'; g.fillRect(f.x - u * 1.1, f.y - u * .3, u * 2.2, u * .6);
       g.fillStyle = `hsl(${f.hue},100%,75%)`; g.fillRect(front - u * .2, f.y - u * .15, u * .4, u * .3);
       g.fillStyle = '#ff3355'; g.fillRect(back - u * .15, f.y - u * .12, u * .3, u * .24);
@@ -2282,7 +2312,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
   });
 }
 
-// Dark City: Art Deco towers under a low overcast, washed-out windows, and one rooftop spotlight with the shadow
+// Dark Night City: Art Deco towers under a low overcast, washed-out windows, and one rooftop spotlight with the shadow
 // of a real-looking bat caught in its soft, round pool of light. An original, naturalistic silhouette (raised wings,
 // finger-tip points along the membrane), not any brand's emblem.
 {
@@ -2330,7 +2360,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
     g.save(); g.translate(tx, ty); g.rotate(-.12 + Math.sin(t / 3700) * .04);   // tilted and drifting, like a real bat crossing the beam
     g.globalAlpha *= .8; g.drawImage(getBatSprite(), -bw / 2, -bh / 2, bw, bh); g.restore();
   };
-  registerTheme('noir', { name: 'Dark City', kit: KITS.noir, minF: .4, maxF: .9, weather: 'rain',
+  registerTheme('noir', { name: 'Dark Night City', kit: KITS.noir, minF: .4, maxF: .9, weather: 'rain',
     sky: [[0, '#040405'], [1, '#1c1a16']], stars: false, moon: false, overcast: true, cloud: 'rgba(30,30,33,.72)',
     side: '#0b0b0c', top: '#151515', win: c => ({ h: c.h, s: c.s * .3, m: c.m * .7 }),
     back: { h: 1.1, density: 1, body: '#0d0d0f', win: () => 'rgba(210,170,100,.16)' },
@@ -2480,7 +2510,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
       palm(g, E.left - 30, H + 40, ph, ph * .1, 'rgba(255,90,200,1)', ph / 640, sway);
       palm(g, E.right + 30, H + 40, ph * .95, -ph * .11, 'rgba(0,240,255,1)', ph / 660, -sway);
       if (!st.scan) { const c = document.createElement('canvas'); c.width = 1; c.height = 3; const x = c.getContext('2d'); x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(0, 0, 1, 1); st.scan = c; }
-      const a0 = g.globalAlpha; g.globalAlpha = a0 * .16; g.fillStyle = g.createPattern(st.scan, 'repeat'); g.fillRect(E.left, 0, E.right - E.left, H); g.globalAlpha = a0;   // faint scanlines
+      const a0 = g.globalAlpha; g.globalAlpha = a0 * .16; g.fillStyle = st.scanPat ??= g.createPattern(st.scan, 'repeat'); g.fillRect(E.left, 0, E.right - E.left, H); g.globalAlpha = a0;   // faint scanlines
     },
   });
 }
@@ -2626,6 +2656,7 @@ function start() {
 <!-- Plugin files: extra themed cities, real cities and landmarks, written against window.CityPulse. A missing file is just skipped. -->
 <script src="themes-a.js"></script>
 <script src="themes-b.js"></script>
+<script src="themes-c.js"></script>
 <script src="cities-world.js"></script>
 <script>start();</script>
 </body>

@@ -5,7 +5,13 @@
 (() => {
   const CP = window.CityPulse;
   if (!CP) return;
-  const { registerTheme, registerLandmark, sprite, pixelArt, hash, depthOf } = CP;
+  const { registerTheme, registerLandmark, sprite, pixelArt, hash, depthOf, glow, mk, lin, strip } = CP;
+  // Neon Strip's headlight beam (a widening wedge fading out ahead), drawn once per direction and stretched onto each car.
+  const BEAM = [-1, 1].map(dir => mk(128, 48, (x, w, h) => {
+    x.fillStyle = lin(x, 0, 0, w, 0, dir > 0 ? [[0, 'rgba(255,245,210,.35)'], [1, 'rgba(255,245,210,0)']] : [[0, 'rgba(255,245,210,0)'], [1, 'rgba(255,245,210,.35)']]);
+    const n = dir > 0 ? 0 : w, f = w - n;              // the near (car) end and the far end
+    x.beginPath(); x.moveTo(n, h * .35 / 1.2); x.lineTo(f, 0); x.lineTo(f, h); x.lineTo(n, h * .65 / 1.2); x.fill();
+  }));
   const once = () => { let last = -1; return E => last !== E.t && (last = E.t, true); };   // true on the first call of each frame
   const topT = b => b.tiers[b.tiers.length - 1];
 
@@ -724,9 +730,7 @@
         // taillights behind, and their lights smeared on the wet road. Nearer lanes are bigger.
         const car = (x, y, s, dir, hue) => {
           const L = 6.4 * s, h = 1.5 * s, r = .55 * s, fx = x + dir * L / 2, bx = x - dir * L / 2;
-          const beam = g.createLinearGradient(fx, 0, fx + dir * 9 * s, 0);
-          beam.addColorStop(0, 'rgba(255,245,210,.35)'); beam.addColorStop(1, 'rgba(255,245,210,0)');
-          g.fillStyle = beam; g.beginPath(); g.moveTo(fx, y - h * .75); g.lineTo(fx + dir * 9 * s, y - h * 1.1); g.lineTo(fx + dir * 9 * s, y + h * .1); g.lineTo(fx, y - h * .45); g.fill();
+          g.drawImage(BEAM[dir > 0 ? 1 : 0], dir > 0 ? fx : fx - 9 * s, y - h * 1.1, 9 * s, h * 1.2);   // headlight beam
           g.fillStyle = 'rgba(255,90,170,.18)'; g.fillRect(x - L / 2, y + s * .15, L, s * .55);   // its glow on the wet road
           g.fillStyle = `hsl(${hue},45%,26%)`; g.beginPath();
           g.moveTo(bx, y - r); g.lineTo(bx, y - h * .95); g.lineTo(x - dir * L * .22, y - h); g.lineTo(x - dir * L * .1, y - h * 1.65);
@@ -769,7 +773,6 @@
   // floor toward you on every bass hit, the bikes speed up with the mids and the data streams brighten with the highs.
   {
     const TAU = Math.PI * 2, CYAN = '0,230,255', ORANGE = '255,140,30';
-    const glow = (g, rgb, x, y, r, a) => { if (a <= .01 || r <= 0) return; const pa = g.globalAlpha; g.globalAlpha = pa * Math.min(1, a); g.drawImage(sprite(rgb), x - r, y - r, 2 * r, 2 * r); g.globalAlpha = pa; };
     const st = { key: '', bikes: [], pulses: [], prevBF: 0, ph: 0, sp: 1 };
     const tick = once();
     const update = E => {                                 // once per frame: the clock, the bikes, the floor pulses
@@ -777,7 +780,7 @@
       const { W, H, unit: u, dt, bands, bassFlash, scrollV } = E, k = `${W}x${H}x${u}x${E.widget}`;
       if (st.key !== k) {
         st.key = k; st.pulses = [];
-        st.bikes = [[.32, 1, CYAN, .1], [.5, -1, ORANGE, .45], [.7, 1, CYAN, .7], [.88, -1, ORANGE, .25]]
+        st.bikes = [[.32, 1, CYAN, .1], [.5, -1, ORANGE, .45], [.7, 1, CYAN, .7], [.88, -1, ORANGE, .25]]   // far lanes first, so nearer bikes draw over them
           .slice(0, E.widget ? 2 : 4).map(([lane, dir, rgb, x]) => ({ lane, dir, rgb, x: W * x, v: (14 + 6 * Math.random()) * u }));
       }
       st.sp += (1 + 1.2 * ((bands[3].level + bands[4].level) / 2) - st.sp) * Math.min(1, dt * 1.5);   // smoothed, so they surge rather than jerk
@@ -794,9 +797,7 @@
     // An original light-trail bike: a low dark wedge with two glowing wheels and a long fading ribbon of light behind it.
     const bike = (g, b, y, s, u) => {
       const { x, dir, rgb } = b, L = 5 * u * s, h = 1.4 * u * s, r = .6 * u * s, tl = 32 * u * s;
-      const tr = g.createLinearGradient(x, 0, x - dir * tl, 0);
-      tr.addColorStop(0, `rgba(${rgb},.9)`); tr.addColorStop(1, `rgba(${rgb},0)`);
-      g.fillStyle = tr; g.fillRect(dir > 0 ? x - tl : x, y - h * .75, tl, Math.max(1, h * .4));
+      g.drawImage(strip(`rgba(${rgb},.9)`, `rgba(${rgb},0)`, -dir), dir > 0 ? x - tl : x, y - h * .75, tl, Math.max(1, h * .4));
       glow(g, rgb, x, y - h * .5, L * .9, .35);
       g.fillStyle = '#020507'; g.strokeStyle = `rgba(${rgb},.95)`; g.lineWidth = Math.max(1, u * .15 * s);
       g.beginPath(); g.moveTo(x - dir * L * .55, y - r); g.lineTo(x - dir * L * .2, y - h); g.lineTo(x + dir * L * .3, y - h * .85); g.lineTo(x + dir * L * .58, y - r); g.closePath(); g.fill(); g.stroke();
@@ -853,7 +854,7 @@
       drawTop(g, E) {
         update(E);
         const { GY, H, unit: u } = E, gh = H - GY;
-        for (const b of [...st.bikes].sort((a, c) => a.lane - c.lane)) bike(g, b, GY + gh * b.lane, .9 + 1.1 * b.lane, u);   // nearer lanes are bigger
+        for (const b of st.bikes) bike(g, b, GY + gh * b.lane, .9 + 1.1 * b.lane, u);   // nearer lanes are bigger
       },
     });
   }

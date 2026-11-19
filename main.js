@@ -140,13 +140,13 @@ async function applyWallpaper(cfg) {
       if (MAC) { w.setVisibleOnAllWorkspaces(true); return w.showInactive(); }   // type 'desktop' already sits behind the icons
       const hwnd = w.getNativeWindowHandle().readBigUInt64LE(0), pb = phys(d.bounds), rel = { x: pb.x - vx, y: pb.y - vy, width: pb.width, height: pb.height };
       const res = await win32.wallpaper(hwnd, rel);
-      if (w.isDestroyed() || !res) return;                // replaced meanwhile, or the helper restarted (it isn't a "no")
+      if (w.isDestroyed() || !walls.includes(w) || !res) return;   // replaced meanwhile, or the helper restarted (it isn't a "no")
       if (!res.ok) {                                      // Windows didn't allow it: back out quietly
         await setWallpaper({ mode: 'off' });
         tray.displayBalloon?.({ title: 'City Pulse', content: 'Live wallpaper isn’t available on this version of Windows.' });
       } else {
         w.showInactive();                                 // tell Chromium it's visible so it actually draws
-        await win32.wallpaper(hwnd, rel);                 // and re-seat it in case showing moved it
+        if (walls.includes(w)) await win32.wallpaper(hwnd, rel);   // and re-seat it in case showing moved it (not once it's being taken down)
       }
     });
     return w;
@@ -216,7 +216,7 @@ function updateTray() {
       { label: 'All screens: own city each', type: 'radio', checked: fullOpen && fm === 'per', click: () => { closeFull(); openFull('per'); } },
       { label: 'All screens: one tour across', type: 'radio', checked: fullOpen && fm === 'span', click: () => { closeFull(); openFull('span'); } },
     ] },
-    { label: 'Live wallpaper (experimental)', submenu: [
+    { label: 'Live wallpaper', submenu: [
       { label: 'Off', type: 'radio', checked: wall.mode === 'off', click: () => setWallpaper({ mode: 'off' }) },
       ...list.map((d, i) => ({ label: screenName(d, i), type: 'radio', checked: wall.mode === 'one' && wall.display === d.id,
         click: () => setWallpaper({ mode: 'one', display: d.id }) })),

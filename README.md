@@ -12,9 +12,9 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 
 ![Chicago skyline with some buildings lit and others dark on the beat](docs/beat.png)
 
-| Shanghai: Floors with random colors, during a loud song | Dark City in the rain: one solid color |
+| Shanghai: Floors with random colors, during a loud song | Dark Night City in the rain: one solid color |
 | --- | --- |
-| ![Shanghai skyline with buildings filled almost to the top in random colors](docs/shanghai.png) | ![Dark City in grey rain with every window in one dark teal](docs/noir.png) |
+| ![Shanghai skyline with buildings filled almost to the top in random colors](docs/shanghai.png) | ![Dark Night City in grey rain with every window in one dark teal](docs/noir.png) |
 
 **Pan view:** the city keeps going past the screen edges. Drag or scroll to choose your part of it.
 
@@ -33,7 +33,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Loudness meter:** on Windows, tops out at your Windows volume, so at 50% volume it peaks halfway.
 - **Skylines:**
   - **14 real cities** with hand-drawn landmarks: Charlotte, Chicago, Dubai, Hong Kong, London, New York, Paris, San Francisco, Seattle, Shanghai, Sydney, Tampa, Tokyo and Toronto. New York is the first one you see.
-  - **15 themed cities**: Abyssal City, Aero, Atlantis, Aurora Harbor, Brasshaven, Christmas Village, Cyberpunk, Dark City, Desert Mirage, The Grid, Lantern District, Lunar Colony, Neon City, Neon Strip and Synthwave. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
+  - **16 themed cities**: Abyssal City, Aero, Atlantis, Aurora Harbor, Brasshaven, Christmas Village, Cyberpunk, Dark Night City, Desert Mirage, The Grid, Jungle City, Lantern District, Lunar Colony, Neon City, Neon Strip and Synthwave. Each has its own sky, ground, creatures or machines, and something unique that moves with the music.
 - **Light styles:**
   - **Floors:** an equalizer that climbs each building, with a falling peak marker.
   - **Pulse:** each building's windows follow the volume.
@@ -45,9 +45,10 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 - **Scene:**
   - a street with traffic, a park, or a thin river with reflections
   - a hazy back skyline and 3D building detail
-- **Weather:** rain, snow, blizzards (dense, wind-driven snow, a whiteout haze and snow lying deeper on roofs and streets), thunderstorms (lightning on the bass), fog, cherry blossoms and autumn leaves.
+- **Weather:** rain, snow, blizzards (dense, wind-driven snow, a whiteout haze and snow lying deeper on roofs and streets), thunderstorms (lightning on the bass), fog, cherry blossoms and autumn leaves. **Wind** sets which way rain and snow fall: straight down, left to right, right to left, or Auto, which shifts direction every minute or so.
 - **Seasons:** Spring, Summer, Fall or Winter, or Auto to follow today's date. A season brings its weather (cherry blossoms, autumn leaves, snow) while the Weather setting is Clear; a weather you pick, or live weather, always wins. Winter also puts snow on the rooftops, streets and parks, and each season tints the park trees.
-- **Christmas Village:** a big snowy village under snow-capped mountains and a ridge of pines, its houses decked in all kinds of lights that chase and twinkle with the music (coloured strings, warm icicles, candy-cane garlands) and smoking chimneys, wreaths, a little church, a toy workshop factory with candy-striped smokestacks and a conveyor of presents, gingerbread cottages, candy canes and presents along a snowy road, and a frozen river. A great four-pointed star gleams in the top left, a big, richly decorated Christmas tree (tinsel, baubles, presents underneath) lights up with the music under a gold star, now and then a faint aurora comes in with pale angels gliding through it for 10 to 20 seconds, a sleigh pulled by reindeer (a glowing red nose in front) crosses the sky every 30 to 90 seconds, and three travellers on camels, in green, red and blue robes with small gold crowns, ride single file along the road from right to left.
+- **Christmas Village:** a big snowy village under snow-capped mountains and a ridge of pines, its cottages in deep reds, pines, slates and plums with lit front doors, lanterns and shop awnings, decked in all kinds of lights that chase and twinkle with the music (coloured strings, warm icicles, candy-cane garlands) and smoking chimneys, wreaths, a half-timbered inn, a bakery with cakes in the window, a tall townhouse with a candle in every window, a clock tower that keeps the real time, a log cabin, a little church, a toy workshop factory with candy-striped smokestacks and a conveyor of presents, gingerbread cottages, candy canes and presents along a snowy road, and a frozen river. A great four-pointed star gleams in the top left, a big, richly decorated Christmas tree (tinsel, baubles, presents underneath) stands fixed in the bottom right and lights up with the music under a gold star, now and then a faint aurora comes in with pale angels gliding through it for 10 to 20 seconds, a sleigh pulled by reindeer (a glowing red nose in front) crosses the sky every 30 to 90 seconds, and three travellers on camels, in green, red and blue robes with small gold crowns, ride single file along the road from right to left.
+- **Jungle City:** aged stone towers deep in a rainforest, hung with ivy and lit by torches that flare with the music, a stepped temple, a great carved stone head with glowing eyes, waterfalls in the misty hills, fireflies and glowing mushrooms that pulse with the music. A golden skull shimmers on a pedestal in a shrine atop one tower. A pixel explorer in a fedora and leather jacket wanders the city, stopping to look up at buildings, going inside and showing up at their windows. After two to three minutes he finds the skull and takes it, the pedestal sinks into the tower, and he walks off with it. About two minutes later the pedestal rises with the skull again, and he comes back.
 - **Live weather (optional):** mirror the real current weather of the skyline's city, or of any city you type, refreshed every 15 minutes from [Open-Meteo](https://open-meteo.com) (free, no account). City Pulse never looks up where you are: only the name you search for, and then that place's rounded coordinates, are sent. It's always night in City Pulse, so a sunny day shows as a clear night.
 - **Ambient motion:** each item can be switched on or off: blinking roof lights, windows switching on and off, searchlights, stars, shooting stars, moon, clouds, planes and flying cars.
 - **Views:**
@@ -63,7 +64,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
   - optional burn-in protection creeps the picture a few pixels over about 20 minutes
 - **Control Center:** the one window for everything, in three steps: **1. Listen to** (the audio source), **2. Where the city shows** (widget, full screen, wallpaper, and a **Tour across every screen** button), **3. Customize**: pick Widget, Full screen or Wallpaper, then the screen if you have several, and its settings appear right below. Click the tray icon, the ☰ button, or launch City Pulse again to open it.
 - **Lives in the tray:** no taskbar button. The tray icon by the clock shows or hides the widget, and also has full screen, Settings, Start with Windows and Quit.
-- **Live wallpaper (experimental):** puts City Pulse behind your desktop icons on the display you choose, with its own look (Control Center → Customize → Wallpaper). It relies on an unofficial Windows feature, so a future Windows update could break it. If that happens, it switches itself off.
+- **Live wallpaper:** puts City Pulse behind your desktop icons on the display you choose, with its own look (Control Center → Customize → Wallpaper). It relies on an unofficial Windows feature, so a future Windows update could break it. If that happens, it switches itself off.
 
 ## Install (Windows)
 

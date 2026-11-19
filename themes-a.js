@@ -5,15 +5,11 @@
 'use strict';
 const CP = window.CityPulse;
 if (!CP) return;
-const { registerTheme, hash, sprite, pixelArt, domeBase, collar, depthOf } = CP;
+const { registerTheme, hash, sprite, pixelArt, domeBase, collar, depthOf, mk, withAlpha, glow, lin } = CP;
 const TAU = Math.PI * 2, CLEAR = 'rgba(0,0,0,0)';
 
-const mk = (w, h, draw) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); draw(c.getContext('2d'), c.width, c.height); return c; };
 const dpr = () => window.devicePixelRatio || 1;
 // Hooks may run at partial opacity (the tour's crossfade), so alpha is always multiplied, then restored.
-const withAlpha = (g, a, fn) => { const a0 = g.globalAlpha; g.globalAlpha = a0 * Math.max(0, Math.min(1, a)); fn(); g.globalAlpha = a0; };
-const glow = (g, rgb, x, y, r, a) => withAlpha(g, a, () => g.drawImage(sprite(rgb), x - r, y - r, 2 * r, 2 * r));
-const lin = (g, x0, y0, x1, y1, stops) => { const gr = g.createLinearGradient(x0, y0, x1, y1); for (const [p, c] of stops) gr.addColorStop(p, c); return gr; };
 const keyOf = E => `${E.W}x${E.H}x${E.unit}x${E.widget}`;
 
 // Pixel sprites (rows of palette keys, facing right), rendered once per size and direction, then blitted.
@@ -929,7 +925,9 @@ function curtains(g, E, en, t, a) {
 // a glowing red nose in front (only one sleigh at a time). Three travellers on camels (green, red and blue robes, small gold
 // crowns) ride single file along the road from right to left; once they're gone, they set out again after 10-25 s.
 {
-  const { registerLandmark } = CP;
+  const { registerLandmark, STY } = CP;
+  STY.cottage = { cw: 3.4, ch: 3.6, ww: .42, wh: .48 };   // a house's few, well-spaced windows
+  const WALLS = ['#3a1a1e', '#1a2c22', '#1e2636', '#2e1e30', '#33241a', '#141019'];   // deep red, pine, slate, plum, brown, night
   const CAMEL = [
     '......k.k.k.....', '......kkkkk.....', '......hsss......', '......hhsh......', '.....ggggg......', '....gggggggg....',
     '....ggggggg..cc.', '...cggggggc..ccc', '..cccccccccc.cc.', '.dcccccccccccc..', '.d.cccccccccc...', '...cccccccccc...'];
@@ -988,7 +986,7 @@ function curtains(g, E, en, t, a) {
       if (!L.side) { g.fillStyle = '#eef3fb'; g.beginPath(); g.moveTo(x0, -19.5); g.lineTo(x0 + 7.5, -14); g.lineTo(x0 + 6.2, -14); g.lineTo(x0 + .2, -18.4); g.fill(); }
     }
     for (const y of [-11, -6.5]) for (const x of [-13.5, -10, -6.5, 4.3, 7.8, 11.3]) { g.fillStyle = L.win(L.lit(-y)); g.fillRect(x, y, 2.2, 3); }
-    g.fillStyle = L.win(Math.max(.4, L.lit(2))); g.fillRect(-3, -8, 6, 8); g.beginPath(); g.arc(0, -8, 3, Math.PI, 0); g.fill();   // the doors
+    g.fillStyle = L.win(Math.max(.4, L.lit(2))); g.beginPath(); g.moveTo(-3, 0); g.lineTo(-3, -8); g.arc(0, -8, 3, Math.PI, 0); g.lineTo(3, 0); g.fill();   // the doors, one shape
     if (L.side) return;
     g.fillStyle = '#1f7a36'; g.fillRect(-15, -14.4, 30, .8);                                              // green eaves, a red ribbon band
     g.fillStyle = '#c8202a'; g.fillRect(-15, -12.4, 11.6, .6); g.fillRect(3.4, -12.4, 11.6, .6);
@@ -1019,6 +1017,148 @@ function curtains(g, E, en, t, a) {
     g.fillStyle = '#ffffff'; for (let x = -4.6; x <= 4.6; x += 1.15) { g.beginPath(); g.arc(x, -8, .5, 0, Math.PI); g.fill(); }
     g.fillStyle = '#e8202a'; g.beginPath(); g.arc(0, -14.2, .8, 0, TAU); g.fill();
     for (const x of [-2.2, 1.6]) for (let y = -3; y < 0; y += 1) { g.fillStyle = y % 2 ? '#e8202a' : '#ffffff'; g.fillRect(x, y, .6, 1); }
+  } });
+
+  // Shared bits for the cottages below: snow on a gable, chimney smoke, a garland with berries, a row of icicles.
+  const SNOW = '#eef3fb';
+  const gableSnow = (g, l, r, base, top, k = .28) => {   // a snow cap down both slopes of a gable from x l to r
+    const m = (l + r) / 2, dx = (r - l) / 2 * k, dy = (base - top) * k;
+    g.fillStyle = SNOW; g.beginPath(); g.moveTo(l - .3, base + .2); g.lineTo(m, top - .4); g.lineTo(r + .3, base + .2);
+    g.lineTo(r - dx * .4, base - dy * .2); g.lineTo(m + dx * .2, top + dy * .9); g.lineTo(m - dx * .5, top + dy * .7); g.lineTo(l + dx * .4, base - dy * .25); g.fill();
+  };
+  const smoke = (g, x, y, seed) => { const t = performance.now(); for (let k = 0; k < 3; k++) {
+    const p = (t / 3300 + k / 3 + seed) % 1; g.fillStyle = `rgba(215,222,240,${.32 * (1 - p)})`; g.beginPath(); g.arc(x + p * 2.6, y - p * 5.5, .6 + p * 1.4, 0, TAU); g.fill(); } };
+  const garland = (g, l, r, y, sag) => {
+    g.strokeStyle = '#1f6a32'; g.lineWidth = .7; g.beginPath(); g.moveTo(l, y); g.quadraticCurveTo((l + r) / 2, y + sag * 2, r, y); g.stroke();
+    for (let i = 1; i < 6; i++) { const f = i / 6, x = l + (r - l) * f, yy = y + sag * 4 * f * (1 - f); g.fillStyle = i % 2 ? '#e02a2a' : '#ffd23a'; g.beginPath(); g.arc(x, yy, .28, 0, TAU); g.fill(); }
+  };
+  const icicles = (g, l, r, y) => { g.fillStyle = 'rgba(225,238,255,.85)'; for (let x = l + .3, i = 0; x < r; x += .7, i++) g.fillRect(x, y, .2, .4 + (i * 7 % 5) * .18); };
+  const pane = (g, L, x, y, w, h, lit) => {             // a lit window with a cross of glazing bars
+    g.fillStyle = L.win(lit); g.fillRect(x, y, w, h);
+    if (L.side) return;
+    g.fillStyle = 'rgba(30,18,12,.85)'; g.fillRect(x + w / 2 - .1, y, .2, h); g.fillRect(x, y + h / 2 - .1, w, .2);
+  };
+
+  // The coaching inn: a stone ground floor, a half-timbered upper floor, a steep roof with two dormers, a hanging sign,
+  // a lantern by the door and a garland over it.
+  registerLandmark('inn', { w: 20, h: 25, draw(g, L) {
+    const c = col => L.side ? L.body : col;
+    g.fillStyle = c('#3a3440'); g.fillRect(-9, -9, 18, 9);                                 // stone ground floor
+    g.fillStyle = c('#4a3b2c'); g.fillRect(-9.6, -16, 19.2, 7);                            // the upper floor, jettied out
+    g.fillStyle = c('#2a1e26'); g.beginPath(); g.moveTo(-10.6, -15.6); g.lineTo(0, -24.5); g.lineTo(10.6, -15.6); g.fill();
+    g.fillStyle = c('#3a3038'); g.fillRect(6.2, -24, 1.8, 6);                               // the chimney
+    for (const dx of [-4.6, 4.6]) {                                                         // dormers
+      g.fillStyle = c('#2e2430'); g.fillRect(dx - 1.5, -19.6, 3, 2.6);
+      g.beginPath(); g.moveTo(dx - 1.9, -19.4); g.lineTo(dx, -21.4); g.lineTo(dx + 1.9, -19.4); g.fill();
+      pane(g, L, dx - .9, -19, 1.8, 1.8, L.lit(19));
+    }
+    for (const x of [-8, -4.8, 2.6, 5.8]) pane(g, L, x, -7.2, 2.2, 2.8, L.lit(6));          // ground floor windows
+    for (const x of [-8.2, -4.6, 3, 6.6]) pane(g, L, x, -14.6, 1.8, 2.4, L.lit(13));       // upper windows
+    g.fillStyle = L.win(Math.max(.4, L.lit(2))); g.beginPath(); g.moveTo(-1.3, 0); g.lineTo(-1.3, -3.6); g.arc(0, -3.6, 1.3, Math.PI, 0); g.lineTo(1.3, 0); g.fill();
+    if (L.side) return;
+    g.strokeStyle = '#21140c'; g.lineWidth = .45; g.beginPath();                           // the timber frame
+    for (const x of [-9.4, -6.6, -3.4, 0, 3.4, 6.6, 9.4]) { g.moveTo(x, -16); g.lineTo(x, -9); }
+    for (const [a, b] of [[-9.4, -6.6], [-3.4, 0], [3.4, 6.6]]) { g.moveTo(a, -9); g.lineTo(b, -16); g.moveTo(b + 3.2, -9); g.lineTo(a + 3.2, -16); }
+    g.moveTo(-9.6, -9.2); g.lineTo(9.6, -9.2); g.moveTo(-9.6, -15.8); g.lineTo(9.6, -15.8); g.stroke();
+    g.fillStyle = 'rgba(0,0,0,.25)'; for (let y = -8.4; y < 0; y += 1.4) g.fillRect(-9, y, 18, .15);   // stone courses
+    gableSnow(g, -10.6, 10.6, -15.6, -24.5, .32);
+    for (const dx of [-4.6, 4.6]) gableSnow(g, dx - 1.9, dx + 1.9, -19.4, -21.4, .5);
+    g.fillStyle = SNOW; g.fillRect(6, -24.4, 2.2, .6); smoke(g, 7.1, -25, .2);
+    icicles(g, -9.6, 9.6, -9);
+    g.strokeStyle = '#1a1a1a'; g.lineWidth = .3; g.beginPath(); g.moveTo(9.6, -11.5); g.lineTo(12, -11.5); g.stroke();   // the sign on its bracket
+    g.fillStyle = '#5a3a1c'; g.fillRect(10.4, -11.3, 2.2, 1.8); g.strokeStyle = '#c8a030'; g.strokeRect(10.5, -11.2, 2, 1.6);
+    g.fillStyle = '#ffd23a'; star5(g, 11.5, -10.4, .55);
+    garland(g, -2, 2, -5.6, .5);
+    const fl = .8 + .2 * Math.sin(performance.now() / 180);                                 // the lantern, flickering
+    glow(g, '255,190,100', 2.2, -3.4, 2.4, .5 * fl); g.fillStyle = '#ffd88a'; g.fillRect(1.9, -3.8, .6, .8);
+  } });
+
+  // The bakery: a brick shop with a striped awning over a glowing display window of cakes, a wreath on the door and a
+  // round window up in the gable.
+  registerLandmark('bakery', { w: 13, h: 16, draw(g, L) {
+    const c = col => L.side ? L.body : col;
+    g.fillStyle = c('#5a2624'); g.fillRect(-6, -10, 12, 10);
+    g.fillStyle = c('#2a1e26'); g.beginPath(); g.moveTo(-6.8, -9.8); g.lineTo(0, -15.6); g.lineTo(6.8, -9.8); g.fill();
+    g.fillStyle = c('#3a3038'); g.fillRect(-4.6, -15.4, 1.6, 4);
+    g.fillStyle = L.win(Math.max(.45, L.lit(3))); g.fillRect(-5, -5.2, 6.2, 4);            // the display window
+    g.fillStyle = L.win(Math.max(.35, L.lit(2))); g.fillRect(2.4, -4.8, 2.2, 4.8);          // the door
+    g.fillStyle = L.win(L.lit(12)); g.beginPath(); g.arc(0, -12, 1.2, 0, TAU); g.fill();
+    for (const x of [-4.4, 1.6]) pane(g, L, x, -9, 2, 2.2, L.lit(8));
+    if (L.side) return;
+    g.fillStyle = 'rgba(0,0,0,.22)'; for (let y = -9.6, i = 0; y < 0; y += .8, i++) g.fillRect(-6, y, 12, .1);   // brick courses
+    g.fillStyle = '#7a4a2a'; for (const [x, r] of [[-4, .7], [-2.4, .9], [-.6, .6]]) { g.beginPath(); g.arc(x, -1.2, r, Math.PI, 0); g.fill(); }   // cakes
+    g.fillStyle = '#f4e4d0'; for (const x of [-4, -2.4, -.6]) g.fillRect(x - .5, -1.9 - (x === -2.4 ? .2 : 0), 1, .25);   // their icing
+    g.fillStyle = '#e8202a'; g.beginPath(); g.arc(-2.4, -2.3, .2, 0, TAU); g.fill();
+    for (let i = 0; i < 7; i++) { g.fillStyle = i % 2 ? '#f4f4f4' : '#d42a2a'; g.fillRect(-5.6 + i, -6.6, 1, 1.4);   // the awning, scalloped
+      g.beginPath(); g.arc(-5.1 + i, -5.2, .5, 0, Math.PI); g.fill(); }
+    g.fillStyle = SNOW; g.fillRect(-5.7, -6.9, 7.2, .35);
+    g.strokeStyle = '#1f6a32'; g.lineWidth = .45; g.beginPath(); g.arc(3.5, -3.6, .6, 0, TAU); g.stroke();   // a wreath on the door
+    g.fillStyle = '#e02a2a'; g.fillRect(3.3, -3.1, .4, .3);
+    gableSnow(g, -6.8, 6.8, -9.8, -15.6, .3); g.fillStyle = SNOW; g.fillRect(-4.8, -15.8, 2, .5); smoke(g, -3.8, -16.2, .6);
+    icicles(g, -6, 6, -10);
+  } });
+
+  // A tall, narrow townhouse with a stepped gable, a candle in every window, a star up top and window boxes of berries.
+  registerLandmark('townhouse', { w: 9, h: 28, draw(g, L) {
+    const c = col => L.side ? L.body : col;
+    g.fillStyle = c('#22303a'); g.fillRect(-4, -21, 8, 21);
+    for (const [hw, y0, y1] of [[4, -21, -23], [2.8, -23, -25], [1.6, -25, -27.4]]) g.fillRect(-hw, y1, hw * 2, y0 - y1);   // the stepped gable
+    for (let f = 0; f < 4; f++) for (const x of [-3, 1]) {
+      const y = -4.4 - f * 4.4; pane(g, L, x, y - 2.4, 2, 2.6, L.lit(-y));
+      if (!L.side && f) { g.fillStyle = '#f4f0e0'; g.fillRect(x + .85, y - 1.2, .3, 1); g.fillStyle = '#ffcf5a'; g.beginPath(); g.arc(x + 1, y - 1.45, .2, 0, TAU); g.fill();   // a candle
+        g.fillStyle = '#3a2a1a'; g.fillRect(x - .2, y + .25, 2.4, .5); g.fillStyle = '#e02a2a'; for (let k = 0; k < 4; k++) g.fillRect(x + .1 + k * .55, y, .3, .3); }
+    }
+    g.fillStyle = L.win(Math.max(.35, L.lit(2))); g.fillRect(-1, -3.4, 2, 3.4);
+    g.fillStyle = L.win(L.lit(24)); g.beginPath(); g.arc(0, -24.6, .7, 0, TAU); g.fill();
+    if (L.side) return;
+    g.fillStyle = '#ffd23a'; star5(g, 0, -24.6, .55);
+    g.fillStyle = SNOW; for (const [hw, y] of [[4, -23], [2.8, -25], [1.6, -27.4]]) g.fillRect(-hw - .2, y - .3, hw * 2 + .4, .55);
+    g.fillRect(-4.2, -21.3, 8.4, .5);
+    g.fillStyle = '#4a4450'; g.fillRect(-1.6, -.4, 3.2, .4);                                // the front step
+    garland(g, -1.2, 1.2, -3.6, .3);
+  } });
+
+  // The clock tower: a stone base, a square tower with a glowing clock that keeps the real time, an open belfry with
+  // a gold bell, a steep snowy roof and a gold ball on top.
+  registerLandmark('clocktower', { w: 9, h: 37, draw(g, L) {
+    const c = col => L.side ? L.body : col;
+    g.fillStyle = c('#3a3644'); g.fillRect(-4, -6, 8, 6);
+    g.fillStyle = c('#2e2a36'); g.fillRect(-3, -30, 6, 24);
+    g.fillStyle = c('#24202c'); g.beginPath(); g.moveTo(-3.6, -29.6); g.lineTo(0, -36); g.lineTo(3.6, -29.6); g.fill();
+    g.fillStyle = L.win(Math.max(.3, L.lit(28))); g.beginPath(); g.moveTo(-1.4, -26); g.lineTo(-1.4, -28); g.arc(0, -28, 1.4, Math.PI, 0); g.lineTo(1.4, -26); g.fill();   // the belfry
+    for (const y of [-11, -15]) pane(g, L, -.7, y, 1.4, 2, L.lit(-y));
+    g.fillStyle = L.win(Math.max(.35, L.lit(2))); g.beginPath(); g.moveTo(-1.1, 0); g.lineTo(-1.1, -3); g.arc(0, -3, 1.1, Math.PI, 0); g.lineTo(1.1, 0); g.fill();
+    g.fillStyle = L.side ? L.body : '#f4ecd0'; g.beginPath(); g.arc(0, -21, 2.2, 0, TAU); g.fill();   // the clock face
+    if (L.side) return;
+    glow(g, '255,236,190', 0, -21, 4, .35);
+    g.strokeStyle = '#3a2a1a'; g.lineWidth = .2; g.beginPath(); g.arc(0, -21, 2.2, 0, TAU); g.stroke();
+    for (let i = 0; i < 12; i++) { const a = i * Math.PI / 6; g.fillStyle = '#3a2a1a'; g.fillRect(Math.cos(a) * 1.8 - .1, -21 + Math.sin(a) * 1.8 - .1, .2, .2); }
+    const d = new Date(), hr = (d.getHours() % 12 + d.getMinutes() / 60) / 12 * TAU, mn = d.getMinutes() / 60 * TAU;
+    g.lineWidth = .3; g.lineCap = 'round'; g.beginPath();
+    g.moveTo(0, -21); g.lineTo(Math.sin(hr) * 1.1, -21 - Math.cos(hr) * 1.1); g.moveTo(0, -21); g.lineTo(Math.sin(mn) * 1.7, -21 - Math.cos(mn) * 1.7); g.stroke(); g.lineCap = 'butt';
+    g.fillStyle = '#e8c040'; g.beginPath(); g.arc(0, -27.6, .8, Math.PI, 0); g.lineTo(.9, -26.6); g.lineTo(-.9, -26.6); g.fill();   // the bell
+    g.beginPath(); g.arc(0, -36.4, .45, 0, TAU); g.fill();
+    gableSnow(g, -3.6, 3.6, -29.6, -36, .35); g.fillStyle = SNOW; g.fillRect(-4.2, -6.3, 8.4, .5); g.fillRect(-3.2, -30.2, 6.4, .45);
+    g.fillStyle = 'rgba(0,0,0,.22)'; for (let y = -5.2; y < 0; y += 1.2) g.fillRect(-4, y, 8, .15);
+    garland(g, -4, 4, -6, .8);
+  } });
+
+  // A log cabin: round logs with their cut ends showing, a deep load of snow on the roof, a stone chimney, a woodpile.
+  registerLandmark('cabin', { w: 13, h: 12, draw(g, L) {
+    const c = col => L.side ? L.body : col;
+    for (let i = 0; i < 6; i++) { g.fillStyle = c(i % 2 ? '#4a2c18' : '#3c2212'); g.fillRect(-5.4, -7.2 + i * 1.2, 10.8, 1.2); }
+    g.fillStyle = c('#2a1a14'); g.beginPath(); g.moveTo(-6.6, -6.9); g.lineTo(0, -11.6); g.lineTo(6.6, -6.9); g.fill();
+    g.fillStyle = c('#545058'); g.fillRect(3.4, -11.6, 1.8, 4.6);
+    pane(g, L, -4, -5.6, 2.4, 2.4, L.lit(4));
+    g.fillStyle = L.win(Math.max(.35, L.lit(2))); g.fillRect(1, -4.4, 2, 4.4);
+    if (L.side) return;
+    g.fillStyle = '#6a4428'; for (let i = 0; i < 6; i++) for (const x of [-5.4, 5.4]) { g.beginPath(); g.arc(x, -6.6 + i * 1.2, .55, 0, TAU); g.fill(); }   // log ends
+    g.fillStyle = '#a07040'; for (let i = 0; i < 6; i++) for (const x of [-5.4, 5.4]) { g.beginPath(); g.arc(x, -6.6 + i * 1.2, .22, 0, TAU); g.fill(); }
+    g.fillStyle = 'rgba(0,0,0,.3)'; for (let y = -10.6; y < -7; y += 1) g.fillRect(3.4, y, 1.8, .15);
+    g.fillStyle = '#a3121c'; g.fillRect(-4, -5.6, .5, 2.4); g.fillRect(-2.1, -5.6, .5, 2.4);   // red curtains
+    gableSnow(g, -6.6, 6.6, -6.9, -11.6, .55); g.fillStyle = SNOW; g.fillRect(3.2, -11.9, 2.2, .6); smoke(g, 4.3, -12.4, .9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3 - i; j++) { g.fillStyle = '#5a3a20'; g.beginPath(); g.arc(-6.3 + j * .9 + i * .45, -.45 - i * .8, .42, 0, TAU); g.fill(); }   // the woodpile
+    icicles(g, -5.4, 5.4, -7.2);
   } });
 
   // The great star: four long pointed rays (the lower one longest), faint diagonal glints, a soft halo that gently gleams.
@@ -1090,8 +1230,8 @@ function curtains(g, E, en, t, a) {
   }
   function tree(g, E) {
     const { W, GY, H, t } = E, sp = E.spectrum, d = dpr(), base = GY + (H - GY) * .45 * .3;
-    const h = Math.round(Math.min(GY * .62, W * .5)), w = h * .52, x = E.to - Math.min(W, GY) * .22, top = base - h;
-    if (x + w < E.left || x - w > E.right) return;       // still off screen in the tour
+    const h = Math.round(Math.min(GY * .62, W * .5)), w = h * .52, x = W - Math.min(W, GY) * .22, top = base - h;   // fixed on screen
+    if (x + w < E.left || x - w > E.right) return;       // the village's stretch in the tour doesn't reach it
     if (st.tk !== h + '|' + d) { st.tk = h + '|' + d; st.tree = treeBody(h, w); }
     g.drawImage(st.tree, x - st.tree.width / d / 2, top, st.tree.width / d, st.tree.height / d);
     let k = 0;
@@ -1184,9 +1324,9 @@ function curtains(g, E, en, t, a) {
   }
 
   registerTheme('xmas', { name: 'Christmas Village',
-    kit: { styles: ['pairs', 'grid', 'wide', 'tall', 'slim', 'pairs'], roofs: [['pyramid', 4], ['pyramid', 3], ['pyramid', 5.5], ['pyramid', 2.5], ['pyramid', 7], ['pyramid', 4]],
-      tall: .12, shrink: .82, w0: 6, gaps: [.6, 1.6], landmarks: ['workshop', 'chapel', 'ginger'], lmChance: .2, lmScale: 1.6 },
-    minF: .16, maxF: .42, weather: 'snow', noBack: true, planes: false, roofLights: false, searchlights: false,
+    kit: { styles: ['cottage', 'pairs', 'cottage', 'tall', 'wide', 'cottage'], roofs: [['pyramid', 4], ['pyramid', 3], ['pyramid', 5.5], ['pyramid', 2.5], ['pyramid', 7], ['pyramid', 4], ['pyramid', 9]],
+      tall: .22, shrink: .82, w0: 6, gaps: [.6, 1.6], landmarks: ['workshop', 'inn', 'chapel', 'bakery', 'townhouse', 'ginger', 'clocktower', 'cabin'], lmChance: .6, lmScale: 1.6 },
+    minF: .1, maxF: .38, weather: 'snow', noBack: true, planes: false, roofLights: false, searchlights: false,
     sky: [[0, '#020615'], [.6, '#0a1838'], [1, '#1c3256']], skyToGround: true,
     stars: true, moon: false, cloud: 'rgba(160,180,220,.12)', fogRGB: '190,205,230',
     body: '#141019', side: '#1d1822', top: '#262030',
@@ -1252,6 +1392,21 @@ function curtains(g, E, en, t, a) {
         const sh = Math.floor(E.t / 400);               // the stripes march along
         for (let i = 0; i < m; i++) { g.fillStyle = (i + sh) % 2 ? '#ffffff' : '#e8202a'; g.fillRect(cx - tw / 2 + tw * i / m, ey, tw / m + .5, Math.max(1, u * .35)); }
       }
+      if (!E.widget) {                                      // a lit front door at street level, set off-centre on some
+        const bw = b.tiers[0].w * u, dx = (hash(b.id, 1, 95) - .5) * bw * .5, dw = Math.max(2, u * 1.5), dh = u * 2.6, gy = E.GY;
+        g.fillStyle = '#0c0a10'; g.fillRect(cx + dx - dw / 2 - u * .25, gy - dh - u * .25, dw + u * .5, dh + u * .25);
+        withAlpha(g, .55 + .45 * b.level, () => { g.fillStyle = '#ffcc7a'; g.fillRect(cx + dx - dw / 2, gy - dh, dw, dh); });
+        if (v === 1 || v === 4) {                            // a lantern by the door, flickering
+          const lx = cx + dx + dw / 2 + u * .7, fl = .8 + .2 * Math.sin(E.t / 170 + b.id);
+          glow(g, '255,190,100', lx, gy - dh * .8, u * 1.8, .5 * fl); g.fillStyle = '#ffd88a'; g.fillRect(lx - u * .2, gy - dh * .9, u * .4, u * .6);
+        }
+        if (v === 2) {                                       // a striped shop awning over the door
+          const aw = dw * 2.4, ax = cx + dx - aw / 2, ay = gy - dh - u * 1.2, m = 6;
+          for (let i = 0; i < m; i++) { g.fillStyle = i % 2 ? '#f4f4f4' : '#c82a2a'; g.fillRect(ax + aw * i / m, ay, aw / m + .5, u * .9); }
+          g.fillStyle = '#eef3fb'; g.fillRect(ax, ay - u * .2, aw, u * .3);
+        }
+        if (v === 3) { g.strokeStyle = '#1f7a36'; g.lineWidth = Math.max(1, u * .3); g.beginPath(); g.arc(cx + dx, gy - dh * .62, dw * .3, 0, TAU); g.stroke(); }
+      }
       if (b.id % 3 === 0 && !E.widget) {                    // a wreath with a red bow
         const wy = ey + u * 3, wr = Math.max(2, u * 1.1);
         g.strokeStyle = '#1f7a36'; g.lineWidth = Math.max(1.5, u * .55); g.beginPath(); g.arc(cx, wy, wr, 0, TAU); g.stroke();
@@ -1289,6 +1444,7 @@ function curtains(g, E, en, t, a) {
       for (let x = 0; x <= W + 20; x += 20) g.lineTo(x, iy - road * .08 * (1 + Math.sin((x + travel) / (u * 7)) * .6));
       g.lineTo(W, iy + 1); g.fill();
     } },
+    decorate(b, r) { b.body = WALLS[Math.floor(r() * WALLS.length)]; },
     afterLayout(list) { st.list = list; },
     drawTop(g, E) {                                       // the great tree, then the three travellers riding past in front of it
       step(E);
