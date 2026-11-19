@@ -30,7 +30,9 @@
   #panel summary::after{content:'▸';color:#5d7bb0}
   #panel details[open] summary::after{content:'▾'}
   #panel .body{display:grid;gap:8px;padding:8px 4px 4px}
-  #panel .presets{display:grid;gap:6px;padding-bottom:4px}
+  /* each section's options sit on their own tinted panel joined to its header, so it's clear which header they belong to */
+  #panel > details[open] > summary{border-radius:6px 6px 0 0}
+  #panel > details > .body{background:#11172f;border:1px solid #232c52;border-top:0;border-radius:0 0 6px 6px;padding:8px}
   #panel .row2{display:flex;gap:4px}
   #panel .swatches{display:flex;flex-wrap:wrap;gap:5px}
   #panel .swatches:empty{display:none}
@@ -58,7 +60,7 @@
   html.settings #panel select,html.settings #panel input[type=color],html.settings #panel .row2 input{padding:6px;font-size:14px}
   html.spanScreen #panel .presets,html.spanScreen #panel details:not(#lights){display:none}
   html.settings #panel summary{padding:9px 10px;font-size:15px}
-  html.settings #panel .body{gap:12px;padding:12px 4px 6px}
+  html.settings #panel .body{gap:12px;padding:12px 10px 10px}
   html.wall #ui,html.wall #panel{display:none !important}
   #cc,#ccOpen{display:none}
   html.app #ccOpen:not([hidden]){display:inline-block}
@@ -120,11 +122,6 @@
     <iframe id="ccSettings" title="Settings"></iframe></section>
 </div>
 <div id="panel" hidden>
-  <div class="presets">
-    <label>Preset <select id="preset"></select></label>
-    <div class="row2"><input id="presetName" placeholder="Name this look…" maxlength="30"><button id="presetSave">Save</button></div>
-    <button id="presetDel" hidden>Delete this preset</button>
-  </div>
   <details name="sect" open><summary>Skyline</summary><div class="body">
     <label>City <select id="city"></select></label>
     <label>View <select id="view">
@@ -235,6 +232,11 @@
     <label class="row"><input type="checkbox" id="skyBody"> Moon</label>
     <label class="row"><input type="checkbox" id="clouds"> Clouds</label>
     <label class="row"><input type="checkbox" id="planes"> Planes</label>
+  </div></details>
+  <details name="sect" class="presets"><summary>Presets</summary><div class="body">
+    <label>Preset <select id="preset"></select></label>
+    <div class="row2"><input id="presetName" placeholder="Name this look…" maxlength="30"><button id="presetSave">Save</button></div>
+    <button id="presetDel" hidden>Delete this preset</button>
   </div></details>
 </div>
 <script>
