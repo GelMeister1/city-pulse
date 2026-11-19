@@ -24,7 +24,7 @@ A night-time city skyline whose windows pulse to your music. Run it as a small a
 
 ## Features
 
-- **Listens to whatever your PC is playing.** On Windows, system audio is picked up automatically. On a Mac, see [Mac](#mac-preview).
+- **Listens to whatever your PC is playing.** On Windows, system audio is picked up automatically. On a Mac, see [Listening on a Mac](#listening-on-a-mac).
   - The song is split into 8 bands, from bass to treble (Bass, Kick, Low-mid, Mid, Upper-mid, Presence, Treble, Air).
   - Each building is assigned one band for good. Landmarks are spread from bass to treble, so each famous building owns a clear part of the song.
   - Buildings on the same band move together.
@@ -85,10 +85,49 @@ xattr -cr "/Applications/City Pulse.app"
 
 4. Allow microphone access when asked. City Pulse lives in the menu bar, not the Dock.
 
-**Listening on a Mac:** macOS doesn't let apps hear what's playing, so City Pulse listens to an input you pick under **Listen to**: a microphone, a line-in, or [BlackHole](https://existential.audio/blackhole/), a free driver that carries your Mac's sound:
-1. Install **BlackHole 2ch**.
-2. In **Audio MIDI Setup**, click **+ → Create Multi-Output Device** and tick your speakers or headphones and **BlackHole 2ch**.
-3. Choose that Multi-Output Device as your sound output, then choose **BlackHole 2ch** under **Listen to**.
+#### Listening on a Mac
+
+macOS doesn't let apps hear what's playing, so City Pulse listens to an input you pick under **Listen to**. That can be a microphone, a line-in, or [BlackHole](https://existential.audio/blackhole/), a free driver that carries your Mac's sound. The steps below set up BlackHole so you can switch between your Mac's speakers and AirPods (or other Bluetooth headphones) in one click, with City Pulse reacting either way.
+
+**1. Install BlackHole.** Install **BlackHole 2ch** and restart. It isn't an app, so it won't appear in Applications. It appears as a sound device named **BlackHole 2ch** in **System Settings → Sound**, under both Output and Input.
+
+**2. Connect your headphones.** Connect your AirPods, from the menu bar or **System Settings → Bluetooth**. They must be connected to show up in the next steps.
+
+**3. Create one output for each way you listen.** Open **Audio MIDI Setup** (press ⌘ Space and type its name, or find it in Applications → Utilities).
+
+Mac speakers:
+1. Click **+** at the bottom left, then **Create Multi-Output Device**.
+2. Under **Use**, tick only **MacBook Speakers** (your Mac's speakers) and **BlackHole 2ch**.
+3. Set **Primary Device** to **MacBook Speakers**.
+4. Tick **Drift Correction** for **BlackHole 2ch** only.
+5. Double-click the new device's name in the list and rename it **Speakers + City Pulse**.
+
+AirPods:
+1. Click **+**, then **Create Multi-Output Device**.
+2. Under **Use**, tick only **AirPods** and **BlackHole 2ch**.
+3. Set **Primary Device** to **AirPods**.
+4. Tick **Drift Correction** for **BlackHole 2ch** only.
+5. Rename it **AirPods + City Pulse**.
+
+**4. Put sound in the menu bar.** **System Settings → Control Center → Sound → Always Show in Menu Bar.**
+
+**5. Point City Pulse at BlackHole (once).** In City Pulse's **Control Center**, choose **BlackHole 2ch** under **Listen to**. This works for both outputs.
+
+**6. Switch.** Click the speaker icon in the menu bar and choose **Speakers + City Pulse** or **AirPods + City Pulse**.
+
+**Calls (FaceTime, Zoom and others).** Bluetooth headphones can't use their microphone while they're part of a Multi-Output Device. If they try, the mic goes silent. Pick one of these:
+
+- **Keep City Pulse running:** listen with **AirPods + City Pulse** and talk through the Mac's microphone.
+  - **System Settings → Sound → Input:** **MacBook Microphone**.
+  - In FaceTime, open the **Video** menu and set **Microphone** to **MacBook Microphone**. Other call apps have the same choice in their audio settings.
+- **Use the AirPods microphone:** for the call, choose plain **AirPods** from the menu bar, and set **Input** to **AirPods**. City Pulse goes quiet until you switch back to **AirPods + City Pulse** after the call.
+
+**Good to know**
+- **Never choose BlackHole 2ch as your Input** in Sound settings or a call app, or the other person won't hear you.
+- **Volume:** a Multi-Output Device has no volume control of its own, so the volume keys may do nothing. Set the volume in your music app, or select the speakers or AirPods in Audio MIDI Setup and change it there.
+- **When the AirPods connect**, the Mac may switch straight to plain **AirPods**, and City Pulse goes dark. Choose **AirPods + City Pulse** again.
+- **AirPods missing** from the AirPods device: reconnect them, then check that **AirPods** is still ticked in Audio MIDI Setup.
+- **Echo or delay:** make sure **Drift Correction** is ticked only for **BlackHole 2ch**.
 
 Mac differences: updates are downloaded by hand (the menu's **Check for updates…** opens the Releases page), the loudness meter isn't scaled by the Mac volume, and to uninstall you drag the app to the Bin.
 

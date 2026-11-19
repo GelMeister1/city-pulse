@@ -65,6 +65,18 @@ app.whenReady().then(async () => {
     Object.assign(S, keep); layout(); return out.join(',');
   })()`);
   if (season !== 'snow,leaves,rain,snow,none,fog,none,true') fails.push('season vs weather: ' + season);
+  // A window whose saved settings have live weather on starts up (the panel reads the live weather while the page loads).
+  // Uses a screen's own key that nothing else uses, removed afterwards; the hidden window is left open (closing it quits).
+  const LW = 'cityPulse:full:7';
+  await win.webContents.executeJavaScript(`localStorage.setItem(${JSON.stringify(LW)}, JSON.stringify({ city: 'nyc', liveWx: 'city' }))`);
+  const lw = new BrowserWindow({ show: false, width: 640, height: 360, useContentSize: true, frame: false, webPreferences: { offscreen: true, backgroundThrottling: false } });
+  lw.webContents.setAudioMuted(true);
+  const lwErr = []; lw.webContents.on('console-message', e => { if (e.level === 'error') lwErr.push(e.message); });
+  await lw.loadFile(path.join(__dirname, '..', 'index.html'), { query: { full: '1', mode: 'per', screen: '7' } });
+  await new Promise(r => setTimeout(r, 500));
+  const lwN = await lw.webContents.executeJavaScript(`typeof buildings === 'undefined' ? -1 : buildings.length`).catch(() => -1);
+  await win.webContents.executeJavaScript(`localStorage.removeItem(${JSON.stringify(LW)})`);
+  if (!(lwN > 0) || lwErr.length) fails.push(`live weather on at start: ${lwN} buildings ${lwErr.join(' | ').slice(0, 200)}`);
   await new Promise(r => setTimeout(r, 500));            // let a few frames draw the last layout
   console.log(`${cities.length} cities x ${VIEWS.length} views x ${SIZES.length} sizes`);
   if (errors.length) fails.push(...errors.map(e => 'console: ' + e.slice(0, 200)));

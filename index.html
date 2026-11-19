@@ -288,6 +288,11 @@ function seasonNow() {
   if (Date.now() - seasonAt > 60e3) { seasonAt = Date.now(); seasonAuto = ['winter', 'spring', 'summer', 'fall'][Math.floor((new Date().getMonth() + 1) % 12 / 3)]; }
   return seasonAuto;
 }
+// Live weather: where each real city is, and the latest report. Declared early, since the panel reads them while the page loads.
+const CITY_LL = { nyc: [40.71, -74.01], chicago: [41.88, -87.63], seattle: [47.61, -122.33], sf: [37.77, -122.42], dubai: [25.2, 55.27],
+  paris: [48.86, 2.35], tokyo: [35.68, 139.69], london: [51.51, -.13], toronto: [43.65, -79.38], sydney: [-33.87, 151.21],
+  hongkong: [22.32, 114.17], shanghai: [31.23, 121.47], tampa: [27.95, -82.46], charlotte: [35.23, -80.84] };
+let live = null, liveKey = '', liveAt = 0;
 let savedView;                                           // span mode forces the tour without overwriting the saved view
 let tourLights = null;                                   // span mode, own lights on: the tour's Lights settings, kept to save back
 function loadSettings(json) {
@@ -1573,10 +1578,6 @@ function paintSky(g, T) {                                // a theme's gradient, 
 // Live weather: the real current weather of this skyline's city, or of a place you typed, from Open-Meteo (free, no key).
 // Only the name you search for, and then that place's coordinates (rounded), are sent. It wins over the Weather menu
 // and the themed cities' own rain, refreshes every 15 minutes, and keeps the last reading if the service can't be reached.
-const CITY_LL = { nyc: [40.71, -74.01], chicago: [41.88, -87.63], seattle: [47.61, -122.33], sf: [37.77, -122.42], dubai: [25.2, 55.27],
-  paris: [48.86, 2.35], tokyo: [35.68, 139.69], london: [51.51, -.13], toronto: [43.65, -79.38], sydney: [-33.87, 151.21],
-  hongkong: [22.32, 114.17], shanghai: [31.23, 121.47], tampa: [27.95, -82.46], charlotte: [35.23, -80.84] };
-let live = null, liveKey = '', liveAt = 0;
 // WMO weather codes to City Pulse weather and amount. No sun: clear and cloudy days stay a clear night.
 const wmo = c => c >= 95 ? ['storm', 80]
   : (c >= 71 && c <= 77) || c === 85 || c === 86 ? ['snow', c === 75 || c === 86 ? 90 : c === 73 ? 60 : 35]
