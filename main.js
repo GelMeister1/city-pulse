@@ -368,7 +368,10 @@ app.whenReady().then(() => {
     updateTray();
   }, 800); };
   screen.on('display-added', rearranged); screen.on('display-removed', rearranged);
-  screen.on('display-metrics-changed', (_, d, changed) => { if (changed.some(c => ['bounds', 'workArea', 'scaleFactor'].includes(c))) rearranged(); });
+  // On a Mac the work area changes every time the Dock slides in or out (auto-hide, a window minimized to it or restored
+  // from it). Rebuilding for that made the wallpaper blink out and restart, so there only a real display change counts.
+  const WATCH = MAC ? ['bounds', 'scaleFactor'] : ['bounds', 'workArea', 'scaleFactor'];
+  screen.on('display-metrics-changed', (_, d, changed) => { if (changed.some(c => WATCH.includes(c))) rearranged(); });
 });
 
 app.on('before-quit', e => {
