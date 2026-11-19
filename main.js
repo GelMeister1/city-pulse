@@ -133,7 +133,9 @@ async function applyWallpaper(cfg) {
   const all = screen.getAllDisplays().map(x => phys(x.bounds)), vx = Math.min(...all.map(b => b.x)), vy = Math.min(...all.map(b => b.y));
   walls = windowsFor(cfg.mode, one, true).map(({ d, query }) => {
     const w = new BrowserWindow({ ...d.bounds, show: false, frame: false, thickFrame: false, resizable: false, skipTaskbar: true, focusable: false,
-      backgroundColor: '#05060c', title: 'City Pulse Wallpaper', ...(MAC ? { type: 'desktop' } : {}), webPreferences: { ...PREFS, backgroundThrottling: false } });
+      backgroundColor: '#05060c', title: 'City Pulse Wallpaper',
+      // Mac: square corners also make it a borderless window, which macOS lets reach up behind the menu bar like a real wallpaper
+      ...(MAC ? { type: 'desktop', roundedCorners: false, enableLargerThanScreen: true } : {}), webPreferences: { ...PREFS, backgroundThrottling: false } });
     load(w, { full: '1', wall: '1', ...query });
     w.once('ready-to-show', async () => {
       if (w.isDestroyed()) return;

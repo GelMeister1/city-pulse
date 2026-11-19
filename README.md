@@ -98,14 +98,14 @@ macOS doesn't let apps hear what's playing, so City Pulse listens to an input yo
 
 Mac speakers:
 1. Click **+** at the bottom left, then **Create Multi-Output Device**.
-2. Under **Use**, tick only **MacBook Speakers** (your Mac's speakers) and **BlackHole 2ch**.
+2. Under **Use**, tick **MacBook Speakers** (your Mac's speakers) first, then **BlackHole 2ch**, and nothing else. The order matters: the speakers must be listed above BlackHole.
 3. Set **Primary Device** to **MacBook Speakers**.
 4. Tick **Drift Correction** for **BlackHole 2ch** only.
 5. Double-click the new device's name in the list and rename it **Speakers + City Pulse**.
 
 AirPods:
 1. Click **+**, then **Create Multi-Output Device**.
-2. Under **Use**, tick only **AirPods** and **BlackHole 2ch**.
+2. Under **Use**, tick **AirPods** first, then **BlackHole 2ch**, and nothing else. The order matters: the AirPods must be listed above BlackHole.
 3. Set **Primary Device** to **AirPods**.
 4. Tick **Drift Correction** for **BlackHole 2ch** only.
 5. Rename it **AirPods + City Pulse**.
@@ -129,6 +129,7 @@ AirPods:
 - **When the AirPods connect**, the Mac may switch straight to plain **AirPods**, and City Pulse goes dark. Choose **AirPods + City Pulse** again.
 - **AirPods missing** from the AirPods device: reconnect them, then check that **AirPods** is still ticked in Audio MIDI Setup.
 - **Echo or delay:** make sure **Drift Correction** is ticked only for **BlackHole 2ch**.
+- **Crackling** when music starts, clearing up after a while: BlackHole is listed above your speakers or AirPods. Untick both, then tick them again, speakers or AirPods first and **BlackHole 2ch** second, and check **Drift Correction** is ticked for **BlackHole 2ch** only.
 
 Mac differences: updates are downloaded by hand (the menu's **Check for updates…** opens the Releases page), the loudness meter isn't scaled by the Mac volume, and to uninstall you drag the app to the Bin.
 
