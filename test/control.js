@@ -19,6 +19,13 @@ app.whenReady().then(async () => {
     return whichShown;
   };
   const which = () => js(`[...document.querySelectorAll('#ccWhich button')].map(b => b.textContent).join('|')`);
+  // opens on the wallpaper; section 2's dropdowns light up when on (or, for the widget, when hidden), in the order wallpaper, widget, full screen
+  const lit = () => js(`['ccWall', 'ccWidget', 'ccFull'].map(id => { const e = document.getElementById(id); return e.options[e.selectedIndex].text + (e.classList.contains('lit') ? '*' : ''); }).join('|') + ' ' + [...document.querySelectorAll('#ccWhat button')].map(b => b.textContent).join(',')`);
+  if (!(await js(`document.getElementById('ccSettings').dataset.src`)).includes('for=wall')) fails.push('should open on the wallpaper');
+  if (await lit() !== 'All screens: one tour across*|Shown|Off Wallpaper,Widget,Full screen') fails.push('where it shows: ' + await lit());
+  await js(`__setState({ widgetShown: false })`);
+  if (!(await lit()).startsWith('All screens: one tour across*|Hidden*|Off ')) fails.push('widget hidden: ' + await lit());
+  await js(`__setState({ widgetShown: true })`);
   if (await step([['ccWhat', 'Widget']], 'index.html?settings=1&for=widget&embed=1', 'the widget')) fails.push('widget should not ask which screen');
   // full screen off: one look, no screen choice
   if (await step([['ccWhat', 'Full screen']], 'index.html?settings=1&for=full&embed=1', 'is off')) fails.push('full screen off should not ask which screen');

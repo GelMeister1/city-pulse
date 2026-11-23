@@ -68,7 +68,9 @@
   html.control,html.control body{overflow:auto;background:#0b0e1c}
   html.control #cc{display:grid;gap:16px;padding:14px 16px 24px;color:#b9bdd0;font-size:14px}
   #cc h1{margin:0;font-size:18px;font-weight:600;color:#e6e9f5}
-  #cc h2{margin:0 0 6px;font-size:14px;font-weight:600;color:#8fd3ff;letter-spacing:.02em}
+  #cc h2{margin:0;font-size:17px;font-weight:700;color:#e6f3ff;letter-spacing:.01em;display:flex;align-items:center}
+  #cc section + section{border-top:1px solid #222a48;padding-top:14px}
+  #cc select.lit{border-color:#7cf;background:#16305a;color:#fff;box-shadow:0 0 0 1px #7cf}
   #cc select{font:inherit;background:#05060c;color:#ddd;border:1px solid #333a58;border-radius:4px;padding:6px;width:100%;min-width:0}
   #cc .seg{display:flex;flex-wrap:wrap;gap:6px}
   #cc button{font-size:13px}
@@ -83,7 +85,7 @@
   #cc button.on{border-color:#7cf;color:#fff;background:#16305a}
   #cc .big{padding:10px;font-size:15px;font-weight:600}
   #cc section{display:grid;gap:8px}
-  #cc h2 .n{display:inline-grid;place-items:center;width:20px;height:20px;margin-right:6px;border-radius:50%;background:#16305a;color:#cfe6ff;font-size:12px}
+  #cc h2 .n{display:inline-grid;place-items:center;width:24px;height:24px;margin-right:8px;border-radius:50%;background:#2a5cb0;color:#fff;font-size:13px}
   #cc .where{display:grid;gap:4px}
   #cc .where b{font-size:12px;font-weight:600;color:#9aa3c8}
   #cc .note{margin:0;font-size:12px;color:#7d86a8}
@@ -107,14 +109,14 @@
 </div>
 <div id="cc">
   <h1>City Pulse</h1>
-  <section><h2><span class="n">1</span> Listen to</h2><select id="ccSource"></select>
-    <p class="note">The sound the city lights up to.</p></section>
-  <section><h2><span class="n">2</span> Where the city shows</h2>
-    <div class="where"><b>Widget</b><div class="seg"><button id="ccWidget">Show widget</button></div></div>
-    <div class="where"><b>Full screen</b><div class="seg" id="ccFull"></div></div>
-    <div class="where"><b>Desktop wallpaper</b><div class="seg" id="ccWall"></div></div>
+  <section><h2><span class="n">1</span> What it listens to</h2><p class="note">The sound the city lights up to.</p>
+    <select id="ccSource"></select></section>
+  <section><h2><span class="n">2</span> Where it shows</h2><p class="note">Turn each place on or off. A highlighted box is on (or, for the widget, hidden).</p>
+    <label class="where"><b>Desktop wallpaper</b><select id="ccWall"></select></label>
+    <label class="where"><b>Widget</b><select id="ccWidget"></select></label>
+    <label class="where"><b>Full screen</b><select id="ccFull"></select></label>
     <button id="ccTour" class="big">Tour across every screen</button></section>
-  <section><h2><span class="n">3</span> Customize</h2>
+  <section><h2><span class="n">3</span> Change the look</h2>
     <p class="note">Pick what to change. Everything applies as you go.</p>
     <div class="seg" id="ccWhat"></div>
     <div id="ccWhichWrap" hidden><p class="note" id="ccWhichNote"></p><div class="seg" id="ccWhich"></div></div>
@@ -2530,7 +2532,7 @@ window.CityPulse = Object.freeze({ registerTheme, registerCity, registerLandmark
 // settings page itself, embedded, so it saves and updates the city windows exactly as before). The app (cityPulse.control)
 // owns the windows, pushes its state, and can open it at a given step (Settings in the tray or the widget's gear).
 let ccState = null;
-const cc = { what: 'widget', which: null };              // what you're customising, and which screen: its index, 'tour', or null
+const cc = { what: 'wall', which: null };              // what you're customising, and which screen: its index, 'tour', or null
 function ccSeg(el, items) {                              // a row of buttons: [label, current?, action]
   const labels = items.map(([label]) => label).join('\n');
   if (el.dataset.labels !== labels) {                    // rebuilt only when the choices change, so a state push mid-click keeps the button
@@ -2544,16 +2546,22 @@ function ccSeg(el, items) {                              // a row of buttons: [l
     items[+b.dataset.i][2]();
   };
 }
+function ccSel(el, items, lit) {                         // a dropdown: [label, current?, action]; lit when it's not in its usual state
+  const labels = items.map(([label]) => label).join('|');
+  if (el.dataset.labels !== labels) { el.dataset.labels = labels; el.innerHTML = items.map(([label], i) => `<option value="${i}">${esc(label)}</option>`).join(''); }
+  el.selectedIndex = items.findIndex(([, on]) => on);
+  el.classList.toggle('lit', !!lit);
+  el.onchange = () => { el.classList.toggle('lit', el.selectedIndex > 0); items[el.selectedIndex][2](); };   // shows at once; the app's next state confirms it
+}
 function ccRender(st) {
   const C = cityPulse.control;
   ccState = st;
-  ccSeg($('ccFull'), [['Off', st.fullMode === 'off', () => C.setFull('off')], ['On the widget’s screen', st.fullMode === 'one', () => C.setFull('one')],
-    ['All screens: own city each', st.fullMode === 'per', () => C.setFull('per')], ['All screens: one tour across', st.fullMode === 'span', () => C.setFull('span')]]);
-  ccSeg($('ccWall'), [['Off', st.wallMode === 'off', () => C.setWall('off')],
+  ccSel($('ccWall'), [['Off', st.wallMode === 'off', () => C.setWall('off')],
     ...st.screens.map(x => [`Screen ${x.index + 1} only`, st.wallMode === 'one' && st.wallScreen === x.index, () => C.setWall('one', x.index)]),
-    ['All screens: own city each', st.wallMode === 'per', () => C.setWall('per')], ['All screens: one tour across', st.wallMode === 'span', () => C.setWall('span')]]);
-  $('ccWidget').textContent = st.widgetShown ? 'Hide widget' : 'Show widget';
-  $('ccWidget').classList.toggle('on', !!st.widgetShown);
+    ['All screens: own city each', st.wallMode === 'per', () => C.setWall('per')], ['All screens: one tour across', st.wallMode === 'span', () => C.setWall('span')]], st.wallMode !== 'off');
+  ccSel($('ccWidget'), [['Shown', !!st.widgetShown, () => C.setWidget(true)], ['Hidden', !st.widgetShown, () => C.setWidget(false)]], !st.widgetShown);
+  ccSel($('ccFull'), [['Off', st.fullMode === 'off', () => C.setFull('off')], ['On the widget’s screen', st.fullMode === 'one', () => C.setFull('one')],
+    ['All screens: own city each', st.fullMode === 'per', () => C.setFull('per')], ['All screens: one tour across', st.fullMode === 'span', () => C.setFull('span')]], st.fullMode !== 'off');
   ccCustomize();
 }
 // Step 3: what to change, which screen (only where the running mode gives screens their own settings), a line saying
@@ -2563,7 +2571,7 @@ function ccRender(st) {
 //   one tour across:  the tour itself, or one screen's own lights in it
 function ccCustomize() {
   const st = ccState; if (!st) return;
-  ccSeg($('ccWhat'), [['Widget', 'widget'], ['Full screen', 'full'], ['Wallpaper', 'wall']].map(([label, k]) =>
+  ccSeg($('ccWhat'), [['Wallpaper', 'wall'], ['Widget', 'widget'], ['Full screen', 'full']].map(([label, k]) =>
     [label, cc.what === k, () => { cc.what = k; cc.which = null; ccCustomize(); }]));
   const mode = cc.what === 'full' ? st.fullMode : cc.what === 'wall' ? st.wallMode : null, n = st.screens.length;
   const choices = n < 2 ? [] : mode === 'per' ? st.screens.map(x => [`Screen ${x.index + 1}`, x.index])
@@ -2598,9 +2606,8 @@ function startControl() {
     if (f || !w) C.setFull('span');
     if (w) C.setWall('span');
   };
-  $('ccWidget').onclick = () => C.setWidget(!(ccState && ccState.widgetShown));
   C.onGoto?.(({ target }) => {                           // opened from the tray or the widget's gear: jump to that step
-    cc.what = ['widget', 'full', 'wall'].includes(target) ? target : 'widget'; cc.which = null;
+    cc.what = ['widget', 'full', 'wall'].includes(target) ? target : 'wall'; cc.which = null;
     ccCustomize(); $('ccSettings').scrollIntoView({ block: 'nearest' });
   });
   C.state().then(ccRender);

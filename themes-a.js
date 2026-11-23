@@ -977,11 +977,18 @@ function curtains(g, E, en, t, a) {
       '...gggoyyy...', '..oggggggog..', '.syyygggggys.', '..ggogggyyg..', '.ggggggoggg.', 'syyygggogggs', '......t......', '......t......']]
     .map(rows => PAL(rows, { g: '#1a5a32', s: '#eef3fb', o: '#1a5a32', y: '#d8b040', t: '#4a2e18' }));
   const pineBulbs = PINES.map(sp => sp.rows.flatMap((r, j) => [...r].map((c, i) => c === 'o' ? [i, j] : null).filter(Boolean)));
-  // The skaters (grown-ups, so they don't count against the children): gliding on one leg, then pushing off. Facing right.
-  const SKATER = [['....hh....', '...hhhh...', '....ff....', '....fe....', '...sss....', '..scccc...', '...ccccm..', '...cccc...', '...cccc...', '....ll....', '....l.l...', '..ll...l..', '.kk....kk.'],
-    ['....hh....', '...hhhh...', '....ff....', '....fe....', '...sss....', '..scccc...', '..mcccc...', '...cccc...', '...cccc...', '....ll....', '...l..l...', '...l...l..', '..kk...kk.']];
-  const SKATER_PALS = [['#7a2a3a', '#1e2a4a', '#e8c040'], ['#1e3a5a', '#d23a32', '#ffffff'], ['#3a5a2a', '#eef3fb', '#d23a32'], ['#4a2a5a', '#ffd23a', '#2a7ad8'], ['#5a3a1a', '#2f9e4a', '#ffffff']]
-    .map(([c, h, s]) => SKATER.map(rows => PAL(rows, { c, h, s, f: '#f0c8a0', e: '#1a1a1a', m: '#2a2a2a', l: '#20202a', k: '#c8d4e4' })));
+  // The skaters (grown-ups, so they don't count against the children), men and women, facing right. The legs stride:
+  // both blades gliding, then the back leg pushing out behind and lifting, then back in (SK_LEGS frames 0, 1, 2, 1).
+  const SK_MAN = ['....hh....', '...hhhh...', '....ff....', '....fe....', '...sss....', '..scccc...', '...ccccm..', '...cccc...', '...cccc...'];
+  const SK_WOMAN = ['...hhh....', '..hhhhh...', '..rfff....', '..rffe....', '..rsss....', '..scccc...', '...ccccm..', '..cccccc..', '.cccccccc.'];   // hair down her back, a flared skating skirt
+  const SK_LEGS = [['....ll....', '....ll....', '....ll....', '...kkkk...'], ['....ll....', '...l.l....', '..l..l....', '.kk.kkk...'],
+    ['....ll....', '.lll.l....', 'k....l....', '....kkk...']];
+  const skFrames = (top, pals) => pals.map(([c, h, s, r = '#000', l = '#20202a']) => SK_LEGS.map(legs => PAL([...top, ...legs],
+    { c, h, s, r, l, f: '#f0c8a0', e: '#1a1a1a', m: '#2a2a2a', k: '#c8d4e4' })));
+  const SK_M = skFrames(SK_MAN, [['#7a2a3a', '#1e2a4a', '#e8c040'], ['#1e3a5a', '#d23a32', '#ffffff'], ['#3a5a2a', '#eef3fb', '#d23a32'], ['#4a2a5a', '#ffd23a', '#2a7ad8'], ['#5a3a1a', '#2f9e4a', '#ffffff']]);
+  const SK_W = skFrames(SK_WOMAN, [['#a3203a', '#ffffff', '#ffffff', '#5a3418', '#1a1a2a'], ['#2a6a8a', '#f0c0d4', '#d23a32', '#d8b060', '#2a2030'],
+    ['#d8cce4', '#d23a32', '#d23a32', '#2a1a10', '#3a2a4a'], ['#6a2a7a', '#ffd23a', '#ffd23a', '#8a3a1a', '#1a1a2a'], ['#1f6a3a', '#ffffff', '#d23a32', '#c89040', '#2a1a1a']]);
+  const skLeg = p => p < .55 ? 0 : p < .68 || p >= .85 ? 1 : 2;   // where in the stride, from its phase 0..1
   // The horse-drawn carriages: a trotting horse (two frames), and a coach with a coachman up front. Facing right.
   const HORSE = [['.............hh...', '............mhhh..', '...........mmhhkh.', '...........mhhhhhh', '..........mmh..hhh', '..........mhh.....', '.tt.hhhhhhhh......',
     'tttahhhhhhhhh.....', 't..ahhhhhhhhh.....', '...ahhhhhhhhh.....', '....hhhhhhhh......', '....h..h..h..h....', '...h...h..h...h...', '...o...o..o...o...'],
@@ -991,6 +998,12 @@ function curtains(g, E, en, t, a) {
   const COACH = ['...............tt....', '...............tt....', '..............tttt...', '...............ff....', 'nnnnnnnnnnnnn..cc....', 'ggggggggggggg.cccc...',
     'rrrrrrrrrrrrr.ccccL..', 'rwwwwrrrwwwwr.ss.....', 'rwwwwrrrwwwwrrrrrr...', 'rrrrrrrrrrrrrrrrrr...', 'rgrrrrrrrrrrrgrrr....', '.rrrrrrrrrrrrr.......'];
   const COACHES = ['#6a1420', '#1a3a2a', '#1a2440'].map(r => PAL(COACH, { n: '#eef3fb', g: '#c8a030', r, w: '#ffd88a', t: '#18141a', f: '#f0c8a0', c: '#2a2a3a', s: '#3a2a1a', L: '#ffe9a0' }));
+  // An open park carriage with its folding hood up: a couple out for a ride under a tartan blanket, the driver up front.
+  const VIC = ['...............tt....', '.nnnnnn........tt....', 'dddddddd......tttt...', 'ddiiMMiii......ff....', 'ddiMMMMppi.....cc....', 'ddiiffiqfi....cccc...',
+    'dd.aaaabbb....ccccL..', 'dd.kKkKkKkK..ss......', 'rrrrrrrrrrrrrrrrrr...', 'rgrrrrrrrrrrrgrrr....', 'rrrrrrrrrrrrrrrr.....', '.rrrrrrrrrrrrr.......'];
+  const VICS = [['#141418', '#e8e8f0', '#5a3a1a', '#7a1a2a'], ['#5a1420', '#d23a32', '#d8b060', '#1f4a6a'], ['#e8e4dc', '#2f6a3a', '#1a1210', '#6a2a5a']]
+    .map(([r, p, q, b]) => PAL(VIC, { r, p, q, b, n: '#eef3fb', g: '#c8a030', d: '#18141a', i: '#9a3a3e', M: '#101014', f: '#f0c8a0', a: '#2a3040',
+      k: '#8a1a20', K: '#1f5a32', t: '#18141a', c: '#2a2a3a', s: '#3a2a1a', L: '#ffe9a0' }));
   const ANGEL = [['......hh......', '.....h..h.....', '.....yffy.....', '.ww...ff...ww.', 'wwww.rrrr.wwww', '.wwwwrrrrwwww.', '..wwrrrrrrww..', '....rrrrrr....', '....rrggrr....', '...rrrrrrrr...', '...rrrrrrrr...', '..rrrrrrrrrr..'],
     ['......hh......', '.....h..h.....', '.....yffy.....', '......ff......', '.....rrrr.....', '...wwrrrrww...', '.wwwrrrrrrwww.', 'wwww.rrrr.wwww', 'ww..rrggrr..ww', '...rrrrrrrr...', '...rrrrrrrr...', '..rrrrrrrrrr..']]
     .map(rows => PAL(rows, { h: '#ffd23a', y: '#f2d27a', f: '#f0c8a0', w: '#cfe0ff', r: '#ffffff', g: '#e8c040' }));
@@ -1392,7 +1405,7 @@ function curtains(g, E, en, t, a) {
     if (t >= st.nextCar && st.cars.length < 2) {
       const dir = st.cars.length ? -st.cars[0].dir : Math.random() < .5 ? 1 : -1, m = u * 16;
       st.cars.push({ dir, wx: tv + (dir > 0 ? -m : W + m), v: u * (9 + 3 * Math.random()), born: t, ph: Math.random() * 9,
-        coach: Math.floor(Math.random() * COACHES.length), horse: Math.floor(Math.random() * HORSES.length), pair: Math.random() < .5 });
+        vic: Math.random() < .55, coach: Math.floor(Math.random() * 3), horse: Math.floor(Math.random() * HORSES.length), pair: Math.random() < .5 });
       st.nextCar = t + 7000 + 15000 * Math.random();
     }
     for (const c of st.cars) c.wx += c.dir * c.v * dt;
@@ -1408,7 +1421,7 @@ function curtains(g, E, en, t, a) {
     for (let onIce; (onIce = st.skaters.reduce((n, s) => n + (s.pair ? 2 : 1), 0)) < st.skN && (t >= st.nextSkater || onIce < 2);) {   // never fewer than two out there
       const dir = Math.random() < .5 ? 1 : -1, pair = onIce + 2 <= st.skN && Math.random() < .45, m = u * 6;
       st.skaters.push({ dir, wx: tv + (dir > 0 ? -m : W + m), v: u * (2.6 + 2.4 * Math.random()), y0: laneY(), ph: Math.random() * TAU,
-        pal: Math.floor(Math.random() * SKATER_PALS.length), pal2: Math.floor(Math.random() * SKATER_PALS.length), pair, born: t,
+        pal: Math.floor(Math.random() * SK_M.length), pal2: Math.floor(Math.random() * SK_M.length), pair, born: t, woman: Math.random() < .45, k: 1,
         turns: Math.floor(Math.random() * 3), turnAt: t + 6000 + 10000 * Math.random(), trail: [], tt: 0 });
       st.nextSkater = t + 1500 + 2500 * Math.random();
     }
@@ -1417,7 +1430,7 @@ function curtains(g, E, en, t, a) {
       if (s.turns && t >= s.turnAt && x > W * .15 && x < W * .85) { s.turns--; s.turnAt = t + 7000 + 9000 * Math.random(); s.turnT = t; s.flip = true; }
       if (s.flip && t - s.turnT >= 600) { s.dir = -s.dir; s.flip = false; }   // eases to a stop, turns round, glides off the other way
       const k = s.turnT && t - s.turnT < 1200 ? Math.max(.05, Math.abs((t - s.turnT) / 600 - 1)) : 1;
-      s.wx += s.dir * s.v * k * dt;
+      s.k = k; s.wx += s.dir * s.v * k * dt;
       if (t - s.tt > 110) { s.tt = t; s.trail.push([s.wx, s.y0 + Math.sin(t / 2600 + s.ph) * .07]); if (s.trail.length > 22) s.trail.shift(); }
     }
   }
@@ -1501,6 +1514,28 @@ function curtains(g, E, en, t, a) {
       }
     }
   }
+  function drawPine(g, E, v, x, y, px, seed) {            // a little pine standing at (x, y); a dressed one's bulbs blink in their own time
+    const pine = PINES[v], pw = spW(pine, px), ph = spH(pine, px), lx = x - pw / 2, ty = y - ph;
+    drawPix(g, pine, px, lx, ty, false);
+    pineBulbs[v].forEach(([bi, bj], n) => {
+      const c = (n + seed) % 4; if (Math.sin(E.t / 380 + n * 1.7 + seed) <= -.2) return;
+      if (!E.widget) glow(g, BULB_RGB[c], lx + (bi + .5) * px, ty + (bj + .5) * px, px * 3, .4);
+      g.fillStyle = BULBS[c]; g.fillRect(Math.round(lx + bi * px), Math.round(ty + bj * px), px, px);
+    });
+  }
+  // Pines in the gaps between the houses, one or two to a gap, standing at the foot of the town.
+  function gapPines(E, out) {
+    const { W, GY } = E, px = pxOf(E, .62), L = st.list;
+    for (let i = 0; i + 1 < L.length; i++) {
+      const a = L[i], b = L[i + 1], gap = (b.cx - b.wpx / 2) - (a.cx + a.wpx / 2), x = E.toScreen((a.cx + a.wpx / 2 + b.cx - b.wpx / 2) / 2);
+      if (gap < px * 6 || x < -gap || x > W + gap || hash(a.id, 3, 98) < .3) continue;
+      const n = gap > px * 16 && hash(a.id, 4, 98) < .6 ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const v = (hash(a.id, 5 + k, 98) < .5 ? 0 : 2) + (hash(a.id, 7 + k, 98) < .125 ? 1 : 0), xx = x + (n > 1 ? (k - .5) * gap * .45 : 0);
+        out.push([GY + k, () => drawPine(g0, E, v, xx, GY + px, px, a.id + k)]);
+      }
+    }
+  }
   // Everything on the back path that's in view, as [depth y, draw] pairs for drawTop to paint back to front.
   function backPath(E, out) {
     const { W, GY, H, t, unit: u } = E, road = (H - GY) * ROAD, tv = E.travel, px = pxOf(E, .72), SP = SPU * u;
@@ -1527,26 +1562,57 @@ function curtains(g, E, en, t, a) {
     for (let j = j0; j <= j1; j++) {                      // canes, presents and little pines, scattered back and forth in depth
       const wx = (j + .7 * hash(j, 1, 92)) * sp, x = wx - tv, y = GY + road * (.18 + .44 * hash(j, 2, 92)), r = hash(j, 3, 92);
       if (zones.some(([zx, zh]) => Math.abs(wx - zx) < zh)) continue;
-      if (r < .34) out.push([y, () => drawPix(g0, CANE, px, x, y - spH(CANE, px), hash(j, 4, 92) < .5)]);
-      else if (r < .66) {
+      if (r < .22) out.push([y, () => {                   // leaning every which way, as the wind and the snow left them
+        const cw = spW(CANE, px), ch = spH(CANE, px); g0.save(); g0.translate(x + cw / 2, y + px); g0.rotate((hash(j, 9, 92) - .5) * 1.2);
+        drawPix(g0, CANE, px, -cw / 2, -ch, hash(j, 4, 92) < .5); g0.restore();
+      }]);
+      else if (r < .42) {
         const a = GIFTS[Math.floor(hash(j, 5, 92) * 4)], b = GIFTS[(Math.floor(hash(j, 5, 92) * 4) + 1) % 4], two = hash(j, 6, 92) < .5;
         out.push([y, () => { drawPix(g0, a, px, x, y - spH(a, px), false); if (two) drawPix(g0, b, px, x + spW(a, px) + px, y - spH(b, px), false); }]);
       } else {
-        const v = (hash(j, 7, 92) < .5 ? 0 : 2) + (hash(j, 8, 92) < .45 ? 1 : 0), pine = PINES[v];
-        out.push([y, () => {
-          const pw = spW(pine, px), ph = spH(pine, px), lx = x - pw / 2, ty = y - ph;
-          drawPix(g0, pine, px, lx, ty, false);
-          pineBulbs[v].forEach(([bi, bj], n) => {           // its bulbs, each blinking in its own time
-            const on = Math.sin(t / 380 + n * 1.7 + j) > -.2, c = (n + j) % 4;
-            if (!on) return;
-            if (!E.widget) glow(g0, BULB_RGB[c], lx + (bi + .5) * px, ty + (bj + .5) * px, px * 3, .4);
-            g0.fillStyle = BULBS[c]; g0.fillRect(Math.round(lx + bi * px), Math.round(ty + bj * px), px, px);
-          });
-        }]);
+        const v = (hash(j, 7, 92) < .5 ? 0 : 2) + (hash(j, 8, 92) < .125 ? 1 : 0), pine = PINES[v];   // one in eight dressed up
+        out.push([y, () => drawPine(g0, E, v, x, y, px, j)]);
+      }
+    }
+    const gs = 23 * u;                                    // little groves of two to four pines here and there, behind the snowball fights
+    for (let j = Math.floor((tv - gs * 2) / gs); (j - 1) * gs < tv + W; j++) {
+      if (hash(j, 1, 93) < .4) continue;
+      const n = 2 + Math.floor(hash(j, 2, 93) * 3), gx = (j + .6 * hash(j, 3, 93)) * gs;
+      for (let k = 0; k < n; k++) {
+        const v = (hash(j, k + 4, 93) < .6 ? 0 : 2) + (hash(j, k + 9, 93) < .125 ? 1 : 0), y = GY + road * (.06 + .2 * hash(j, k + 14, 93)), x = gx + (k - n / 2) * 7 * px + hash(j, k + 19, 93) * 3 * px - tv;
+        out.push([y, () => drawPine(g0, E, v, x, y, px, j * 7 + k)]);
       }
     }
   }
-  let g0 = null;                                          // the canvas drawTop is painting, for the deferred draws above
+  let g0 = null;
+  // Old iron lampposts along the river bank, each with a wreath and a snowy cap, strung together with swags of coloured bulbs.
+  function lamps(g, E, iy) {
+    const { W, t, unit: u, travel } = E, sp = u * 26, lh = u * 7, lw = Math.max(1, Math.round(u * .35)), r = Math.max(1, u * .22);
+    const post = i => hash(i, 1, 97) < .75 ? i * sp + (hash(i, 2, 97) - .5) * u * 6 : null;   // where post i stands (town x), if it does
+    for (let i = Math.floor((travel - sp) / sp); i * sp - travel < W + sp; i++) {
+      const a = post(i), b = post(i + 1); if (a === null) continue;
+      const x = Math.round(a - travel);
+      if (b !== null) {                                   // the swag to the next post, hanging lower in the middle
+        const x2 = b - travel, n = Math.max(4, Math.round((x2 - x) / (u * 1.6)));
+        g.strokeStyle = 'rgba(30,40,30,.8)'; g.lineWidth = 1; g.beginPath();
+        for (let k = 0; k <= n; k++) { const q = k / n, yy = iy - lh * .78 + Math.sin(q * Math.PI) * u * 1.8; k ? g.lineTo(x + (x2 - x) * q, yy) : g.moveTo(x, yy); } g.stroke();
+        for (let k = 1; k < n; k++) {
+          const q = k / n, bx = x + (x2 - x) * q, by = iy - lh * .78 + Math.sin(q * Math.PI) * u * 1.8 + r, c = (k + i) % 4;
+          if (Math.sin(t / 520 + k * 2.1 + i) < -.55) continue;   // each one twinkling off now and then
+          if (!E.widget) glow(g, BULB_RGB[c], bx, by, r * 5, .3);
+          g.fillStyle = BULBS[c]; g.beginPath(); g.arc(bx, by, r, 0, TAU); g.fill();
+        }
+      }
+      g.fillStyle = '#16141c'; g.fillRect(x - lw / 2, iy - lh, lw, lh); g.fillRect(x - lw * 1.5, iy - u * .6, lw * 3, u * .6);   // the post and its foot
+      const hy = iy - lh - u * 1.3, hw = u * 1.1;          // the lamp
+      if (!E.widget) glow(g, '255,210,130', x, hy + u * .6, u * 4.5, .5 + .05 * Math.sin(t / 300 + i));
+      g.fillStyle = '#ffe2a0'; g.fillRect(x - hw / 2, hy, hw, u * 1.2); g.fillStyle = '#16141c'; g.fillRect(x - hw / 2 - u * .2, hy - u * .3, hw + u * .4, u * .35);
+      g.fillStyle = '#eef3fb'; g.fillRect(x - hw / 2 - u * .3, hy - u * .55, hw + u * .6, u * .3);
+      const wy = iy - lh * .45, wr = Math.max(1.5, u * .7);   // the wreath and its bow
+      g.strokeStyle = '#1f7a36'; g.lineWidth = Math.max(1, u * .4); g.beginPath(); g.arc(x, wy, wr, 0, TAU); g.stroke();
+      g.fillStyle = '#e02a2a'; g.fillRect(x - u * .4, wy + wr - u * .2, u * .8, u * .5);
+    }
+  }                                          // the canvas drawTop is painting, for the deferred draws above
 
   // A carriage: one or two horses trotting ahead, the coach with lit windows, a coachman up front and a lantern.
   function drawCarriage(g, c, E) {
@@ -1554,12 +1620,12 @@ function curtains(g, E, en, t, a) {
     const x = c.wx - travel, f = Math.floor(t / 170 + c.ph) % 2, bob = (Math.floor(t / 170 + c.ph) % 2) * px;
     g.save(); g.translate(Math.round(x), 0); if (c.dir < 0) g.scale(-1, 1);   // drawn facing right around its middle, mirrored to go left
     const P = (a, b) => [a * px, b * px], hs = HORSES[c.horse][f], cw = 21, L = -20;   // coach from L to L + 21, horses ahead of it
-    const coachY = base - 4 * px - spH(COACHES[c.coach], px), hx = L + cw - 3;
+    const body = (c.vic ? VICS : COACHES)[c.coach], coachY = base - 4 * px - spH(body, px), hx = L + cw - 3;
     if (c.pair) withAlpha(g, .8, () => drawPix(g, HORSES[c.horse][1 - f], px, (hx + 2) * px, base - spH(hs, px) - 2 * px, false));   // the far horse
     g.strokeStyle = '#3a2416'; g.lineWidth = Math.max(1, px * .7); g.beginPath();   // the shafts
     g.moveTo(...P(L + 17, -5).map((v, i) => v + (i ? base : 0))); g.lineTo(...P(hx + 9, -7).map((v, i) => v + (i ? base - bob : 0))); g.stroke();
     drawPix(g, hs, px, hx * px, base - spH(hs, px) - bob, false);
-    drawPix(g, COACHES[c.coach], px, L * px, coachY, false);
+    drawPix(g, body, px, L * px, coachY, false);
     g.strokeStyle = 'rgba(30,20,10,.8)'; g.lineWidth = Math.max(1, px * .4); g.beginPath();   // the reins
     g.moveTo(...P(L + 16, 0).map((v, i) => v + (i ? coachY + 6 * px : 0))); g.lineTo(...P(hx + 15, 0).map((v, i) => v + (i ? base - 11 * px - bob : 0))); g.stroke();
     const rot = (c.wx * c.dir) / px;                      // the wheels turn with the distance covered
@@ -1571,7 +1637,7 @@ function curtains(g, E, en, t, a) {
       g.stroke(); g.fillStyle = '#3a2416'; g.fillRect(cx - px, cy - px, px * 2, px * 2);
     }
     if (!E.widget) { glow(g, '255,220,140', (L + 18.5) * px, coachY + 6.5 * px, px * 5, .55 + .1 * Math.sin(t / 150 + c.ph));   // the lantern
-      for (const wx of [L + 3, L + 10]) glow(g, '255,200,120', wx * px, coachY + 8.5 * px, px * 4, .35); }
+      if (!c.vic) for (const wx of [L + 3, L + 10]) glow(g, '255,200,120', wx * px, coachY + 8.5 * px, px * 4, .35); }
     for (let k = 0; k < 4; k++) {                         // snow kicked up behind the wheels
       const p = (t / 600 + k / 4 + c.ph) % 1;
       g.fillStyle = `rgba(240,246,255,${.6 * (1 - p)})`; g.fillRect(Math.round((L - p * 6) * px), Math.round(base - p * (1 - p) * 10 * px - px), Math.max(1, px), Math.max(1, px));
@@ -1583,10 +1649,10 @@ function curtains(g, E, en, t, a) {
     const { t, travel } = E, px = pxOf(E, .62), y = iy + ih * (s.y0 + Math.sin(t / 2600 + s.ph) * .07), flip = s.dir < 0;
     g.strokeStyle = 'rgba(225,240,255,.3)'; g.lineWidth = 1; g.beginPath();
     s.trail.forEach(([wx, y0], i) => { const tx = wx - travel, ty = iy + ih * y0 + px * .5; if (i) g.lineTo(tx, ty); else g.moveTo(tx, ty); }); g.stroke();
-    const who = [[0, 0, s.pal]]; if (s.pair) who.push([-s.dir * 7, 2, s.pal2]);
-    const f = Math.floor(t / 900 + s.ph) % 2;
-    for (const [dx, dy, pal] of who.sort((a, b) => a[1] - b[1])) {
-      const sp = SKATER_PALS[pal][(f + (dx ? 1 : 0)) % 2], w = spW(sp, px), h = spH(sp, px), x = s.wx - travel + dx * px - w / 2, yy = y + dy * px;
+    const who = [[0, 0, s.pal, s.woman]]; if (s.pair) who.push([-s.dir * 7, 2, s.pal2, !s.woman]);   // a pair is always a man and a woman
+    const f = s.k < .4 ? 0 : skLeg(((t / 1500 + s.ph) % 1 + 1) % 1);   // gliding through a turn; otherwise a lazy stride, in step with a partner
+    for (const [dx, dy, pal, woman] of who.sort((a, b) => a[1] - b[1])) {
+      const sp = (woman ? SK_W : SK_M)[pal][f], w = spW(sp, px), h = spH(sp, px), x = s.wx - travel + dx * px - w / 2, yy = y + dy * px;
       withAlpha(g, .16, () => { g.save(); g.translate(0, yy * 2); g.scale(1, -1); drawPix(g, sp, px, x, yy - h, flip); g.restore(); });
       drawPix(g, sp, px, x, yy - h, flip);
     }
@@ -1742,15 +1808,15 @@ function curtains(g, E, en, t, a) {
       g.fillStyle = '#eef3fb'; g.beginPath(); g.moveTo(0, iy + 1);   // the snowy bank along the river
       for (let x = 0; x <= W + 20; x += 20) g.lineTo(x, iy - road * .05 * (1 + Math.sin((x + travel) / (u * 7)) * .6));
       g.lineTo(W, iy + 1); g.fill();
-      const rp = Math.max(1, Math.round(u * .25)), rs = u * 5;   // frozen reeds poking up along the bank
+      const rs = u * 6;                                    // snow-capped stones half buried along the bank, alone or in little heaps
       for (let i = Math.floor(travel / rs) - 1; i * rs - travel < W; i++) {
-        if (hash(i, 1, 64) < .55) continue;
-        const x = i * rs - travel + hash(i, 2, 64) * rs, n = 2 + Math.floor(hash(i, 3, 64) * 3);
+        if (hash(i, 1, 64) < .6) continue;
+        const x0 = i * rs - travel + hash(i, 2, 64) * rs, n = 1 + Math.floor(hash(i, 3, 64) * 3);
         for (let j = 0; j < n; j++) {
-          const hh = u * (1.2 + 1.4 * hash(i, j + 4, 64)), xx = Math.round(x + j * rp * 2);
-          g.fillStyle = '#6a5a3a'; g.fillRect(xx, Math.round(iy - hh), rp, Math.round(hh));
-          if (j === 1) { g.fillStyle = '#4a3220'; g.fillRect(xx - rp * .5, Math.round(iy - hh), rp * 2, Math.round(u * .7)); }
-          g.fillStyle = '#eef3fb'; g.fillRect(xx, Math.round(iy - hh), rp, rp);
+          const rw = u * (1.6 + 1.8 * hash(i, j + 4, 64)), rh = rw * (.55 + .2 * hash(i, j + 8, 64)), x = x0 + j * u * 1.9 - (j === 2 ? u * 2.8 : 0), y = iy + u * (.2 + .25 * (j === 2));
+          g.fillStyle = '#3e4658'; g.beginPath(); g.ellipse(x, y, rw / 2, rh, 0, Math.PI, TAU); g.fill();
+          g.fillStyle = '#566078'; g.beginPath(); g.ellipse(x - rw * .12, y - rh * .2, rw * .3, rh * .6, 0, Math.PI, TAU); g.fill();
+          g.fillStyle = '#eef3fb'; g.beginPath(); g.ellipse(x, y - rh * .62, rw * .42, rh * .42, 0, Math.PI, TAU); g.fill();
         }
       }
     } },
@@ -1763,7 +1829,7 @@ function curtains(g, E, en, t, a) {
     crowdState() {                                        // for the tests: who's out, and what the children are doing
       const kids = [...st.fights.values()].flatMap(f => f.kids);
       return { kids: kids.length, poses: kids.map(k => k.ph), balls: [...st.fights.values()].reduce((n, f) => n + f.balls.length, 0),
-        cars: st.cars.length, onIce: st.skaters.reduce((n, s) => n + (s.pair ? 2 : 1), 0), men: !!st.men, treeX: st.treeX };
+        cars: st.cars.length, carsAt: st.cars.map(c => [c.wx, c.vic, c.dir]), onIce: st.skaters.reduce((n, s) => n + (s.pair ? 2 : 1), 0), men: !!st.men, treeX: st.treeX };
     },
     drawTop(g, E) {                                       // everything on the snow and the ice, painted from the back to the front
       step(E);
@@ -1774,9 +1840,10 @@ function curtains(g, E, en, t, a) {
         const px = pxOf(E, .55), w = spW(RIDERS[0][0], px), f = Math.floor(E.t / 260) % 2;
         st.gapW = w * 1.35;
         if (st.men) { const y = GY + road * .13; items.push([y, () => { for (let i = 0; i < 3; i++) drawPix(g, RIDERS[i][(f + i) % 2], px, st.men.wx - travel + i * st.gapW, y - spH(RIDERS[0][0], px), true); }]); }
-        backPath(E, items);
+        backPath(E, items); gapPines(E, items);
         for (const c of st.cars) items.push([GY + road * (c.dir > 0 ? .88 : .74), () => drawCarriage(g, c, E)]);
         for (const s of st.skaters) items.push([iy + ih * s.y0 + 1, () => drawSkater(g, s, E, iy, ih)]);
+        items.push([iy, () => lamps(g, E, iy)]);
       }
       items.sort((a, b) => a[0] - b[0]).forEach(([, d]) => d());
     },
