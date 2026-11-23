@@ -83,7 +83,6 @@
   #panel #tourList{display:grid;gap:2px;max-height:180px;overflow:auto;padding:4px 6px;border:1px solid #333a58;border-radius:4px;background:#05060c}
   #panel #tourList b{font-size:11px;opacity:.6;margin-top:4px}
   #cc button.on{border-color:#7cf;color:#fff;background:#16305a}
-  #cc .big{padding:10px;font-size:15px;font-weight:600}
   #cc section{display:grid;gap:8px}
   #cc h2 .n{display:inline-grid;place-items:center;width:24px;height:24px;margin-right:8px;border-radius:50%;background:#2a5cb0;color:#fff;font-size:13px}
   #cc .where{display:grid;gap:4px}
@@ -111,11 +110,10 @@
   <h1>City Pulse</h1>
   <section><h2><span class="n">1</span> What it listens to</h2><p class="note">The sound the city lights up to.</p>
     <select id="ccSource"></select></section>
-  <section><h2><span class="n">2</span> Where it shows</h2><p class="note">Turn each place on or off. A highlighted box is on (or, for the widget, hidden).</p>
+  <section><h2><span class="n">2</span> Where it shows</h2><p class="note">Turn each place on or off. A highlighted box is on.</p>
     <label class="where"><b>Desktop wallpaper</b><select id="ccWall"></select></label>
     <label class="where"><b>Widget</b><select id="ccWidget"></select></label>
-    <label class="where"><b>Full screen</b><select id="ccFull"></select></label>
-    <button id="ccTour" class="big">Tour across every screen</button></section>
+    <label class="where"><b>Full screen</b><select id="ccFull"></select></label></section>
   <section><h2><span class="n">3</span> Change the look</h2>
     <p class="note">Pick what to change. Everything applies as you go.</p>
     <div class="seg" id="ccWhat"></div>
@@ -1495,7 +1493,8 @@ function drawBuilding(g, b, cx, t) {
       // A point on the 3D side face: s = 0 at the front edge .. 1 at the back, for front height yv. The side's top edge rises
       // toward the back, so a floor's line slants up a little more the higher up the tier it is: windows stay on their floor.
       const sideY = (s, yv) => yv - s * rise * (y - yv) / th;
-      const sideQuad = (s0, s1, ya, yb) => { g.beginPath(); g.moveTo(x1 + s0 * d, sideY(s0, ya)); g.lineTo(x1 + s1 * d, sideY(s1, ya)); g.lineTo(x1 + s1 * d, sideY(s1, yb)); g.lineTo(x1 + s0 * d, sideY(s0, yb)); g.fill(); };
+      const quad = (s0, s1, ya, yb) => { g.moveTo(x1 + s0 * d, sideY(s0, ya)); g.lineTo(x1 + s1 * d, sideY(s1, ya)); g.lineTo(x1 + s1 * d, sideY(s1, yb)); g.lineTo(x1 + s0 * d, sideY(s0, yb)); };
+      const sideQuad = (s0, s1, ya, yb) => { g.beginPath(); quad(s0, s1, ya, yb); g.fill(); };
       // Side windows follow the building's own window style, seen at an angle: a ribbon building gets one short bar per floor,
       // the others as many windows as their column pitch fits (1 for square and wide windows, 2 for tall, slim and slit ones).
       const sideWins = d < 3 ? 0 : !st.cw ? 1 : Math.max(1, Math.min(3, Math.round(d / (st.cw * u * .6))));
@@ -1518,18 +1517,20 @@ function drawBuilding(g, b, cx, t) {
           const wy = y - (f + 1) * fh + fh * (1 - st.wh) / 2, wh = Math.max(1, fh * st.wh);
           g.fillStyle = style;
           if (sideWins) {                               // the same floor round the side, half as bright: the shaded face
-            const a0 = g.globalAlpha; g.globalAlpha = a0 * .5;
-            for (let k = 0; k < sideWins; k++) sideQuad((k + (1 - sideW) / 2) / sideWins, (k + (1 + sideW) / 2) / sideWins, wy, wy + wh);
-            g.globalAlpha = a0;
+            const a0 = g.globalAlpha; g.globalAlpha = a0 * .5; g.beginPath();
+            for (let k = 0; k < sideWins; k++) quad((k + (1 - sideW) / 2) / sideWins, (k + (1 + sideW) / 2) / sideWins, wy, wy + wh);
+            g.fill(); g.globalAlpha = a0;
           }
           if (!cols) { g.fillRect(x0 + u * .6, wy, tw - u * 1.2, wh); continue; }
           const fl = S.flicker && a < .05 + .22 * calm;   // "dark" includes calm mode's faint resting glow
+          let flk = null; g.beginPath();                  // a floor's windows in one fill (one draw call, not one per window)
           for (let k = 0; k < cols; k++) {
             if (st.skip && k % st.skip === st.skip - 1) continue;
             const wx = left + k * cw + (cw - ww) / 2;
-            if (fl && flick(b.id, gf, k, t)) { g.fillStyle = `hsl(40,60%,${12 + 12 * S.bright / 100}%)`; g.fillRect(wx, wy, ww, wh); g.fillStyle = style; }
-            else g.fillRect(wx, wy, ww, wh);
+            if (fl && flick(b.id, gf, k, t)) (flk ||= []).push(wx); else g.rect(wx, wy, ww, wh);
           }
+          g.fill();
+          if (flk) { g.fillStyle = `hsl(40,60%,${12 + 12 * S.bright / 100}%)`; for (const wx of flk) g.fillRect(wx, wy, ww, wh); }
         }
         if (edge && !widget) {                          // ledge every 6 floors (full screen only; too busy at widget size)
           g.fillStyle = edge;
@@ -2546,22 +2547,22 @@ function ccSeg(el, items) {                              // a row of buttons: [l
     items[+b.dataset.i][2]();
   };
 }
-function ccSel(el, items, lit) {                         // a dropdown: [label, current?, action]; lit when it's not in its usual state
+function ccSel(el, items) {                              // a dropdown: [label, current?, action, on?]; lit while the chosen option is an on one
   const labels = items.map(([label]) => label).join('|');
   if (el.dataset.labels !== labels) { el.dataset.labels = labels; el.innerHTML = items.map(([label], i) => `<option value="${i}">${esc(label)}</option>`).join(''); }
   el.selectedIndex = items.findIndex(([, on]) => on);
-  el.classList.toggle('lit', !!lit);
-  el.onchange = () => { el.classList.toggle('lit', el.selectedIndex > 0); items[el.selectedIndex][2](); };   // shows at once; the app's next state confirms it
+  const lit = () => el.classList.toggle('lit', !!items[el.selectedIndex]?.[3]);
+  lit(); el.onchange = () => { lit(); items[el.selectedIndex][2](); };   // shows at once; the app's next state confirms it
 }
 function ccRender(st) {
   const C = cityPulse.control;
   ccState = st;
   ccSel($('ccWall'), [['Off', st.wallMode === 'off', () => C.setWall('off')],
-    ...st.screens.map(x => [`Screen ${x.index + 1} only`, st.wallMode === 'one' && st.wallScreen === x.index, () => C.setWall('one', x.index)]),
-    ['All screens: own city each', st.wallMode === 'per', () => C.setWall('per')], ['All screens: one tour across', st.wallMode === 'span', () => C.setWall('span')]], st.wallMode !== 'off');
-  ccSel($('ccWidget'), [['Shown', !!st.widgetShown, () => C.setWidget(true)], ['Hidden', !st.widgetShown, () => C.setWidget(false)]], !st.widgetShown);
-  ccSel($('ccFull'), [['Off', st.fullMode === 'off', () => C.setFull('off')], ['On the widget’s screen', st.fullMode === 'one', () => C.setFull('one')],
-    ['All screens: own city each', st.fullMode === 'per', () => C.setFull('per')], ['All screens: one tour across', st.fullMode === 'span', () => C.setFull('span')]], st.fullMode !== 'off');
+    ...st.screens.map(x => [`Screen ${x.index + 1} only`, st.wallMode === 'one' && st.wallScreen === x.index, () => C.setWall('one', x.index), 1]),
+    ['All screens: own city each', st.wallMode === 'per', () => C.setWall('per'), 1], ['All screens: one tour across', st.wallMode === 'span', () => C.setWall('span'), 1]]);
+  ccSel($('ccWidget'), [['Shown', !!st.widgetShown, () => C.setWidget(true), 1], ['Hidden', !st.widgetShown, () => C.setWidget(false)]]);
+  ccSel($('ccFull'), [['Off', st.fullMode === 'off', () => C.setFull('off')], ['On the widget’s screen', st.fullMode === 'one', () => C.setFull('one'), 1],
+    ['All screens: own city each', st.fullMode === 'per', () => C.setFull('per'), 1], ['All screens: one tour across', st.fullMode === 'span', () => C.setFull('span'), 1]]);
   ccCustomize();
 }
 // Step 3: what to change, which screen (only where the running mode gives screens their own settings), a line saying
@@ -2601,11 +2602,6 @@ function startControl() {
   document.title = 'City Pulse';
   if (!inApp || !cityPulse.control) return;
   const C = cityPulse.control;
-  $('ccTour').onclick = () => {                          // one tour across every screen: wherever the city is showing, else full screen
-    const f = ccState && ccState.fullMode !== 'off', w = ccState && ccState.wallMode !== 'off';
-    if (f || !w) C.setFull('span');
-    if (w) C.setWall('span');
-  };
   C.onGoto?.(({ target }) => {                           // opened from the tray or the widget's gear: jump to that step
     cc.what = ['widget', 'full', 'wall'].includes(target) ? target : 'wall'; cc.which = null;
     ccCustomize(); $('ccSettings').scrollIntoView({ block: 'nearest' });
@@ -2666,7 +2662,10 @@ function start() {
   layout();
   addEventListener('resize', layout);
   // The one animation loop. frame() never schedules itself, so an extra call can't start a second loop.
-  (function loop(t) { requestAnimationFrame(loop); frame(t); })(performance.now());   // book the next frame first, so one throw can't stop the animation
+  // Book the next frame first, so one throw can't stop the animation. A 120/144 Hz screen skips every other refresh
+  // (60-80 fps is plenty for drifting lights and halves the work); a 60 Hz screen draws them all.
+  let drawn = 0;
+  (function loop(t) { requestAnimationFrame(loop); if (t - drawn < 12) return; drawn = t; frame(t); })(performance.now());
 }
 </script>
 <!-- Plugin files: extra themed cities, real cities and landmarks, written against window.CityPulse. A missing file is just skipped. -->

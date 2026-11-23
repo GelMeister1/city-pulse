@@ -999,10 +999,12 @@ function curtains(g, E, en, t, a) {
     'rrrrrrrrrrrrr.ccccL..', 'rwwwwrrrwwwwr.ss.....', 'rwwwwrrrwwwwrrrrrr...', 'rrrrrrrrrrrrrrrrrr...', 'rgrrrrrrrrrrrgrrr....', '.rrrrrrrrrrrrr.......'];
   const COACHES = ['#6a1420', '#1a3a2a', '#1a2440'].map(r => PAL(COACH, { n: '#eef3fb', g: '#c8a030', r, w: '#ffd88a', t: '#18141a', f: '#f0c8a0', c: '#2a2a3a', s: '#3a2a1a', L: '#ffe9a0' }));
   // An open park carriage with its folding hood up: a couple out for a ride under a tartan blanket, the driver up front.
-  const VIC = ['...............tt....', '.nnnnnn........tt....', 'dddddddd......tttt...', 'ddiiMMiii......ff....', 'ddiMMMMppi.....cc....', 'ddiiffiqfi....cccc...',
-    'dd.aaaabbb....ccccL..', 'dd.kKkKkKkK..ss......', 'rrrrrrrrrrrrrrrrrr...', 'rgrrrrrrrrrrrgrrr....', 'rrrrrrrrrrrrrrrr.....', '.rrrrrrrrrrrrr.......'];
-  const VICS = [['#141418', '#e8e8f0', '#5a3a1a', '#7a1a2a'], ['#5a1420', '#d23a32', '#d8b060', '#1f4a6a'], ['#e8e4dc', '#2f6a3a', '#1a1210', '#6a2a5a']]
-    .map(([r, p, q, b]) => PAL(VIC, { r, p, q, b, n: '#eef3fb', g: '#c8a030', d: '#18141a', i: '#9a3a3e', M: '#101014', f: '#f0c8a0', a: '#2a3040',
+  const VIC = ['.nnnnnnn.............', 'dddddddddd...........', 'ddiiMMiiii...........', 'ddiiMMiipi.....tt....', 'ddiMMMMppp.....tt....', 'ddiiffiqff....tttt...',
+    'ddiifeiqfe.....ff....', 'ddiaaaabbb.....cc....', 'dd.aaaabbbb...cccc...', 'dd.aaaabbbb...ccccL..', 'dd.kKkKkKkK..ss......',
+    'rrrrrrrrrrrrrrrrrr...', 'rgrrrrrrrrrrrgrrr....', 'rrrrrrrrrrrrrrrr.....', '.rrrrrrrrrrrrr.......'];   // three rows taller than a coach, the riders under a high hood
+  const VIC_UP = 3;
+  const VICS = [['#141418', '#e8e8f0', '#d8b060', '#2a5a8a'], ['#5a1420', '#ffd23a', '#d8b060', '#1f4a6a'], ['#e8e4dc', '#2f8a4a', '#e0a060', '#6a2a5a']]
+    .map(([r, p, q, b]) => PAL(VIC, { r, p, q, b, n: '#eef3fb', g: '#c8a030', d: '#18141a', i: '#9a3a3e', M: '#101014', f: '#f0c8a0', e: '#1a1a1a', a: '#2a3040',
       k: '#8a1a20', K: '#1f5a32', t: '#18141a', c: '#2a2a3a', s: '#3a2a1a', L: '#ffe9a0' }));
   const ANGEL = [['......hh......', '.....h..h.....', '.....yffy.....', '.ww...ff...ww.', 'wwww.rrrr.wwww', '.wwwwrrrrwwww.', '..wwrrrrrrww..', '....rrrrrr....', '....rrggrr....', '...rrrrrrrr...', '...rrrrrrrr...', '..rrrrrrrrrr..'],
     ['......hh......', '.....h..h.....', '.....yffy.....', '......ff......', '.....rrrr.....', '...wwrrrrww...', '.wwwrrrrrrwww.', 'wwww.rrrr.wwww', 'ww..rrggrr..ww', '...rrrrrrrr...', '...rrrrrrrr...', '..rrrrrrrrrr..']]
@@ -1620,14 +1622,14 @@ function curtains(g, E, en, t, a) {
     const x = c.wx - travel, f = Math.floor(t / 170 + c.ph) % 2, bob = (Math.floor(t / 170 + c.ph) % 2) * px;
     g.save(); g.translate(Math.round(x), 0); if (c.dir < 0) g.scale(-1, 1);   // drawn facing right around its middle, mirrored to go left
     const P = (a, b) => [a * px, b * px], hs = HORSES[c.horse][f], cw = 21, L = -20;   // coach from L to L + 21, horses ahead of it
-    const body = (c.vic ? VICS : COACHES)[c.coach], coachY = base - 4 * px - spH(body, px), hx = L + cw - 3;
+    const body = (c.vic ? VICS : COACHES)[c.coach], coachY = base - 4 * px - spH(body, px), dY = (c.vic ? VIC_UP : 0) * px, hx = L + cw - 3;   // dY: the driver sits lower in the taller sprite
     if (c.pair) withAlpha(g, .8, () => drawPix(g, HORSES[c.horse][1 - f], px, (hx + 2) * px, base - spH(hs, px) - 2 * px, false));   // the far horse
     g.strokeStyle = '#3a2416'; g.lineWidth = Math.max(1, px * .7); g.beginPath();   // the shafts
     g.moveTo(...P(L + 17, -5).map((v, i) => v + (i ? base : 0))); g.lineTo(...P(hx + 9, -7).map((v, i) => v + (i ? base - bob : 0))); g.stroke();
     drawPix(g, hs, px, hx * px, base - spH(hs, px) - bob, false);
     drawPix(g, body, px, L * px, coachY, false);
     g.strokeStyle = 'rgba(30,20,10,.8)'; g.lineWidth = Math.max(1, px * .4); g.beginPath();   // the reins
-    g.moveTo(...P(L + 16, 0).map((v, i) => v + (i ? coachY + 6 * px : 0))); g.lineTo(...P(hx + 15, 0).map((v, i) => v + (i ? base - 11 * px - bob : 0))); g.stroke();
+    g.moveTo(...P(L + 16, 0).map((v, i) => v + (i ? coachY + dY + 6 * px : 0))); g.lineTo(...P(hx + 15, 0).map((v, i) => v + (i ? base - 11 * px - bob : 0))); g.stroke();
     const rot = (c.wx * c.dir) / px;                      // the wheels turn with the distance covered
     for (const [wx, r] of [[L + 4, 4.2], [L + 15, 3.2]]) {
       const cx = wx * px, cy = base - r * px;
@@ -1636,7 +1638,7 @@ function curtains(g, E, en, t, a) {
       for (let k = 0; k < 4; k++) { const a = rot / r + k * Math.PI / 4; g.moveTo(cx - Math.cos(a) * r * px, cy - Math.sin(a) * r * px); g.lineTo(cx + Math.cos(a) * r * px, cy + Math.sin(a) * r * px); }
       g.stroke(); g.fillStyle = '#3a2416'; g.fillRect(cx - px, cy - px, px * 2, px * 2);
     }
-    if (!E.widget) { glow(g, '255,220,140', (L + 18.5) * px, coachY + 6.5 * px, px * 5, .55 + .1 * Math.sin(t / 150 + c.ph));   // the lantern
+    if (!E.widget) { glow(g, '255,220,140', (L + 18.5) * px, coachY + dY + 6.5 * px, px * 5, .55 + .1 * Math.sin(t / 150 + c.ph));   // the lantern
       if (!c.vic) for (const wx of [L + 3, L + 10]) glow(g, '255,200,120', wx * px, coachY + 8.5 * px, px * 4, .35); }
     for (let k = 0; k < 4; k++) {                         // snow kicked up behind the wheels
       const p = (t / 600 + k / 4 + c.ph) % 1;
