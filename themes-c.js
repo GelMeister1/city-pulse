@@ -787,8 +787,8 @@
         const p = (E.t - st.quake) / 420;
         if (p >= 1) st.quake = 0; else E.quake = [Math.sin(p * 34) * (1 - p) * E.unit * .9, Math.sin(p * 47) * (1 - p) * E.unit * .3];
       } else if (st.boulder && !E.widget) E.quake = [Math.sin(E.t / 31) * E.unit * .2, Math.sin(E.t / 47) * E.unit * .12];   // the ground rumbling under the boulder
+      boulder(g, E); drawExplorer(g, E);                   // in the widget too; only the extras below are skipped there
       if (E.widget) return;
-      boulder(g, E); drawExplorer(g, E);
       const { W, H, GY, t, dt } = E;
       if (!st.flies) st.flies = Array.from({ length: 36 }, (_, i) => ({ x: Math.random(), y: .45 + Math.random() * .5, ph: Math.random() * TAU, k: i }));
       for (const f of st.flies) {
