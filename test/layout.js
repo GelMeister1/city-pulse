@@ -85,6 +85,21 @@ app.whenReady().then(async () => {
     return { found: (stole - enter) / 1000, back: (back - stole) / 1000, shrine, rolled, caught };
   })()`);
   if (!(heist.found >= 120 && heist.back >= 120 && heist.back < 135 && !heist.shrine && heist.rolled && !heist.caught)) fails.push('jungle heist timing: ' + JSON.stringify(heist));
+  // Christmas Village over 3 simulated minutes: never more than 12 children or 2 carriages, 2 to 5 skaters once they've
+  // come out, the snowball fight actually knocks someone over, and the tree stands on a spot in the town.
+  const xmas = await win.webContents.executeJavaScript(`(() => {
+    const keep = { ...S }, E0 = { ...E }, T = THEMES.xmas; S.city = 'xmas'; S.view = 'pan'; layout();
+    let t = E.t + 1, kids = 0, cars = 0, iceMax = 0, iceMin = 99, downs = 0;
+    for (let i = 0; i < 3600; i++) {
+      t += 50; Object.assign(E, { t, dt: .05 }); T.drawTop(ctx, E);
+      const s = T.crowdState(); kids = Math.max(kids, s.kids); cars = Math.max(cars, s.cars); iceMax = Math.max(iceMax, s.onIce);
+      if (i > 400) iceMin = Math.min(iceMin, s.onIce); if (s.poses.includes('down')) downs++;
+    }
+    const tree = T.crowdState().treeX;
+    Object.assign(E, E0); Object.assign(S, keep); layout();
+    return { kids, cars, iceMax, iceMin, downs, tree: typeof tree === 'number' };
+  })()`);
+  if (!(xmas.kids > 0 && xmas.kids <= 12 && xmas.cars >= 1 && xmas.cars <= 2 && xmas.iceMax <= 5 && xmas.iceMin >= 2 && xmas.downs && xmas.tree)) fails.push('christmas crowd: ' + JSON.stringify(xmas));
   // A machine that can't keep up at Retina density drops to one pixel per point; a pause (hidden window) doesn't count.
   const slowDrop = await win.webContents.executeJavaScript(`(() => {
     const run = ms => { scaleCap = 4; slow = 0; dpr = 2; for (let i = 0; i < 40; i++) frame(last + ms); return scaleCap; };
